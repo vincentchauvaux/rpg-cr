@@ -1,0 +1,24 @@
+{
+  "name": "rpg-cr",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @rpg-cr/api\" \"npm run dev -w @rpg-cr/web\"",
+    "dev:clean": "npm run dev:kill && npm run clean -w @rpg-cr/web && npm run dev",
+    "build": "npm run build -w @rpg-cr/shared && npm run build -w @rpg-cr/api && npm run build -w @rpg-cr/web",
+    "start": "concurrently -n api,web \"npm run start -w @rpg-cr/api\" \"npm run start -w @rpg-cr/web\"",
+    "dev:kill": "lsof -ti:3000 | xargs kill -9 2>/dev/null; lsof -ti:4000 | xargs kill -9 2>/dev/null; true"
+  },
+  "overrides": {
+    "next": "15.5.18",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.3"
+  }
+}
