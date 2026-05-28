@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-05-28 (Correctif Réclamer — refcount MJ `opening`)
+> Dernière mise à jour : 2026-05-28 (Config racine monorepo versionnée ; branche `cursor/rpg-cr-monorepo-root`)
 
 ## Vision
 
@@ -19,7 +19,7 @@ Application SaaS de salons JDR rejoinables, avec MJ IA (LLM marché + fallback L
 
 ## MVP livré (v0.1)
 
-1. **Structure** — `package.json`, workspaces, README, ce fichier
+1. **Structure** — racine : `package.json`, `package-lock.json`, `tsconfig.base.json`, `.gitignore`, `.env.example`, `Dockerfile`, `docker-compose.yml`, README ; workspaces `apps/*`, `packages/*` ; ce fichier
 2. **API salons** — `POST /api/rooms`, `GET /api/rooms/:code`, `POST /api/rooms/:id/join`, liste joueurs
 3. **WebSocket** — `/ws?roomId&playerId&playerName`, broadcast messages et joueurs ; ping/pong ; reconnexion client + resync API
 4. **Interface** — accueil créer/rejoindre, page `/salon/[code]`, QR + lien, switch god mode (admin)
