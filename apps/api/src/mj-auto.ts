@@ -403,7 +403,7 @@ async function executeAutoMj(
     onSuccess?.();
     finishMjTurn(roomId, execOpts);
   } catch (e) {
-    const err = e instanceof Error ? e.message : "Erreur MJ";
+    const err = formatMjFailureDetail(e);
     console.error(`[mj-auto] tour MJ échoué (${source})`, { roomId, err });
     broadcastMjFailure(roomId, err);
     finishMjTurn(roomId, execOpts);
@@ -643,12 +643,25 @@ export function requestHostMjTrigger(
   return { ok: true };
 }
 
+function formatMjFailureDetail(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/en chargement \(JIT\)|pas listé sur LM Studio|LM Studio injoignable/i.test(msg)) {
+    return msg;
+  }
+  if (/Délai dépassé/i.test(msg)) {
+    return (
+      `${msg} Si le modèle est READY dans LM Studio, réessayez **Réclamer** (une seconde tentative allège le contexte).`
+    );
+  }
+  return msg;
+}
+
 function broadcastMjFailure(roomId: string, detail: string): void {
   const failMsg = saveMessage(
     roomId,
     "system",
     "Système",
-    `Le MJ n'a pas pu répondre (${detail}). Réessayez Réclamer ou vérifiez la configuration LLM.`,
+    `Le MJ n'a pas pu répondre (${detail}). Réessayez Réclamer ou vérifiez la configuration LLM en god mode.`,
     "system"
   );
   broadcastMessage(roomId, failMsg);

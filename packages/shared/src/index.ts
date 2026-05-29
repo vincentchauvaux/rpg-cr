@@ -10,6 +10,8 @@ export * from "./character-progression.js";
 export * from "./llm/catalog.js";
 export * from "./llm/model-kind.js";
 export * from "./llm/lmstudio-url.js";
+export * from "./llm/context-budget.js";
+export * from "./llm/lmstudio-preflight.js";
 export * from "./llm/providers.js";
 export * from "./mj/canon-continuity.js";
 export * from "./mj/system-prompt.js";

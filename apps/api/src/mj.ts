@@ -6,7 +6,14 @@ import {
   localeLabel,
   prepareMjResponse,
   DEFAULT_LOCALE,
+  estimatePromptChars,
+  isLlmTimeoutError,
+  mjContextLimits,
+  preflightLmStudioForMj,
+  resolveLlmTimeoutMs,
+  type ChatCompletionMessage,
   type LlmRoomConfig,
+  type MjContextMode,
   type ScenePatchInput,
   type ExtractedNarrativeArc,
 } from "@rpg-cr/shared";
@@ -32,11 +39,9 @@ export interface MjTurnOptions {
   responseLocale?: string;
   /** Ne pas injecter la fiche du joueur qui parle (ex. entrée en scène manuelle). */
   omitSpeakingPlayerSheet?: boolean;
+  /** Sauter la pré-vérification LM Studio (tests internes). */
+  skipLmStudioPreflight?: boolean;
 }
-
-const MJ_WORLD_CONTEXT_MAX = 24_000;
-const MJ_RECENT_MSG_LIMIT = 16;
-const MJ_RECENT_MSG_SLICE = 420;
 
 function truncateMjBlock(text: string, max: number): string {
   const t = text.trim();
@@ -44,19 +49,32 @@ function truncateMjBlock(text: string, max: number): string {
   return `${t.slice(0, max)}\n… [contexte tronqué]`;
 }
 
-export async function runMjTurn(
+function devLogMjContext(
+  mode: MjContextMode,
+  estimatedChars: number,
+  timeoutMs: number,
+  label?: string
+): void {
+  if (process.env.LLM_DEBUG !== "1" && process.env.NODE_ENV === "production") return;
+  console.warn(
+    `[MJ context]${label ? ` ${label}` : ""} mode=${mode} ~${estimatedChars} chars, timeout=${Math.round(timeoutMs / 1000)}s`
+  );
+}
+
+function buildMjTurnMessages(
   roomId: string,
   config: LlmRoomConfig,
   playerMessage: string,
-  apiKey?: string,
-  options: MjTurnOptions = {}
-): Promise<{
-  content: string;
-  usedFallback: boolean;
+  options: MjTurnOptions,
+  mode: MjContextMode
+): {
+  messages: ChatCompletionMessage[];
   responseLocale: string;
-  scenePatch: ScenePatchInput | null;
-  arcPatch: ExtractedNarrativeArc | null;
-}> {
+  estimatedChars: number;
+} {
+  const limits = mjContextLimits(mode);
+  const slim = mode === "slim";
+
   const map = getMap(roomId);
   const quests = listQuests(roomId);
   const journal = listJournal(roomId);
@@ -69,32 +87,37 @@ export async function runMjTurn(
   const mdContext = useExportedLore
     ? readCampaignContext(room.code)
     : { lore: "", journal: "" };
+  const loreCap = slim ? 1200 : 2500;
+  const journalCap = slim ? 800 : 1500;
   const mdSnippet = [
-    mdContext.lore.trim() ? `### Lore (fichier campagne)\n${mdContext.lore.slice(0, 2500)}` : "",
+    mdContext.lore.trim() ? `### Lore (fichier campagne)\n${mdContext.lore.slice(0, loreCap)}` : "",
     mdContext.journal.trim()
-      ? `### Journal (fichier campagne)\n${mdContext.journal.slice(0, 1500)}`
+      ? `### Journal (fichier campagne)\n${mdContext.journal.slice(0, journalCap)}`
       : "",
   ]
     .filter(Boolean)
     .join("\n\n");
 
-  const narrativeFacts = listNarrativeFacts(roomId, 20);
+  const factsLimit = slim ? 10 : 20;
+  const narrativeFacts = listNarrativeFacts(roomId, factsLimit);
   const factsBlock = formatNarrativeFactsForMj(narrativeFacts);
   const establishedCanon = buildEstablishedCanonSummary(roomId);
-  const establishedCanonBlock = formatEstablishedCanonForMj(establishedCanon);
+  const establishedCanonBlock = slim
+    ? ""
+    : formatEstablishedCanonForMj(establishedCanon);
   const sceneBlock = formatSceneForMj(getSceneState(roomId));
   const arcBlock = formatNarrativeArcForMj(getNarrativeArc(roomId));
 
-  const tableAlignments = listPlayers(roomId)
-    .filter((p) => p.circleStatus !== "withdrawn" && p.characterStatus === "ready")
-    .map((p) => {
-      const a = p.characterSheet.alignment;
-      return a
-        ? `- ${p.name} : ${formatAlignmentLabel(a)}`
-        : null;
-    })
-    .filter(Boolean)
-    .join("\n");
+  const tableAlignments = slim
+    ? ""
+    : listPlayers(roomId)
+        .filter((p) => p.circleStatus !== "withdrawn" && p.characterStatus === "ready")
+        .map((p) => {
+          const a = p.characterSheet.alignment;
+          return a ? `- ${p.name} : ${formatAlignmentLabel(a)}` : null;
+        })
+        .filter(Boolean)
+        .join("\n");
 
   let playerSheetBlock = "";
   let responseLocale = options.responseLocale ?? DEFAULT_LOCALE;
@@ -124,39 +147,41 @@ export async function runMjTurn(
     sceneBlock,
     arcBlock,
   });
-  const worldContext = truncateMjBlock(
-    [
-      `Graine narrative du salon : ${worldSeed}.`,
-      `### Résumé canon établi (ne pas inventer au-delà)\n${establishedCanonSummary}`,
-      map
-        ? `Carte (graine ${map.seed}) : pays — ${map.countries.join(", ")}. POI : ${map.pois.map((p) => p.name).join("; ")}.`
-        : "Carte non générée.",
-      `Quêtes actives : ${quests.filter((q) => q.status === "active").map((q) => q.title).join(", ") || "aucune"}.`,
-      `Dernier journal (DB) : ${journal.at(-1)?.title ?? "—"}.`,
-      mdSnippet || "Pas encore d'export .md — l'hôte peut quitter avec « Sauvegarder et quitter ».",
-      `### Canon narratif établi (faits MJ)\n${factsBlock}`,
-      `### Éléments établis (ne pas inventer au-delà)\n${establishedCanonBlock}`,
-      `### Scène actuelle (lieu + ambiance + tension)\n${sceneBlock}`,
-      `### Trame de campagne\n${arcBlock}`,
-      tableAlignments
-        ? `### Alignements à la table\n${tableAlignments}`
-        : "",
-      playerSheetBlock
-        ? `### Capacités du joueur actif\n${truncateMjBlock(playerSheetBlock, 3500)}`
-        : "",
-    ]
-      .filter(Boolean)
-      .join("\n\n"),
-    MJ_WORLD_CONTEXT_MAX
-  );
+
+  const worldParts = [
+    `Graine narrative du salon : ${worldSeed}.`,
+    `### Résumé canon établi (ne pas inventer au-delà)\n${establishedCanonSummary}`,
+    map
+      ? `Carte (graine ${map.seed}) : pays — ${map.countries.join(", ")}. POI : ${map.pois.map((p) => p.name).join("; ")}.`
+      : "Carte non générée.",
+    `Quêtes actives : ${quests.filter((q) => q.status === "active").map((q) => q.title).join(", ") || "aucune"}.`,
+    slim
+      ? ""
+      : `Dernier journal (DB) : ${journal.at(-1)?.title ?? "—"}.`,
+    mdSnippet || (slim ? "" : "Pas encore d'export .md — l'hôte peut quitter avec « Sauvegarder et quitter »."),
+    slim
+      ? ""
+      : `### Canon narratif établi (faits MJ)\n${factsBlock}`,
+    establishedCanonBlock
+      ? `### Éléments établis (ne pas inventer au-delà)\n${establishedCanonBlock}`
+      : "",
+    `### Scène actuelle (lieu + ambiance + tension)\n${sceneBlock}`,
+    slim ? "" : `### Trame de campagne\n${arcBlock}`,
+    tableAlignments ? `### Alignements à la table\n${tableAlignments}` : "",
+    playerSheetBlock
+      ? `### Capacités du joueur actif\n${truncateMjBlock(playerSheetBlock, limits.playerSheetMax)}`
+      : "",
+  ].filter(Boolean);
+
+  const worldContext = truncateMjBlock(worldParts.join("\n\n"), limits.worldMax);
 
   const recentTable = listMessages(roomId)
     .filter((m) => m.kind === "say" || m.kind === "chat" || m.kind === "action" || m.kind === "mj")
-    .slice(-MJ_RECENT_MSG_LIMIT)
+    .slice(-limits.recentLimit)
     .map((m) => {
-      if (m.kind === "mj") return `[MJ] ${m.content.slice(0, MJ_RECENT_MSG_SLICE)}`;
+      if (m.kind === "mj") return `[MJ] ${m.content.slice(0, limits.recentSlice)}`;
       const tag = m.kind === "action" ? "[ACTION]" : "[DIRE]";
-      return `${tag} ${m.playerName}: ${m.content.slice(0, MJ_RECENT_MSG_SLICE)}`;
+      return `${tag} ${m.playerName}: ${m.content.slice(0, limits.recentSlice)}`;
     })
     .join("\n");
 
@@ -171,10 +196,79 @@ export async function runMjTurn(
     config.systemPromptOverride
   );
 
-  const result = await completeAsMj(config, messages, {
+  return {
+    messages,
+    responseLocale,
+    estimatedChars: estimatePromptChars(messages),
+  };
+}
+
+async function completeMjWithTimeout(
+  config: LlmRoomConfig,
+  messages: ChatCompletionMessage[],
+  estimatedChars: number,
+  apiKey?: string
+) {
+  const timeoutMs = resolveLlmTimeoutMs(config.providerId, estimatedChars);
+  return completeAsMj(config, messages, {
     apiKey,
     lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+    timeoutMs,
   });
+}
+
+export async function runMjTurn(
+  roomId: string,
+  config: LlmRoomConfig,
+  playerMessage: string,
+  apiKey?: string,
+  options: MjTurnOptions = {}
+): Promise<{
+  content: string;
+  usedFallback: boolean;
+  responseLocale: string;
+  scenePatch: ScenePatchInput | null;
+  arcPatch: ExtractedNarrativeArc | null;
+}> {
+  if (!options.skipLmStudioPreflight) {
+    await preflightLmStudioForMj(config, {
+      lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+    });
+  }
+
+  let payload = buildMjTurnMessages(roomId, config, playerMessage, options, "full");
+  devLogMjContext(
+    "full",
+    payload.estimatedChars,
+    resolveLlmTimeoutMs(config.providerId, payload.estimatedChars)
+  );
+
+  let result;
+  try {
+    result = await completeMjWithTimeout(
+      config,
+      payload.messages,
+      payload.estimatedChars,
+      apiKey
+    );
+  } catch (firstError) {
+    if (!isLlmTimeoutError(firstError)) throw firstError;
+
+    payload = buildMjTurnMessages(roomId, config, playerMessage, options, "slim");
+    devLogMjContext(
+      "slim",
+      payload.estimatedChars,
+      resolveLlmTimeoutMs(config.providerId, payload.estimatedChars),
+      "retry after timeout"
+    );
+
+    result = await completeMjWithTimeout(
+      config,
+      payload.messages,
+      payload.estimatedChars,
+      apiKey
+    );
+  }
 
   const prepared = prepareMjResponse(result.content);
   warnCanonContinuityDrift(roomId, prepared.content);
@@ -182,7 +276,7 @@ export async function runMjTurn(
   return {
     content: prepared.content,
     usedFallback: result.usedFallback,
-    responseLocale,
+    responseLocale: payload.responseLocale,
     scenePatch: prepared.scenePatch,
     arcPatch: prepared.arcPatch,
   };
@@ -201,10 +295,11 @@ export async function testLlmConnection(
     { role: "user" as const, content: "Dis simplement : OK." },
   ];
 
+  const estimatedChars = estimatePromptChars(messages);
   const result = await completeAsMj(config, messages, {
     apiKey,
     lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-    timeoutMs: 90_000,
+    timeoutMs: resolveLlmTimeoutMs(config.providerId, estimatedChars),
     maxTokens: 5,
     retryOnEmpty: config.providerId === "lmstudio",
   });

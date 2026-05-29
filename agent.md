@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-05-28 (Config racine monorepo versionnée ; branche `cursor/rpg-cr-monorepo-root`)
+> Dernière mise à jour : 2026-05-28 (LLM local — budget contexte, préflight LM Studio, timeouts adaptatifs)
 
 ## Vision
 
@@ -450,13 +450,13 @@ curl -X POST "http://127.0.0.1:4000/api/players/{playerId}/character/generate-al
   - **`preamble`** si `!campaignOpeningDone` (avant ouverture de campagne)
   - **`session_recap`** si ouverture faite, `lastPreambleAt` renseigné (ou après ouverture auto), au moins un message, et pas encore de récap dans l'onglet (`sessionStorage` clé `rpg-cr-recap-done:{roomId}`)
   - sinon **`reclaim`** (continuer le récit) — y compris après ouverture de campagne sans `last_preamble_at` (l'ouverture compte comme préambule via `touchLastPreambleAt`)
-- **Réclamer (joueur)** : `mjPromptBusy` reste actif jusqu'au message MJ ou échec WS ; **`reclaimError`** sous le bouton + bannière rouge (tous les joueurs) ; garde-fou **120 s** ; échec rapide **5 s** si aucun `mj_status` thinking serveur après POST ok ; reset client si dernière sollicitation **> 2 min** (`localStorage` `rpg-cr-mj-prompt-at:{roomId}`) ; `mjThinkingBegin` côté API dès acceptation du `POST …/mj/prompt`.
+- **Réclamer (joueur)** : `mjPromptBusy` reste actif jusqu'au message MJ ou échec WS ; **`reclaimError`** sous le bouton + bannière rouge (tous les joueurs) ; garde-fou client **280 s** (aligné timeout fetch MJ **270 s**) ; échec rapide **5 s** si aucun `mj_status` thinking serveur après POST ok ; reset client si dernière sollicitation **> 2 min** (`localStorage` `rpg-cr-mj-prompt-at:{roomId}`) ; `mjThinkingBegin` côté API dès acceptation du `POST …/mj/prompt`.
 - **Bugs corrigés (2026-05-28)** :
   - Préambule hôte : `narrativePhase` + `endNarrativeMjThinking` (évite `openingRefs` bloqué → Réclamer grisé à vie).
   - Échec LLM silencieux : message « Le MJ n'a pas pu répondre… » **visible par tous** (`message-visibility.ts` — plus filtré comme erreur technique admin).
   - File `busyRooms` : max **48** retries (~2 min) puis message d'erreur + `mjThinkingEnd` ; `runImmediateMj` annule le debounce action en cours (`cancelPendingMjSchedule`).
   - **Action** : `mjThinkingBegin` dès planification (debounce 4 s) + feedback client optimiste à l'envoi ; pas de double `mjThinkingBegin` au tour LLM (`narrativeThinkingShown` si thinking action déjà actif).
-  - Contexte LLM : troncature `runMjTurn` (~24k car. monde, 16 derniers messages) pour limiter les timeouts 120 s.
+  - Contexte LLM : budget `runMjTurn` (mode **full** ~24k car. monde / 16 messages ; retry **slim** ~12k / 8 messages) ; préflight LM Studio (~20 s max) avant le tour lourd ; timeout adaptatif LM Studio **180–240 s** (`resolveLlmTimeoutMs`).
 - Les autres joueurs gardent **Réclamer** → `reclaim` seul.
 - **Préambule** : MJ pose monde, lieu, intrigue, présente chaque PJ prêt (fiches) ; peut archiver scène/trame ; **ne** marque pas `introduced_in_story`. Horodatage `rooms.last_preamble_at` à la fin du tour.
 - **Récap** : synthèse de reprise à partir du chat récent, journal DB, trame archivée, export `lore.md` / `journal.md` si présent ; pas d’extraction LLM scène (`skipSceneExtract`) mais bootstrap lieu léger si archive vide ; horodatage `rooms.last_recap_at` à la fin du tour.
@@ -504,7 +504,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Sanitisation réponses** : `prepareMjResponse()` / `formatMjMessageForDisplay()` (`mj-response-prep.ts` + `sanitize-response.ts`) — avant enregistrement (`runMjTurn`) et à l'affichage (`ChatMessageRow`) : retire blocs `<!--scene:…-->` / `<!--arc:…-->` (y compris variante `**[MJ] <!--scene:…`), préfixe écho `[MJ]` / `[VJ]` / `[DIRE]`, raisonnement interne. Messages anciens en base : filtre affichage identique.
 - **Tag `[VJ]` (voix joueur)** : réservé au format historique des messages PJ — le MJ ne doit **pas** le produire. Si fuite modèle : `transformVjSegmentsForDisplay()` convertit les segments en citation markdown (`> *…*`, guillemets en italique). Consignes dans `system-prompt.ts` (pas de monologue PJ inventé).
 - **Affichage MJ** : `ChatMessageRow` + `MjMessageMarkdown` (`react-markdown`, pas de HTML brut) — paragraphes, `**gras**`, `##` titres, listes `-`. Styles `.chat-msg-mj` dans `globals.css`. Prompt MJ : paragraphes courts + markdown léger.
-- **Plein écran récit** : bouton unique ⛶/⊟ en haut à droite de `.chat-log-wrap` (`RoomView`, `aria-label` « Fermer » en étendu) — `.chat-panel--log-expanded` = overlay `100dvh` en **colonne flex** ; `sessionStorage` `rpg-cr-chat-expanded:{roomId}`.
+- **Plein écran récit** : bouton unique ⛶/⊟ en haut à droite de `.chat-log-wrap` (`RoomView`, `aria-label` « Fermer » en étendu) — `.chat-panel--log-expanded` = overlay `100dvh` en **colonne flex** ; `sessionStorage` `rpg-cr-chat-expanded:{roomId}`. Scrollbar du fil (`.chat-log`) : piste sombre, curseur or/bronze (`globals.css`), discrète sur mobile jusqu’au scroll.
 - **Clé API** : `OPENAI_API_KEY` côté serveur pour l'auto ; champ god mode utile surtout pour « Tester la connexion ».
 
 ## Roadmap v2
@@ -579,8 +579,8 @@ Erreur navigateur = souvent **requête longue ou route spécifique** alors que `
 |--------|--------------|--------|
 | **Embedding** (`text-embedding-nomic-embed-text-v1.5`, `bge-`, etc.) | **Ne supporte pas** `/v1/chat/completions` — réponse vide ou erreur | Choisir un modèle **chat/instruct** ; bouton « Lister modèles LM Studio (chat) » en god mode ; rejet **avant** l'appel API |
 | **Gemma** (`google/gemma-4-e4b`, etc.) | Peut répondre dans `reasoning_content` plutôt que `content` | Le provider lit `content`, `reasoning_content`, `reasoning` |
-| **Qwen** (`qwen2.5-7b-instruct-1m`, etc.) | Répond en `content` ; `reasoning_content` souvent vide ; peut renvoyer **content vide** pendant le chargement JIT | Attendre **READY** 30–90 s après changement ; id exact via sidebar ou `GET /v1/models` |
-| Tous (JIT) | HTTP 200 + `content: ""` pendant le load | Retry auto API (6 s) ; sinon checklist dans l'erreur 502 |
+| **Qwen** (`qwen2.5-7b-instruct-1m`, etc.) | Répond en `content` ; gros contexte 1M → tours lents ; `reasoning_content` souvent vide | Attendre **READY** ; id exact via sidebar ou `GET /v1/models` ; si timeout → retry auto contexte **slim** |
+| Tous (JIT) | HTTP 200 + `content: ""` ou préflight timeout (~14 s) | Préflight avant tour MJ (`preflightLmStudioForMj`) ; retry vide (6 s) ; retry timeout (+8 s) ; message « modèle en chargement » sans attendre 240 s |
 
 Variables dev : `LLM_DEBUG=1` logue un extrait JSON des réponses vides (terminal API, pas l'UI).
 
@@ -639,7 +639,7 @@ Deux canaux distincts, opt-in séparés, déclenchés uniquement sur événement
 
 ## API client — robustesse LAN
 
-- `apps/web/src/lib/api.ts` : retries réseau uniquement (pas sur HTTP 4xx/5xx) ; timeout **30 s** (défaut) / **120 s** (routes MJ) ; cache health 30 s (`api-health.ts`).
+- `apps/web/src/lib/api.ts` : retries réseau uniquement (pas sur HTTP 4xx/5xx) ; timeout **30 s** (défaut) / **270 s** (routes MJ, fill-all) ; cache health 30 s (`api-health.ts`).
 - `formatFetchError` : si `/health` récent OK → message ciblé route (pas « API injoignable » global) ; sinon message pare-feu + `curl …/health`.
 - `getApiUrl()` : même hostname que la page + port 4000 (`config.ts`).
 
@@ -648,6 +648,20 @@ Deux canaux distincts, opt-in séparés, déclenchés uniquement sur événement
 - Bordures **vertes** / **rouges** (`--valid` / `--invalid`) au blur ou à la soumission.
 - Section **Connexion MJ (LLM)** : repliée avec titre vert + ✓ après enregistrement réussi ; clic pour rouvrir.
 - **Test LLM** : endpoint `POST /api/rooms/:roomId/llm/test` (god mode) — mini completion `max_tokens: 5` ; rejet HTTP **400** si modèle embedding ; liste modèles chat : `GET /api/llm/lmstudio/models?baseUrl=…` → appelle **`GET {baseUrl}/models`** avec base normalisée **`/v1`** obligatoire (`http://127.0.0.1:1234/v1/models`, pas `/models` seul).
+
+## LLM local — timeouts, contexte, préflight
+
+| Couche | Comportement |
+|--------|----------------|
+| **Budget contexte** | `packages/shared/src/llm/context-budget.ts` — modes `full` / `slim` ; estimation caractères ; logs `[MJ context]` si `LLM_DEBUG=1` ou dev |
+| **Tour MJ** | `apps/api/src/mj.ts` — `preflightLmStudioForMj` (GET `/v1/models` + sonde courte) puis `completeAsMj` ; si timeout → **une** retry contexte **slim** |
+| **Timeout HTTP** | `resolveLlmTimeoutMs` : LM Studio **180–240 s** selon taille prompt ; cloud **90–120 s** ; défaut `completeAsMj` si `timeoutMs` omis |
+| **JIT / vide** | `providers.ts` : retry réponse vide (6 s) ; retry timeout LM Studio (+8 s backoff, 2e tentative même prompt) |
+| **Client** | `api.ts` : routes MJ **270 s** ; `RoomView` garde-fou Réclamer **280 s** |
+| **File d'attente** | `busyRooms` dans `mj-auto.ts` — pas de tours MJ parallèles par salon ; retries 2,5 s × 48 max |
+| **Erreur chat** | `broadcastMjFailure` — message système persistant, texte actionnable (READY, id modèle, retry slim) |
+
+Variables : `LLM_DEBUG=1` (extrait JSON vide + taille contexte MJ).
 
 ## Vue joueur vs god mode
 

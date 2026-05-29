@@ -15,9 +15,10 @@ import { markHealthOk } from "./api-health";
 
 const RETRY_DELAYS_MS = [0, 400, 1200];
 const DEFAULT_TIMEOUT_MS = 30_000;
-const MJ_TIMEOUT_MS = 120_000;
+/** Aligné sur `resolveLlmTimeoutMs` côté API (LM Studio jusqu'à 240 s + marge réseau). */
+const MJ_TIMEOUT_MS = 270_000;
 /** Fill-all : LLM local (gemma, etc.) peut dépasser 2 min — aligné sous le timeout API (180 s). */
-const GENERATE_ALL_TIMEOUT_MS = 240_000;
+const GENERATE_ALL_TIMEOUT_MS = 270_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));

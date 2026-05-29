@@ -96,8 +96,8 @@ function readChatExpandedPref(roomId: string): boolean {
 }
 /** Garde-fou client si un `mj_status` true est perdu (WS). */
 const MJ_THINKING_STALE_MS = 3 * 60 * 1000;
-/** Réclamer : délai avant message d'échec si aucune réponse MJ. */
-const MJ_PROMPT_STALE_MS = 120 * 1000;
+/** Réclamer : délai avant message d'échec si aucune réponse MJ (aligné timeout client ~270 s). */
+const MJ_PROMPT_STALE_MS = 280 * 1000;
 /** Réclamer : délai si le serveur n'émet aucun `mj_status` thinking après POST ok. */
 const RECLAIM_NO_START_MS = 5 * 1000;
 /** Réinitialiser un état MJ client bloqué au-delà de ce délai (localStorage). */

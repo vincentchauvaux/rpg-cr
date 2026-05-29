@@ -1,4 +1,5 @@
 import { getCatalogEntry } from "./catalog.js";
+import { estimatePromptChars, resolveLlmTimeoutMs } from "./context-budget.js";
 import { assertChatModelId } from "./model-kind.js";
 import { normalizeLmStudioV1BaseUrl } from "./lmstudio-url.js";
 import type { LlmRoomConfig } from "../types.js";
@@ -43,9 +44,11 @@ type ChatCompletionResponse = {
   error?: { message?: string; code?: string; type?: string };
 };
 
-const DEFAULT_TIMEOUT_MS = 120_000;
+/** Fallback si `resolveLlmTimeoutMs` indisponible (tests unitaires minimalistes). */
+export const DEFAULT_TIMEOUT_MS = 120_000;
 const JIT_RETRY_DELAY_MS = 6_000;
 const JIT_MAX_ATTEMPTS = 2;
+const JIT_TIMEOUT_BACKOFF_MS = 8_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -207,7 +210,7 @@ async function openAiCompatibleChatOnce(
         empty: false,
         error: new Error(
           `Délai dépassé (${Math.round(timeoutMs / 1000)} s) en appelant « ${modelId} » sur ${baseUrl}. ` +
-            "Le modèle charge peut-être encore (JIT) — attendez READY dans LM Studio puis retestez."
+            "Contexte peut-être trop long ou modèle encore en chargement (JIT) — attendez READY dans LM Studio, réduisez l'historique, puis réessayez Réclamer."
         ),
       };
     }
@@ -268,23 +271,41 @@ async function openAiCompatibleChatOnce(
   return { ok: true, content };
 }
 
+function isTimeoutAttemptError(
+  result: Extract<ChatAttemptResult, { ok: false; empty: false }>
+): boolean {
+  return /Délai dépassé|TimeoutError|timed out/i.test(result.error.message);
+}
+
 async function openAiCompatibleChat(
   baseUrl: string,
   apiKey: string | undefined,
   modelId: string,
   messages: ChatCompletionMessage[],
-  options: { timeoutMs: number; retryOnEmpty: boolean; maxTokens: number }
+  options: {
+    timeoutMs: number;
+    retryOnEmpty: boolean;
+    maxTokens: number;
+    retryOnTimeout?: boolean;
+  }
 ): Promise<string> {
   let lastEmptyData: ChatCompletionResponse = {};
-  const attempts = options.retryOnEmpty ? JIT_MAX_ATTEMPTS : 1;
+  const emptyAttempts = options.retryOnEmpty ? JIT_MAX_ATTEMPTS : 1;
+  const timeoutAttempts = options.retryOnTimeout ? 2 : 1;
+  const maxAttempts = Math.max(emptyAttempts, timeoutAttempts);
 
-  for (let attempt = 1; attempt <= attempts; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const attemptTimeout =
+      attempt > 1 && options.retryOnTimeout
+        ? options.timeoutMs + JIT_TIMEOUT_BACKOFF_MS
+        : options.timeoutMs;
+
     const result = await openAiCompatibleChatOnce(
       baseUrl,
       apiKey,
       modelId,
       messages,
-      options.timeoutMs,
+      attemptTimeout,
       options.maxTokens
     );
 
@@ -292,12 +313,25 @@ async function openAiCompatibleChat(
 
     if (result.empty) {
       lastEmptyData = result.data;
-      if (attempt < attempts) {
-        devLogLlm("retry", `empty response — attempt ${attempt}/${attempts}, wait ${JIT_RETRY_DELAY_MS}ms`);
+      if (attempt < emptyAttempts) {
+        devLogLlm("retry", `empty response — attempt ${attempt}/${emptyAttempts}, wait ${JIT_RETRY_DELAY_MS}ms`);
         await sleep(JIT_RETRY_DELAY_MS);
         continue;
       }
       throw new Error(formatEmptyLlmResponseError(modelId, lastEmptyData));
+    }
+
+    if (
+      options.retryOnTimeout &&
+      isTimeoutAttemptError(result) &&
+      attempt < timeoutAttempts
+    ) {
+      devLogLlm(
+        "retry",
+        `timeout — attempt ${attempt}/${timeoutAttempts}, wait ${JIT_TIMEOUT_BACKOFF_MS}ms`
+      );
+      await sleep(JIT_TIMEOUT_BACKOFF_MS);
+      continue;
     }
 
     throw result.error;
@@ -318,10 +352,13 @@ export async function completeAsMj(
   const primaryBase =
     config.providerId === "lmstudio" ? normalizeLmStudioV1BaseUrl(rawBase) : rawBase;
   const apiKey = options.apiKey;
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const estimatedChars = estimatePromptChars(messages);
+  const timeoutMs =
+    options.timeoutMs ?? resolveLlmTimeoutMs(config.providerId, estimatedChars);
   const maxTokens = options.maxTokens ?? 2048;
   const retryOnEmpty =
     options.retryOnEmpty ?? config.providerId === "lmstudio";
+  const retryOnTimeout = config.providerId === "lmstudio";
 
   assertChatModelId(config.modelId);
 
@@ -331,7 +368,7 @@ export async function completeAsMj(
       apiKey,
       config.modelId,
       messages,
-      { timeoutMs, retryOnEmpty, maxTokens }
+      { timeoutMs, retryOnEmpty, maxTokens, retryOnTimeout }
     );
     return {
       content,
@@ -352,7 +389,7 @@ export async function completeAsMj(
       undefined,
       config.modelId || "local-model",
       messages,
-      { timeoutMs, retryOnEmpty: true, maxTokens }
+      { timeoutMs, retryOnEmpty: true, maxTokens, retryOnTimeout: true }
     );
     return {
       content,

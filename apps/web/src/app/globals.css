@@ -346,6 +346,27 @@ label {
   flex-direction: column;
   gap: 0.5rem;
   scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-dim) var(--bg);
+}
+
+.chat-log::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-log::-webkit-scrollbar-track {
+  background: var(--bg);
+  border-radius: 999px;
+}
+
+.chat-log::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent-dim) 80%, var(--bg-elevated));
+  border: 2px solid var(--bg);
+  border-radius: 999px;
+}
+
+.chat-log::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-dim);
 }
 
 .chat-mj-status {
@@ -2293,6 +2314,19 @@ textarea.field-invalid {
 
   .chat-log {
     padding: 0.5rem;
+    scrollbar-width: none;
+  }
+
+  .chat-log::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .chat-log::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+
+  .chat-log:active::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--accent-dim) 65%, transparent);
   }
 
   .chat-mj-status {
