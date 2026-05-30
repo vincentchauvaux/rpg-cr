@@ -75,6 +75,7 @@ import {
   extractNarrativeFactsFromText,
   shouldAutoExtractFacts,
 } from "./narrative-facts.js";
+import { buildMentionCandidates } from "./mention-suggestions.js";
 import {
   attachSceneToRoom,
   applySceneUpdate,
@@ -257,10 +258,20 @@ app.post<{
 
 app.put<{
   Params: { roomId: string };
-  Body: { llmConfig: import("@rpg-cr/shared").LlmRoomConfig };
+  Body: {
+    llmConfig: import("@rpg-cr/shared").LlmRoomConfig;
+    playerId?: string;
+  };
 }>("/api/rooms/:roomId/llm", async (req, reply) => {
   const room = getRoomById(req.params.roomId);
   if (!room) return reply.status(404).send({ error: "Salon introuvable" });
+  const actorId = req.body.playerId?.trim();
+  if (actorId) {
+    const actor = listPlayers(room.id).find((p) => p.id === actorId);
+    if (!canConfigureRoomLlm(actor)) {
+      return reply.status(403).send({ error: "Réservé à l'hôte du salon" });
+    }
+  }
   const config = req.body.llmConfig;
   if (config?.modelId?.trim()) {
     try {
@@ -284,8 +295,8 @@ app.post<{
   }
   const players = listPlayers(room.id);
   const actor = players.find((p) => p.id === req.body.playerId);
-  if (!actor?.isGodMode) {
-    return reply.status(403).send({ error: "God mode requis" });
+  if (!canConfigureRoomLlm(actor)) {
+    return reply.status(403).send({ error: "Réservé à l'hôte du salon" });
   }
 
   try {
@@ -698,6 +709,14 @@ function canAccessCharacter(
   return actor.role === "admin";
 }
 
+/** Hôte du salon (role admin) ou god mode UI actif côté serveur */
+function canConfigureRoomLlm(
+  actor: import("@rpg-cr/shared").Player | undefined
+): boolean {
+  if (!actor) return false;
+  return actor.role === "admin" || actor.isGodMode;
+}
+
 function canCancelCharacterAllGeneration(
   actor: import("@rpg-cr/shared").Player,
   target: import("@rpg-cr/shared").Player
@@ -965,18 +984,59 @@ app.post<{
     return reply.status(400).send({ error: "LLM non configuré — remplissez le formulaire guidé." });
   }
   try {
-    const { content } = await runMjTurn(
-      room.id,
+    const { runHeroAssistantTurn } = await import("./hero-assistant.js");
+    const { reply: content } = await runHeroAssistantTurn(
+      actor.id,
+      req.body.prompt?.trim() ||
+        "Guide-moi pour créer mon personnage : une question sur mon rang, ma famille ou mon secret.",
+      "creation",
       room.llmConfig,
-      `[CRÉATION PERSONNAGE — ${actor.name}]\n${req.body.prompt}\n\n` +
-        "Pose une question de suivi ou propose une piste (2–4 phrases). Pas de JSON.",
-      process.env.OPENAI_API_KEY,
-      { speakingPlayerId: actor.id, responseLocale: actor.preferredLocale }
+      process.env.OPENAI_API_KEY
     );
     return { reply: content };
   } catch (e) {
     const err = e instanceof Error ? e.message : "Erreur MJ";
     return reply.status(502).send({ error: err });
+  }
+});
+
+app.post<{
+  Params: { playerId: string };
+  Body: { actorPlayerId: string; question: string; mode?: "creation" | "play" };
+}>("/api/players/:playerId/hero-assistant", async (req, reply) => {
+  const actor = getPlayerById(req.body?.actorPlayerId ?? "");
+  if (!actor || actor.id !== req.params.playerId) {
+    return reply.status(403).send({ error: "Non autorisé" });
+  }
+  const room = getRoomById(actor.roomId);
+  if (!room?.llmConfig) {
+    return reply.status(400).send({
+      error: "MJ non configuré — l'hôte doit configurer le modèle.",
+    });
+  }
+  const question = req.body.question?.trim();
+  if (!question) {
+    return reply.status(400).send({ error: "Question vide" });
+  }
+  const mode =
+    req.body.mode === "creation" || req.body.mode === "play"
+      ? req.body.mode
+      : actor.characterStatus === "ready"
+        ? "play"
+        : "creation";
+  try {
+    const { runHeroAssistantTurn } = await import("./hero-assistant.js");
+    return await runHeroAssistantTurn(
+      actor.id,
+      question,
+      mode,
+      room.llmConfig,
+      process.env.OPENAI_API_KEY
+    );
+  } catch (e) {
+    const err = e instanceof Error ? e.message : "Erreur aide personnelle";
+    const status = err.includes("non configuré") ? 400 : 502;
+    return reply.status(status).send({ error: err });
   }
 });
 
@@ -1142,6 +1202,21 @@ app.get<{
   }
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
   return { facts: listNarrativeFacts(req.params.roomId, limit) };
+});
+
+app.get<{
+  Params: { roomId: string };
+  Querystring: { actorPlayerId?: string };
+}>("/api/rooms/:roomId/mention-suggestions", async (req, reply) => {
+  const actor = getPlayerById(req.query.actorPlayerId ?? "");
+  const room = getRoomById(req.params.roomId);
+  if (!room) return reply.status(404).send({ error: "Salon introuvable" });
+  if (!actor || actor.roomId !== room.id) {
+    return reply.status(403).send({ error: "Non autorisé" });
+  }
+  return {
+    candidates: buildMentionCandidates(room.id, actor.id),
+  };
 });
 
 app.post<{

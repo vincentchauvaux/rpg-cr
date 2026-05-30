@@ -229,9 +229,10 @@ export function CharacterSheetFillAllButton({
     return (
       <p
         className={`char-fill-all-hint${className ? ` ${className}` : ""}`}
-        title="Configurez le MJ en god mode pour remplir via IA"
+        title="L'hôte doit configurer le MJ (LLM) avant la génération IA"
       >
-        ✨ Remplir via IA — configurez le MJ en god mode
+        ✨ Générer fiche IA — configuration MJ requise (étape administration de
+        l&apos;hôte)
       </p>
     );
   }

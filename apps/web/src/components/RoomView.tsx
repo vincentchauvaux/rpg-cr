@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -34,6 +35,7 @@ import {
   snapshotCampaign,
   testLlmConfig,
   promptMj,
+  fetchMentionSuggestions,
   type MjPromptType,
 } from "@/lib/api";
 import { appendChatMessage } from "@/lib/chat-messages";
@@ -65,16 +67,32 @@ import {
   resolveViewerLocale,
   saveLocaleBackup,
 } from "@/lib/locale-prefs";
-import { DEFAULT_LOCALE, canHumanParticipateInChat } from "@rpg-cr/shared";
+import {
+  DEFAULT_LOCALE,
+  canHumanParticipateInChat,
+  type MentionCandidate,
+} from "@rpg-cr/shared";
+import { ChatMentionInput } from "@/components/ChatMentionInput";
 import {
   PlayerCompanionList,
 } from "@/components/PlayerCompanionList";
 import { GraineReader } from "@/components/GraineReader";
 import { CharacterCreationWizard } from "@/components/CharacterCreationWizard";
+import { HostSetupWizard } from "@/components/HostSetupWizard";
+import { HeroAssistantPanel } from "@/components/HeroAssistantPanel";
+import { RoomDockNav } from "@/components/RoomDockNav";
+import {
+  loadRoomSideTab,
+  saveRoomSideTab,
+  type RoomSideTab,
+} from "@/lib/room-side-nav";
+import {
+  isHostLlmSetupComplete,
+  markHostLlmSetupComplete,
+} from "@/lib/host-llm-setup";
 import { CharacterSheetPanel } from "@/components/CharacterSheetPanel";
 import { NarrativeCanonPanel } from "@/components/NarrativeCanonPanel";
 import { SceneIndicator } from "@/components/SceneIndicator";
-import { AiGenerationOverlay } from "@/components/AiGenerationOverlay";
 import { ScribIndicator } from "@/components/ScribIndicator";
 
 interface Props {
@@ -84,6 +102,22 @@ interface Props {
 export type SpeechMode = "say" | "action";
 
 const CHAT_SCROLL_THRESHOLD_PX = 80;
+
+function scrollChatLogToBottom(
+  el: HTMLDivElement,
+  behavior: ScrollBehavior = "smooth"
+): void {
+  const top = Math.max(0, el.scrollHeight - el.clientHeight);
+  if (behavior === "instant") {
+    el.scrollTop = top;
+    return;
+  }
+  try {
+    el.scrollTo({ top, behavior });
+  } catch {
+    el.scrollTop = top;
+  }
+}
 const CHAT_EXPANDED_STORAGE_PREFIX = "rpg-cr-chat-expanded:";
 const MJ_THINKING_IA_HINT = "réponse générée par IA";
 
@@ -113,7 +147,12 @@ function isMjFailureSystemMessage(message: ChatMessage): boolean {
   );
 }
 
-function mjThinkingPlaceholder(phase: "opening" | "turn"): string {
+function mjThinkingStatusLabel(
+  phase: "opening" | "turn",
+  hostPrep: "preamble" | "session_recap" | "reclaim" | null
+): string {
+  if (hostPrep === "preamble") return "Le MJ prépare le préambule…";
+  if (hostPrep === "session_recap") return "Le MJ prépare le récap…";
   const lead =
     phase === "opening" ? "Le MJ prépare le monde…" : "Le MJ réfléchit…";
   return `${lead} — ${MJ_THINKING_IA_HINT}`;
@@ -140,6 +179,8 @@ export function RoomView({ code }: Props) {
     "reclaim" | "preamble" | "session_recap" | null
   >(null);
   const [godModeBusy, setGodModeBusy] = useState(false);
+  /** Onboarding hôte LLM — resync localStorage au chargement salon. */
+  const [hostLlmStepDone, setHostLlmStepDone] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -151,6 +192,7 @@ export function RoomView({ code }: Props) {
   const [viewerLocale, setViewerLocale] = useState<string>(DEFAULT_LOCALE);
   const [alertsPromptOpen, setAlertsPromptOpen] = useState(false);
   const [chatLogExpanded, setChatLogExpanded] = useState(false);
+  const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
   const sessionRef = useRef<Session | null>(null);
   const roomIdRef = useRef<string | null>(null);
   const mjThinkingSinceRef = useRef<number | null>(null);
@@ -160,7 +202,8 @@ export function RoomView({ code }: Props) {
   const mjServerThinkingSeenRef = useRef(false);
   const reclaimNoStartTimerRef = useRef<number | null>(null);
   const chatLogRef = useRef<HTMLDivElement>(null);
-  const scrollAnchorRef = useRef<HTMLDivElement>(null);
+  /** Restaure la position après resync API (évite le saut en haut du fil). */
+  const scrollRestoreRef = useRef<{ top: number; height: number } | null>(null);
   const sessionPlayer = players.find((p) => p.id === session?.playerId);
   const quickUseOptions = (() => {
     if (!sessionPlayer?.characterSheet) return [];
@@ -200,6 +243,30 @@ export function RoomView({ code }: Props) {
   /** true si l'utilisateur est proche du bas — on n'impose pas le scroll en lecture d'historique */
   const stickToBottomRef = useRef(true);
   const isInitialChatScroll = useRef(true);
+
+  const captureChatScrollIfNeeded = useCallback(() => {
+    const el = chatLogRef.current;
+    if (!el || stickToBottomRef.current) return;
+    scrollRestoreRef.current = {
+      top: el.scrollTop,
+      height: el.scrollHeight,
+    };
+  }, []);
+
+  const replaceMessagesFromServer = useCallback((next: ChatMessage[]) => {
+    setMessages((prev) => {
+      if (
+        prev.length === next.length &&
+        prev.length > 0 &&
+        prev[0]?.id === next[0]?.id &&
+        prev.at(-1)?.id === next.at(-1)?.id
+      ) {
+        return prev;
+      }
+      captureChatScrollIfNeeded();
+      return next;
+    });
+  }, [captureChatScrollIfNeeded]);
   const serverGodSyncedRef = useRef(false);
   const adminOpenRef = useRef(false);
 
@@ -229,7 +296,7 @@ export function RoomView({ code }: Props) {
         myId && p.id === myId ? { ...p, isGodMode: uiOpen } : p
       )
     );
-    setMessages(data.messages);
+    replaceMessagesFromServer(data.messages);
     if (mjPromptPendingRef.current) {
       const tail = data.messages.slice(mjPromptStartMsgCountRef.current);
       if (
@@ -273,7 +340,7 @@ export function RoomView({ code }: Props) {
       }
     }
     if (data.room.llmConfig) setLlmForm(data.room.llmConfig);
-  }, [code]);
+  }, [code, replaceMessagesFromServer]);
 
   useEffect(() => {
     const s = loadSession();
@@ -501,16 +568,26 @@ export function RoomView({ code }: Props) {
     stickToBottomRef.current = distance <= CHAT_SCROLL_THRESHOLD_PX;
   }, []);
 
-  const scrollChatToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    scrollAnchorRef.current?.scrollIntoView({ behavior, block: "end" });
-  }, []);
+  useLayoutEffect(() => {
+    const el = chatLogRef.current;
+    if (!el) return;
 
-  useEffect(() => {
-    if (!stickToBottomRef.current) return;
-    const behavior: ScrollBehavior = isInitialChatScroll.current ? "instant" : "smooth";
-    isInitialChatScroll.current = false;
-    scrollChatToBottom(behavior);
-  }, [messages, mjThinking, scrollChatToBottom]);
+    if (stickToBottomRef.current) {
+      const behavior: ScrollBehavior = isInitialChatScroll.current
+        ? "instant"
+        : "smooth";
+      isInitialChatScroll.current = false;
+      scrollChatLogToBottom(el, behavior);
+      scrollRestoreRef.current = null;
+      return;
+    }
+
+    const snap = scrollRestoreRef.current;
+    if (!snap) return;
+    const delta = el.scrollHeight - snap.height;
+    el.scrollTop = Math.max(0, snap.top + delta);
+    scrollRestoreRef.current = null;
+  }, [messages]);
 
   function sendChat() {
     const me = players.find((p) => p.id === session?.playerId);
@@ -697,7 +774,7 @@ export function RoomView({ code }: Props) {
 
   async function handleSaveLlm(config: LlmRoomConfig) {
     if (!room) return;
-    await saveLlmConfig(room.id, config);
+    await saveLlmConfig(room.id, config, session?.playerId);
     setLlmForm(config);
     const data = await getRoom(code);
     setRoom(data.room);
@@ -708,7 +785,7 @@ export function RoomView({ code }: Props) {
         myId && p.id === myId ? { ...p, isGodMode: adminOpenRef.current } : p
       )
     );
-    setMessages(data.messages);
+    replaceMessagesFromServer(data.messages);
     setMap(isAdminGod ? data.map : null);
     if (!data.room.llmConfig) {
       throw new Error(
@@ -721,6 +798,18 @@ export function RoomView({ code }: Props) {
     if (!room || !session) return;
     await testLlmConfig(room.id, session.playerId, apiKey || undefined);
   }
+
+  function handleHostSetupContinue() {
+    if (!room) return;
+    markHostLlmSetupComplete(room.id);
+    setHostLlmStepDone(true);
+  }
+
+  useEffect(() => {
+    if (room?.id && isHostLlmSetupComplete(room.id)) {
+      setHostLlmStepDone(true);
+    }
+  }, [room?.id]);
 
   useEffect(() => {
     if (room?.name && session) {
@@ -803,6 +892,14 @@ export function RoomView({ code }: Props) {
   const me = players.find((p) => p.id === session?.playerId);
   const needsCharacter =
     me?.kind === "human" && me.characterStatus !== "ready";
+  const showHostLlmSetup =
+    isAdmin &&
+    needsCharacter &&
+    Boolean(room?.id) &&
+    !hostLlmStepDone &&
+    (!hasLlmConfig || !isHostLlmSetupComplete(room!.id));
+  const showCharacterWizard =
+    needsCharacter && !showHostLlmSetup;
   const awaitingIntroduction =
     me?.kind === "human" &&
     me.characterStatus === "ready" &&
@@ -812,6 +909,35 @@ export function RoomView({ code }: Props) {
     isAdmin && chatReady && !input.trim() && hasLlmConfig;
   const showCharacterSheet =
     me?.kind !== "human" || me.characterStatus === "ready";
+  const [roomSideTab, setRoomSideTab] = useState<RoomSideTab>("main");
+  useEffect(() => {
+    if (room?.id) setRoomSideTab(loadRoomSideTab(room.id));
+  }, [room?.id]);
+  function handleRoomSideTab(tab: RoomSideTab) {
+    setRoomSideTab(tab);
+    if (room?.id) saveRoomSideTab(room.id, tab);
+    if (tab !== "main" && chatLogExpanded) setChatExpanded(false);
+  }
+  const isMainView = roomSideTab === "main";
+  const showSceneSection = isMainView;
+
+  useEffect(() => {
+    if (!room?.id || !session?.playerId || !chatReady) {
+      setMentionCandidates([]);
+      return;
+    }
+    void fetchMentionSuggestions(room.id, session.playerId)
+      .then((data) => setMentionCandidates(data.candidates))
+      .catch(() => setMentionCandidates([]));
+  }, [room?.id, session?.playerId, chatReady, players, messages.length]);
+  const showCompanionsSection = isMainView || roomSideTab === "companions";
+  const showSheetSection =
+    (isMainView || roomSideTab === "sheet") && showCharacterSheet;
+  const showSettingsSection = isMainView || roomSideTab === "settings";
+  const showAssistantFocused = roomSideTab === "assistant";
+  const showAssistantInline =
+    isMainView &&
+    Boolean(session && hasLlmConfig && me && chatReady && !chatLogExpanded);
   const isAdminGod = isAdmin && adminOpen;
   const visibleMessages = filterMessagesForViewer(messages, isAdminGod);
   const recentSceneTexts = useMemo(
@@ -857,21 +983,16 @@ export function RoomView({ code }: Props) {
     );
   }
 
-  const hostPrepOverlay =
-    (hostMjPrepKind === "preamble" || hostMjPrepKind === "session_recap") &&
-    (mjPromptBusy || mjThinking);
-  const mjInputThinking = mjThinking && !hostPrepOverlay;
-  const hostPrepOverlayMessage =
-    hostMjPrepKind === "session_recap"
-      ? "Le MJ prépare le récap…"
-      : "Le MJ prépare le préambule…";
+  const mjInputThinking = mjThinking;
+
+  const showRoomDock = !showHostLlmSetup && !chatLogExpanded;
 
   return (
-    <main className="layout">
-      <AiGenerationOverlay
-        visible={hostPrepOverlay}
-        message={hostPrepOverlayMessage}
-        hint="Réponse générée par intelligence artificielle."
+    <main className={showRoomDock ? "layout layout--room-dock" : "layout"}>
+      <RoomDockNav
+        active={roomSideTab}
+        onChange={handleRoomSideTab}
+        hidden={!showRoomDock}
       />
       <header className="room-header">
         <div>
@@ -949,15 +1070,30 @@ export function RoomView({ code }: Props) {
         />
       )}
 
-      <div className="room-layout">
+      <div className="room-shell">
+        <div className="room-layout">
         <section
           className={
-            needsCharacter && isAdmin
+            showCharacterWizard && isAdmin
               ? "room-main chat-section-wizard-host"
               : "room-main"
           }
         >
-          {needsCharacter && me && session && (
+          {showHostLlmSetup && session && room && (
+            <HostSetupWizard
+              roomCode={room.code}
+              catalog={catalog}
+              llmForm={llmForm}
+              setLlmForm={setLlmForm}
+              apiKey={apiKey}
+              setApiKey={setApiKey}
+              hasLlmConfig={hasLlmConfig}
+              onSave={handleSaveLlm}
+              onTest={handleTestLlm}
+              onContinue={handleHostSetupContinue}
+            />
+          )}
+          {showCharacterWizard && me && session && (
             <CharacterCreationWizard
               player={me}
               actorPlayerId={session.playerId}
@@ -972,7 +1108,26 @@ export function RoomView({ code }: Props) {
               onError={setError}
             />
           )}
-          <div className={needsCharacter ? "chat-blocked" : undefined}>
+          {showAssistantFocused && session && hasLlmConfig && me && (
+            <div className="room-focused-view room-focused-view--assistant">
+              <h2 className="room-focused-title">Aide personnelle du héros</h2>
+              <HeroAssistantPanel
+                playerId={session.playerId}
+                actorPlayerId={session.playerId}
+                roomId={room?.id}
+                mentionCandidates={mentionCandidates}
+                llmEnabled={hasLlmConfig}
+                mode="play"
+                title="Conseiller du personnage"
+                defaultCollapsed={false}
+                onError={setError}
+              />
+            </div>
+          )}
+
+          {showSceneSection && (
+          <div>
+          <div className={needsCharacter || showHostLlmSetup ? "chat-blocked" : undefined}>
           <div className="table-header-row">
             {room && session && (
               <SceneIndicator
@@ -990,7 +1145,12 @@ export function RoomView({ code }: Props) {
             )}
             <ScribIndicator active={mjBackgroundScrib} />
           </div>
-          {needsCharacter && (
+          {showHostLlmSetup && (
+            <p className="muted" style={{ marginBottom: "0.75rem" }}>
+              Hôte : configurez le MJ (étape 1) avant de créer votre personnage.
+            </p>
+          )}
+          {showCharacterWizard && (
             <p className="muted" style={{ marginBottom: "0.75rem" }}>
               Finalisez votre personnage pour rejoindre la conversation.
             </p>
@@ -1036,17 +1196,16 @@ export function RoomView({ code }: Props) {
                     llmEnabled={hasLlmConfig}
                   />
                 ))}
-                <div ref={scrollAnchorRef} className="chat-scroll-anchor" aria-hidden />
               </div>
               {mjInputThinking ? (
                 <p
                   className="chat-mj-status"
                   role="status"
                   aria-live="polite"
-                  aria-label={mjThinkingPlaceholder(mjPhase)}
+                  aria-label={mjThinkingStatusLabel(mjPhase, hostMjPrepKind)}
                 >
                   <span className="chat-mj-spinner" aria-hidden />
-                  {mjThinkingPlaceholder(mjPhase)}
+                  {mjThinkingStatusLabel(mjPhase, hostMjPrepKind)}
                 </p>
               ) : null}
             </div>
@@ -1156,17 +1315,18 @@ export function RoomView({ code }: Props) {
               )}
 
               <div className="chat-form">
-                <input
+                <ChatMentionInput
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendChat()}
+                  onChange={setInput}
+                  onSubmit={sendChat}
+                  candidates={mentionCandidates}
                   disabled={!chatReady || mjPromptBusy}
                   placeholder={
                     needsCharacter
                       ? "Création du personnage requise…"
                       : speechMode === "say"
-                        ? "Votre parole au conseil…"
-                        : "Décrivez le geste ou l'effort…"
+                        ? "Votre parole au conseil… (@ pour mentionner)"
+                        : "Décrivez le geste… (@ pour mentionner)"
                   }
                   className={speechMode === "action" ? "input-action" : "input-say"}
                 />
@@ -1237,11 +1397,36 @@ export function RoomView({ code }: Props) {
                   </p>
                 ) : null}
               </div>
+
+              {showAssistantInline && (
+                <HeroAssistantPanel
+                  playerId={session!.playerId}
+                  actorPlayerId={session!.playerId}
+                  roomId={room?.id}
+                  mentionCandidates={mentionCandidates}
+                  llmEnabled={hasLlmConfig}
+                  mode="play"
+                  title="Aide personnelle du héros"
+                  defaultCollapsed={false}
+                  onError={setError}
+                />
+              )}
             </>
           )}
           </div>
+          </div>
+          </div>
+          )}
 
-          {session && room && (
+          {showCompanionsSection && session && room && (
+            <div
+              className={
+                roomSideTab === "companions" ? "room-focused-view" : undefined
+              }
+            >
+              {roomSideTab === "companions" && (
+                <h2 className="room-focused-title">Compagnons</h2>
+              )}
             <PlayerCompanionList
               players={players}
               sessionPlayerId={session.playerId}
@@ -1251,9 +1436,18 @@ export function RoomView({ code }: Props) {
               onPlayersChange={setPlayers}
               onError={setError}
             />
+            </div>
           )}
 
-          {session && room && showCharacterSheet && (
+          {showSheetSection && session && room && (
+            <div
+              className={
+                roomSideTab === "sheet" ? "room-focused-view" : undefined
+              }
+            >
+              {roomSideTab === "sheet" && (
+                <h2 className="room-focused-title">Fiche personnage</h2>
+              )}
             <CharacterSheetPanel
               players={players}
               sessionPlayerId={session.playerId}
@@ -1264,9 +1458,22 @@ export function RoomView({ code }: Props) {
               }
               onError={setError}
             />
+            </div>
           )}
 
-          {session && (
+          {showSettingsSection && session && (
+            <div
+              className={
+                roomSideTab === "settings"
+                  ? "room-focused-view room-focused-view--settings"
+                  : undefined
+              }
+            >
+              {roomSideTab === "settings" && (
+                <h2 className="room-focused-title">
+                  {isAdmin ? "Administration" : "Préférences"}
+                </h2>
+              )}
             <div className="panel admin-panel-compact">
               {isAdmin ? (
                 <>
@@ -1297,7 +1504,7 @@ export function RoomView({ code }: Props) {
                 onError={setError}
               />
 
-              {isAdmin && adminOpen ? (
+              {isAdmin && adminOpen && !showHostLlmSetup ? (
                 <div className="god-panel">
                   <AdminLlmForm
                     catalog={catalog}
@@ -1341,10 +1548,11 @@ export function RoomView({ code }: Props) {
                 </div>
               ) : null}
             </div>
+            </div>
           )}
 
-          </div>
         </section>
+        </div>
       </div>
     </main>
   );

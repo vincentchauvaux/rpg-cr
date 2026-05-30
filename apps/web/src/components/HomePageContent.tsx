@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom, getRoom, joinRoom, listCampaigns } from "@/lib/api";
+import { markHostLlmSetupPending } from "@/lib/host-llm-setup";
 import { randomPlayerName, randomRoomName } from "@/lib/random-names";
 import {
   useRandomCreateSuggestions,
@@ -102,6 +103,7 @@ export function HomePageContent() {
     const adminName = resolvePlaceholderValue(adminValue, adminSuggestion);
     try {
       const { room, admin } = await createRoom(name, adminName);
+      markHostLlmSetupPending(room.id);
       const session = {
         roomId: room.id,
         roomCode: room.code,

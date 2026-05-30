@@ -40,6 +40,7 @@ function timeoutForPath(path: string): number {
   if (
     path.includes("/mj") ||
     path.includes("ask-mj") ||
+    path.includes("hero-assistant") ||
     path.includes("generate-field") ||
     path.includes("/translate")
   ) {
@@ -208,11 +209,12 @@ export function translateMessage(
 
 export function saveLlmConfig(
   roomId: string,
-  llmConfig: LlmRoomConfig
+  llmConfig: LlmRoomConfig,
+  playerId?: string
 ): Promise<{ ok: boolean }> {
   return fetchJson(`/api/rooms/${roomId}/llm`, {
     method: "PUT",
-    body: JSON.stringify({ llmConfig }),
+    body: JSON.stringify({ llmConfig, playerId }),
   });
 }
 
@@ -441,6 +443,18 @@ export function askCharacterMj(
   });
 }
 
+export function askHeroAssistant(
+  playerId: string,
+  actorPlayerId: string,
+  question: string,
+  mode: "creation" | "play" = "play"
+): Promise<{ reply: string }> {
+  return fetchJson(`/api/players/${playerId}/hero-assistant`, {
+    method: "POST",
+    body: JSON.stringify({ actorPlayerId, question, mode }),
+  });
+}
+
 export function generateCharacterField(
   playerId: string,
   actorPlayerId: string,
@@ -495,6 +509,15 @@ export function cancelCharacterAllGeneration(
     method: "DELETE",
     body: JSON.stringify({ actorPlayerId }),
   });
+}
+
+export function fetchMentionSuggestions(
+  roomId: string,
+  actorPlayerId: string
+): Promise<{ candidates: import("@rpg-cr/shared").MentionCandidate[] }> {
+  return fetchJson(
+    `/api/rooms/${roomId}/mention-suggestions?actorPlayerId=${encodeURIComponent(actorPlayerId)}`
+  );
 }
 
 export function listNarrativeFacts(

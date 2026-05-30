@@ -3,16 +3,17 @@ import { parseExtractedScene } from "./scene-extract-prompt.js";
 import { sanitizeMjResponse } from "./sanitize-response.js";
 import type { ExtractedNarrativeArc } from "./narrative-arc-extract-prompt.js";
 
-/** Bloc HTML `<!--scene:{…}-->` (fermé ou tronqué en fin de message). */
-const SCENE_COMMENT_RE =
-  /<!--\s*scene:\s*(\{[\s\S]*?\})\s*(?:-->|(?=\s*$))/gi;
-const ARC_COMMENT_RE =
-  /<!--\s*arc:\s*(\{[\s\S]*?\})\s*(?:-->|(?=\s*$))/gi;
+/** Blocs métadonnées MJ fermés (`<!--scene:…-->` / `<!--arc:…-->`). */
+const SCENE_BLOCK_RE = /<!--\s*scene:\s*([\s\S]*?)\s*-->/gi;
+const ARC_BLOCK_RE = /<!--\s*arc:\s*([\s\S]*?)\s*-->/gi;
+/** Fuite en fin de message : balise ouverte sans `-->` de fermeture. */
+const SCENE_TAIL_RE = /<!--\s*scene:(?![\s\S]*-->)[\s\S]*$/gi;
+const ARC_TAIL_RE = /<!--\s*arc:(?![\s\S]*-->)[\s\S]*$/gi;
 /** Variante sans délimiteurs HTML (fuite modèle). */
-const BARE_SCENE_JSON_RE =
-  /(?:^|\n)\s*(?:\*\*)?\s*\[MJ\]\s*(?:\*\*)?\s*<!--?\s*scene:\s*(\{[\s\S]*?\})\s*(?:-->)?\s*(?=\n|$)/gi;
-const BARE_ARC_JSON_RE =
-  /(?:^|\n)\s*<!--?\s*arc:\s*(\{[\s\S]*?\})\s*(?:-->)?\s*(?=\n|$)/gi;
+const BARE_SCENE_BLOCK_RE =
+  /(?:^|\n)\s*(?:\*\*)?\s*\[MJ\]\s*(?:\*\*)?\s*<!--?\s*scene:\s*([\s\S]*?)\s*(?:-->)?\s*(?=\n|$)/gi;
+const BARE_ARC_BLOCK_RE =
+  /(?:^|\n)\s*<!--?\s*arc:\s*([\s\S]*?)\s*(?:-->)?\s*(?=\n|$)/gi;
 /** Tag « voix joueur » (format historique chat) — ne doit pas apparaître dans le récit MJ. */
 const VJ_TAG_RE = /\[VJ\]\s*/gi;
 
@@ -26,9 +27,44 @@ export interface PreparedMjResponse {
   arcPatch: ExtractedNarrativeArc | null;
 }
 
+/** Extrait le premier objet JSON d'un bloc arc/scene (évite `*?` qui s'arrête au premier `}` dans une chaîne). */
+function firstJsonObjectLiteral(raw: string): string | null {
+  const start = raw.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < raw.length; i++) {
+    const ch = raw[i];
+    if (inString) {
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return raw.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 function parseArcCommentObject(raw: string): ExtractedNarrativeArc | null {
+  const json = firstJsonObjectLiteral(raw.trim()) ?? raw.trim();
   try {
-    const o = JSON.parse(raw) as Record<string, unknown>;
+    const o = JSON.parse(json) as Record<string, unknown>;
     const mainPlot = String(o.mainPlot ?? "").trim();
     const currentBeat = String(o.currentBeat ?? "").trim();
     if (!mainPlot && !currentBeat) return null;
@@ -41,19 +77,28 @@ function parseArcCommentObject(raw: string): ExtractedNarrativeArc | null {
   }
 }
 
-function extractSceneFromJsonMatch(json: string): ScenePatchInput | null {
+function extractSceneFromBlock(inner: string): ScenePatchInput | null {
+  const json = firstJsonObjectLiteral(inner) ?? inner.trim();
   const parsed = parseExtractedScene(json);
   if (!parsed || parsed.unchanged) return null;
   return parsed;
 }
 
+function stripLeakedMetadataTails(text: string): string {
+  return text
+    .replace(SCENE_TAIL_RE, "")
+    .replace(ARC_TAIL_RE, "")
+    .replace(/(?:^|\n)\s*<!--?\s*(?:scene|arc):\s*[\s\S]*$/gim, "")
+    .trim();
+}
+
 function stripSceneComments(text: string): { cleaned: string; scene: ScenePatchInput | null } {
   let scene: ScenePatchInput | null = null;
-  const patterns = [SCENE_COMMENT_RE, BARE_SCENE_JSON_RE];
+  const patterns = [SCENE_BLOCK_RE, BARE_SCENE_BLOCK_RE];
   let cleaned = text;
   for (const re of patterns) {
-    cleaned = cleaned.replace(re, (_, json: string) => {
-      const parsed = extractSceneFromJsonMatch(json);
+    cleaned = cleaned.replace(re, (_, inner: string) => {
+      const parsed = extractSceneFromBlock(inner);
       if (parsed) scene = parsed;
       return "";
     });
@@ -66,11 +111,11 @@ function stripArcComments(text: string): {
   arc: ExtractedNarrativeArc | null;
 } {
   let arc: PreparedMjResponse["arcPatch"] = null;
-  const patterns = [ARC_COMMENT_RE, BARE_ARC_JSON_RE];
+  const patterns = [ARC_BLOCK_RE, BARE_ARC_BLOCK_RE];
   let cleaned = text;
   for (const re of patterns) {
-    cleaned = cleaned.replace(re, (_, json: string) => {
-      const parsed = parseArcCommentObject(json);
+    cleaned = cleaned.replace(re, (_, inner: string) => {
+      const parsed = parseArcCommentObject(inner);
       if (parsed) arc = parsed;
       return "";
     });
@@ -106,7 +151,7 @@ export function transformVjSegmentsForDisplay(text: string): string {
 export function stripMjMetadataComments(raw: string): string {
   const scenePass = stripSceneComments(raw);
   const arcPass = stripArcComments(scenePass.cleaned);
-  return stripChatRoleEcho(arcPass.cleaned);
+  return stripChatRoleEcho(stripLeakedMetadataTails(arcPass.cleaned));
 }
 
 /** Texte MJ affiché au chat (métadonnées + raisonnement interne + fuites [VJ]). */
@@ -122,7 +167,9 @@ export function prepareMjResponse(raw: string): PreparedMjResponse {
   const arcPass = stripArcComments(scenePass.cleaned);
   const vjCleaned = transformVjSegmentsForDisplay(arcPass.cleaned);
   return {
-    content: sanitizeMjResponse(stripChatRoleEcho(vjCleaned)),
+    content: sanitizeMjResponse(
+      stripChatRoleEcho(stripLeakedMetadataTails(vjCleaned))
+    ),
     scenePatch: scenePass.scene,
     arcPatch: arcPass.arc,
   };

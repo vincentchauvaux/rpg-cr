@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-05-28 (LLM local — budget contexte, préflight LM Studio, timeouts adaptatifs)
+> Dernière mise à jour : 2026-05-29 (aide personnelle du héros + onboarding hôte LLM)
 
 ## Vision
 
@@ -23,9 +23,10 @@ Application SaaS de salons JDR rejoinables, avec MJ IA (LLM marché + fallback L
 2. **API salons** — `POST /api/rooms`, `GET /api/rooms/:code`, `POST /api/rooms/:id/join`, liste joueurs
 3. **WebSocket** — `/ws?roomId&playerId&playerName`, broadcast messages et joueurs ; ping/pong ; reconnexion client + resync API
 4. **Interface** — accueil créer/rejoindre, page `/salon/[code]`, QR + lien, switch god mode (admin)
-   - **Création salon** : noms salon/hôte proposés aléatoirement (utilisables sans saisie) ; clic efface pour taper ; bouton 🎲 par champ + « Tout relancer »
+   - **Création salon** : noms salon/hôte proposés aléatoirement (utilisables sans saisie) ; clic efface pour taper ; bouton 🎲 par champ + « Tout relancer » ; `markHostLlmSetupPending(roomId)` à la création
+   - **Onboarding hôte (graine)** : après création/reprise salon, tant que la fiche n'est pas `ready` — `HostSetupWizard` (**étape 1/2**) bloque le chat et le wizard PJ : `AdminLlmForm` (LM Studio ou cloud), enregistrement `PUT /api/rooms/:id/llm` (+ `playerId` hôte), **test** `POST …/llm/test` — autorisé pour **`role === admin`** (hôte) sans activer le god mode UI ; puis « Continuer — créer mon personnage » → `localStorage` `rpg-cr-host-llm-setup:{roomId}=done` + `CharacterCreationWizard` (**étape 2/2**). Flag `done` resync au chargement ; sans config MJ : pas de wizard PJ, ✨ « Générer fiche IA » désactivé (libellé FR). Joueurs non-hôte : inchangés (rejoindre → leur fiche ; MJ = config hôte). Pendant l'étape 1, le formulaire LLM du god mode est masqué (évite doublon).
    - **God mode** : panneau admin = `localStorage` `rpg-cr-admin-panel:{playerId}` via `useSyncExternalStore` — **jamais** resync depuis refresh/WS/DB ; PATCH serveur fire-and-forget au toggle
-   - **Layout salon** (`room-layout`) : **une seule colonne** centrée (desktop et mobile) — en-tête salon, scène, chat, compagnons, fiche PJ, panneau **Administration** ou **Préférences** (`admin-panel-compact`) ; pas de grille deux colonnes. **Compagnons** : `.companions-block` — `margin-top` 1rem (bureau) / 0,75rem (≤640px) sous le compositeur chat (`.chat-form` / panneau présentation).
+   - **Layout salon** (`room-shell` + `room-layout`) : **une colonne** centrée ; **dock** (`RoomDockNav`) — sticky **haut** (bureau), fixe **bas** (mobile ≤640px) : **Fiche** + **Cercle** | **Accueil** (vue principale) | **Aide** + **Réglages** ; pas d’onglet « Scène / récit » (le chat reste sur Accueil). Masqué en plein écran récit / onboarding LLM. `sessionStorage` `rpg-cr-room-tab:{roomId}` (ancien `scene` → `main`). **Mentions @** : `ChatMentionInput` dans le **chat** et l’**aide personnelle** (`HeroAssistantPanel`) — joueurs à la table + PNJ du canon ; sous-titre **Lieu · …** (rencontre déduite des messages / scène, pas « Récit »). API `GET …/mention-suggestions`. **Compagnons** : `.companions-block` — `margin-top` 1rem (bureau) / 0,75rem (≤640px).
    - **En-tête salon** (`RoomView`) : titre + **code seul** (sans préfixe « Code : ») — clic copie le code (`navigator.clipboard`) + retour visuel « Copié ! » + `aria-live` ; bouton **Sauvegarder et quitter** : libellé complet au bureau, **icône seule** (sortie) en `position: fixed` haut droite mobile (`≤640px`, `title` / `aria-label`).
    - **Carte + chroniques .md** : visibles **uniquement** en god mode (UI + API `GET /graine`)
 ### Fiche personnage — stats, canon narratif & verrou histoire
@@ -127,6 +128,14 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 - God mode : bouton « Extraire faits du dernier récit » + panneau `NarrativeCanonPanel`.
 - API : `GET /api/rooms/:roomId/narrative-facts`, `POST …/narrative-facts/extract` (god).
 - Prompt MJ : injecte fiche du joueur actif + 20 derniers faits + consignes canon (`system-prompt.ts`).
+
+### Aide personnelle du héros
+
+- **Rôle** : conseiller intime du PJ (pas le MJ public de table) — réponses privées, **non** diffusées dans le fil de récit.
+- **API** : `POST /api/players/:playerId/hero-assistant` — `{ actorPlayerId, question, mode?: "creation" | "play" }` ; le joueur ne peut interroger que **sa propre** fiche.
+- **Contexte** : fiche complète ; en jeu (`play`) : canon établi + **12** derniers messages publics du salon ; prompt `hero-assistant-prompt.ts` — n’invente pas ; si info inconnue, indique **comment la obtenir en jeu**.
+- **UI** : `HeroAssistantPanel` — wizard (étape fiche) + sous le compositeur chat en partie (`mode=play`, tous les joueurs avec fiche prête) ; **Entrée** envoie ; mentions **@** comme le chat ; bordure animée pendant la réponse ; markdown sur les réponses.
+- **Legacy** : `POST …/character/ask-mj` délègue au même moteur (`mode=creation`).
 
 ### Continuité narrative / canon (anti-invention MJ)
 
@@ -363,7 +372,7 @@ API : `GET/PATCH /api/players/:id/character`, `POST …/finalize`, `POST …/int
 - **Mutex par joueur** : une seule génération fill-all par `playerId` (cible) à la fois → **429** si doublon (double-clic, autre appareil) ; TTL verrou **4 min** ; `finally` libère toujours ; `DELETE …/generate-all-lock` (propriétaire ou admin god) ; `GET …/generate-all-lock` pour polling.
 - **HTTP** : timeout LM Studio → **504** `{ error }` (message « Délai dépassé… ») ; autres erreurs LLM → **502**.
 - UI : bouton **« ✨ Remplir la fiche »** (`CharacterSheetFillAllButton`) — snapshot local avant appel ; `inFlightRef` + `disabled` pendant l’appel (anti double-clic) ; en **erreur** : brouillon inchangé + overlay centré `variant="error"` avec message serveur (502/504/429) ou hint LM Studio ; **429** : message autre appareil + boutons « Annuler la génération en cours » / « Réessayer quand c'est libre » (polling lock) ; en succès : `mergeCharacterSheet` côté client aussi.
-- **Overlay IA** (`AiGenerationOverlay.tsx`) : portail `document.body`, chargement **ou** erreur ; fill-all / préambule-récap hôte. En jeu, `mj_status` `thinking` → bordure animée + `.chat-mj-status` ; `background` → `ScribIndicator` uniquement.
+- **Overlay IA** (`AiGenerationOverlay.tsx`) : portail `document.body`, chargement **ou** erreur ; fill-all fiche PJ uniquement. En jeu (dont préambule/récap hôte), `mj_status` `thinking` → bordure animée + `.chat-mj-status` ; `background` → `ScribIndicator` uniquement.
 - Logs : API `req.log.error` + `console.error` `[character-all]` (LLM vide, JSON invalide) ; navigateur `[fetchJson] generate-all HTTP` sur 4xx/5xx.
 - **Extension navigateur** : message Chrome `A listener indicated an asynchronous response…` = souvent extension (traducteur, adblock) — **non bloquant app** ; promesses fill-all terminées en `try/catch` + `.catch` sur le clic.
 - Prompt : `packages/shared/src/mj/character-field-prompt.ts` — injecte champs déjà remplis + lore monde.
@@ -460,7 +469,7 @@ curl -X POST "http://127.0.0.1:4000/api/players/{playerId}/character/generate-al
 - Les autres joueurs gardent **Réclamer** → `reclaim` seul.
 - **Préambule** : MJ pose monde, lieu, intrigue, présente chaque PJ prêt (fiches) ; peut archiver scène/trame ; **ne** marque pas `introduced_in_story`. Horodatage `rooms.last_preamble_at` à la fin du tour.
 - **Récap** : synthèse de reprise à partir du chat récent, journal DB, trame archivée, export `lore.md` / `journal.md` si présent ; pas d’extraction LLM scène (`skipSceneExtract`) mais bootstrap lieu léger si archive vide ; horodatage `rooms.last_recap_at` à la fin du tour.
-- Overlay plein écran (`AiGenerationOverlay`) : « Le MJ prépare le préambule… » / « … le récap… » tant que le tour hôte est en cours (`mjThinking` / `mjPromptBusy`), pas seulement pendant la requête HTTP (réponse API immédiate, LLM asynchrone).
+- Préambule / récap hôte : même feedback discret que le MJ en jeu (bordure `.chat-log-wrap--mj-thinking` + `.chat-mj-status` sous le fil) — **pas** d'overlay plein écran.
 
 ## Intégration narrative joueur humain (MJ)
 
@@ -499,12 +508,13 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Désactivé** (même flag) : `schedulePlayerIntroFollowUpMj`, `tryIntegrateHumanPlayerInStory`.
 - **Toujours actifs** : `requestPlayerMjTrigger` / `requestHostMjTrigger` (Réclamer, indice, préambule, récap), `scheduleCampaignOpening`, `scheduleCircleMj`, `scheduleAiPuppetGeneration`, routes god mode / `promptMj` HTTP.
 - Réactiver le MJ auto sur **Dire** : `AUTO_MJ_ON_PLAYER_MESSAGES = true` (heuristiques triviaux + banter dans `scheduleAutoMj` ; les actions passent par `scheduleActionMj` ou `scheduleAutoMj` selon le flag, sans double tour).
-- **UI statut MJ** : WS `{ type: "mj_status", thinking, background?, phase? }` — `thinking` = récit narratif : bordure animée sur `.chat-log-wrap--mj-thinking` + ligne `.chat-mj-status` sous le fil (pas d'overlay sur les messages) ; `background` = `ScribIndicator` (plume, pas de bordure chat). Envoi / Réclamer bloqués pendant `thinking` narratif (pas pendant `background`). Overlay plein écran : préambule/récap hôte + génération fiche (`AiGenerationOverlay`). Serveur : `mjThinkingBegin` / `mjThinkingEnd` (`ws-hub.ts`) ; `executeAutoMj` appelle `mjThinkingEnd` **après** `broadcastMessage` (message ou erreur système), pas dans un `finally` qui précéderait le WS `message`. File d'attente si salon `busy` émet quand même `mjThinkingBegin` avant le retry. Client : feedback optimiste au clic Réclamer (`mjPromptPendingRef` + `setMjThinking` + libellé « Réclamer… ») ; tant que `mjPromptPendingRef`, tout `mj_status` avec `thinking: false` est **ignoré** pour l'overlay narratif (seul un message `mj` ou système « Le MJ n'a pas pu répondre… » / erreur HTTP / garde-fou 3 min termine l'attente) ; `refresh` après reconnexion compare les messages depuis le décompte au clic. Garde-fou 3 min si `thinking` bloqué.
+- **UI statut MJ** : WS `{ type: "mj_status", thinking, background?, phase? }` — `thinking` = récit narratif : bordure animée sur `.chat-log-wrap--mj-thinking` + ligne `.chat-mj-status` sous le fil (préambule, récap, reclaim inclus) ; `background` = `ScribIndicator` (plume, pas de bordure chat). Envoi / Réclamer bloqués pendant `thinking` narratif (pas pendant `background`). Overlay plein écran : **génération fiche** uniquement (`AiGenerationOverlay` dans `CharacterSheetFillAllButton`). Serveur : `mjThinkingBegin` / `mjThinkingEnd` (`ws-hub.ts`) ; `executeAutoMj` appelle `mjThinkingEnd` **après** `broadcastMessage` (message ou erreur système), pas dans un `finally` qui précéderait le WS `message`. File d'attente si salon `busy` émet quand même `mjThinkingBegin` avant le retry. Client : feedback optimiste au clic Réclamer (`mjPromptPendingRef` + `setMjThinking` + libellé « Réclamer… ») ; tant que `mjPromptPendingRef`, tout `mj_status` avec `thinking: false` est **ignoré** pour l'overlay narratif (seul un message `mj` ou système « Le MJ n'a pas pu répondre… » / erreur HTTP / garde-fou 3 min termine l'attente) ; `refresh` après reconnexion compare les messages depuis le décompte au clic. Garde-fou 3 min si `thinking` bloqué.
 - **Erreur** : `broadcastMjFailure` dans le chat (tous les joueurs) + bannière / `reclaimError` côté client ; `console.error` serveur avec `source` (`player:reclaim`, `action`, `host:preamble`, …).
-- **Sanitisation réponses** : `prepareMjResponse()` / `formatMjMessageForDisplay()` (`mj-response-prep.ts` + `sanitize-response.ts`) — avant enregistrement (`runMjTurn`) et à l'affichage (`ChatMessageRow`) : retire blocs `<!--scene:…-->` / `<!--arc:…-->` (y compris variante `**[MJ] <!--scene:…`), préfixe écho `[MJ]` / `[VJ]` / `[DIRE]`, raisonnement interne. Messages anciens en base : filtre affichage identique.
+- **Sanitisation réponses** : `prepareMjResponse()` / `formatMjMessageForDisplay()` — retire blocs `<!--scene:…-->` / `<!--arc:…-->` (y compris **tronqués** sans `-->`), parse JSON par accolades équilibrées, variantes `**[MJ] <!--scene:…` ; préfixe écho `[MJ]` / `[VJ]` / `[DIRE]`. Messages déjà en base : filtre à l'affichage.
 - **Tag `[VJ]` (voix joueur)** : réservé au format historique des messages PJ — le MJ ne doit **pas** le produire. Si fuite modèle : `transformVjSegmentsForDisplay()` convertit les segments en citation markdown (`> *…*`, guillemets en italique). Consignes dans `system-prompt.ts` (pas de monologue PJ inventé).
 - **Affichage MJ** : `ChatMessageRow` + `MjMessageMarkdown` (`react-markdown`, pas de HTML brut) — paragraphes, `**gras**`, `##` titres, listes `-`. Styles `.chat-msg-mj` dans `globals.css`. Prompt MJ : paragraphes courts + markdown léger.
 - **Plein écran récit** : bouton unique ⛶/⊟ en haut à droite de `.chat-log-wrap` (`RoomView`, `aria-label` « Fermer » en étendu) — `.chat-panel--log-expanded` = overlay `100dvh` en **colonne flex** ; `sessionStorage` `rpg-cr-chat-expanded:{roomId}`. Scrollbar du fil (`.chat-log`) : piste sombre, curseur or/bronze (`globals.css`), discrète sur mobile jusqu’au scroll.
+- **Scroll chat** (`RoomView`) : scroll **dans** `.chat-log` uniquement (`scrollTop`, pas `scrollIntoView` — évite les sauts de page sur mobile) ; auto-bas si proche du bas ; resync API (`refresh`, focus, poll 30 s) **conserve** la position si l'utilisateur lit l'historique ; ignore le resync si la liste de messages est inchangée.
 - **Clé API** : `OPENAI_API_KEY` côté serveur pour l'auto ; champ god mode utile surtout pour « Tester la connexion ».
 
 ## Roadmap v2
@@ -653,8 +663,9 @@ Deux canaux distincts, opt-in séparés, déclenchés uniquement sur événement
 
 | Couche | Comportement |
 |--------|----------------|
-| **Budget contexte** | `packages/shared/src/llm/context-budget.ts` — modes `full` / `slim` ; estimation caractères ; logs `[MJ context]` si `LLM_DEBUG=1` ou dev |
-| **Tour MJ** | `apps/api/src/mj.ts` — `preflightLmStudioForMj` (GET `/v1/models` + sonde courte) puis `completeAsMj` ; si timeout → **une** retry contexte **slim** |
+| **Budget contexte** | `context-budget.ts` + `model-context-tier.ts` — modes `full` / `slim` / **`micro`** (4b, VL, etc.) ; prompt système **compact** (`MJ_SYSTEM_PROMPT_COMPACT`) en micro ; `resolveMjMaxTokens` selon taille modèle |
+| **Tour MJ** | `apps/api/src/mj.ts` — départ selon `initialMjContextModeForModel` (petit modèle → **micro**) ; si erreur **context length** → retry **micro** ; si timeout en **full** → retry **slim** ; message `formatSmallContextModelHint` si échec final |
+| **Préflight** | `lmstudio-preflight.ts` — avertissement console si modèle VL / petite fenêtre |
 | **Timeout HTTP** | `resolveLlmTimeoutMs` : LM Studio **180–240 s** selon taille prompt ; cloud **90–120 s** ; défaut `completeAsMj` si `timeoutMs` omis |
 | **JIT / vide** | `providers.ts` : retry réponse vide (6 s) ; retry timeout LM Studio (+8 s backoff, 2e tentative même prompt) |
 | **Client** | `api.ts` : routes MJ **270 s** ; `RoomView` garde-fou Réclamer **280 s** |

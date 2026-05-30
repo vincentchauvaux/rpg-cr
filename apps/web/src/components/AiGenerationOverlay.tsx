@@ -21,7 +21,7 @@ const DEFAULT_HINT =
   "Le contenu affiché est produit par intelligence artificielle. Patientez quelques instants.";
 
 /**
- * Overlay plein écran (fiche PJ, préambule/récap hôte) — pas le statut MJ du chat
+ * Overlay plein écran (génération fiche PJ, erreurs fill-all) — pas le statut MJ du chat
  * (voir `.chat-log-wrap--mj-thinking` + `.chat-mj-status` dans RoomView).
  */
 export function AiGenerationOverlay({

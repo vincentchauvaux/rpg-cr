@@ -1,5 +1,10 @@
 import { filterChatModelIds } from "./model-kind.js";
 import { lmStudioModelsEndpoint, normalizeLmStudioV1BaseUrl } from "./lmstudio-url.js";
+import {
+  formatSmallContextModelHint,
+  inferModelContextTier,
+  isVisionLanguageModelId,
+} from "./model-context-tier.js";
 import type { LlmRoomConfig } from "../types.js";
 
 const PREFLIGHT_FETCH_MS = 6_000;
@@ -136,6 +141,12 @@ export async function preflightLmStudioForMj(
     throw new LmStudioNotReadyError(
       `Le modèle « ${modelId} » n'est pas chargé ou pas listé sur LM Studio.${hint} ` +
         "Ouvrez LM Studio → chargez le modèle jusqu'à **READY** → god mode → Tester la connexion."
+    );
+  }
+
+  if (isVisionLanguageModelId(modelId) || inferModelContextTier(modelId) === "small") {
+    console.warn(
+      `[LM Studio] Modèle à petite fenêtre « ${modelId} » — ${formatSmallContextModelHint(modelId)}`
     );
   }
 

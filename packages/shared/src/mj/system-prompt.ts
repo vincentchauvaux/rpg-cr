@@ -27,7 +27,7 @@ export const MJ_SYSTEM_PROMPT = `Tu es le Maître du Jeu (MJ) d'une table de jeu
   - des **rebondissements** quand la tension monte ou les joueurs stagnent (pas à chaque message) ;
   - des touches **hilarantes** ou **WTF** avec parcimonie, cohérentes avec le ton médiéval-fantasy ;
   - un retour régulier au **fil principal** — pas d'absurdité totale sans ramener l'enjeu.
-- Optionnel en fin de message : \`<!--arc:{"mainPlot":"…","currentBeat":"…"}-->\` si la trame ou le beat actuel change nettement.
+- Optionnel en fin de message : \`<!--arc:{"mainPlot":"…","currentBeat":"…"}-->\` **sur une seule ligne**, JSON valide et balise fermée, si la trame change nettement (jamais visible dans le récit affiché).
 
 ## Obligations de gestion (réponds en structurant mentalement, expose au joueur seulement le récit)
 - Archiver mentalement les propositions des joueurs pour référence future.
@@ -90,12 +90,24 @@ export const MJ_SYSTEM_PROMPT = `Tu es le Maître du Jeu (MJ) d'une table de jeu
 
 ${MJ_CANON_CONTINUITY_RULES}`;
 
+/** Prompt court pour modèles à petite fenêtre de contexte (4b, VL, etc.). */
+export const MJ_SYSTEM_PROMPT_COMPACT = `Tu es le MJ d'une table JDR médiéval-fantasy en français.
+- Récit court (2–4 paragraphes), sensoriel, pas de méta ni de plan interne.
+- [DIRE]/[ACTION] = paroles/gestes joueurs ; ne pas inventer de titres (princesse, roi…) ni de PNJ absents du contexte.
+- Scène : bloc \`<!--scene:{"location","mood","tension"}-->\` seulement si lieu/ambiance/tension changent.
+- Pas de [VJ] ; guillemets « … » pour les répliques.
+- Ne rédige pas la biographie d'un PJ à sa place.
+${MJ_CANON_CONTINUITY_RULES}`;
+
 export function buildMjMessages(
   worldContext: string,
   playerMessage: string,
-  override?: string
+  override?: string,
+  options?: { compactSystem?: boolean }
 ): { role: "system" | "user"; content: string }[] {
-  const system = override?.trim() || MJ_SYSTEM_PROMPT;
+  const system =
+    override?.trim() ||
+    (options?.compactSystem ? MJ_SYSTEM_PROMPT_COMPACT : MJ_SYSTEM_PROMPT);
   return [
     {
       role: "system",

@@ -8,7 +8,8 @@ import {
   normalizeCharacterSheet,
 } from "@rpg-cr/shared";
 import { AlignmentGrid } from "@/components/AlignmentGrid";
-import { patchCharacter, finalizeCharacter, askCharacterMj } from "@/lib/api";
+import { patchCharacter, finalizeCharacter } from "@/lib/api";
+import { HeroAssistantPanel } from "@/components/HeroAssistantPanel";
 import { CharacterFieldWithAi } from "@/components/CharacterFieldWithAi";
 import { PlayerAvatarUpload } from "@/components/PlayerAvatarUpload";
 import { CharacterSheetStructured } from "@/components/CharacterSheetStructured";
@@ -79,8 +80,6 @@ export function CharacterCreationWizard({
   const identitySteps = [fields.slice(0, 3), fields.slice(3, 5), fields.slice(5)];
   const totalSteps = identitySteps.length + 1;
   const [busy, setBusy] = useState(false);
-  const [mjLog, setMjLog] = useState<string[]>([]);
-  const [interviewInput, setInterviewInput] = useState("");
   const [generatingAll, setGeneratingAll] = useState(false);
 
   const stepFields = identitySteps;
@@ -121,22 +120,6 @@ export function CharacterCreationWizard({
     }
   }
 
-  async function handleInterview() {
-    const prompt =
-      interviewInput.trim() ||
-      "Interviewe-moi pour créer mon personnage : pose-moi une question sur mon rang, ma famille ou mon secret.";
-    setBusy(true);
-    try {
-      const { reply } = await askCharacterMj(player.id, actorPlayerId, prompt);
-      setMjLog((prev) => [...prev, `MJ : ${reply}`]);
-      setInterviewInput("");
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Erreur MJ");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const overlayClass = isHostAdmin
     ? "char-wizard-overlay char-wizard-overlay--section"
     : "char-wizard-overlay";
@@ -144,6 +127,9 @@ export function CharacterCreationWizard({
   return (
     <div className={overlayClass} role="dialog" aria-modal="true">
       <div className={`char-wizard panel${generatingAll ? " char-sheet-generating" : ""}`}>
+        {isHostAdmin && (
+          <p className="host-setup-step muted">Étape 2 sur 2 — Personnage</p>
+        )}
         <h2>Création du personnage</h2>
         <p className="muted">
           {player.name} — complétez les champs ci-dessous à la main, puis « Suite » ou
@@ -155,8 +141,9 @@ export function CharacterCreationWizard({
         </p>
         {isHostAdmin && !llmEnabled && (
           <p className="char-wizard-host-llm-hint">
-            Hôte : activez le <strong>god mode</strong> (panneau à droite), configurez le MJ,
-            puis utilisez ✨ pour remplir via IA — la saisie manuelle reste toujours possible.
+            Le MJ n&apos;est pas configuré pour ce salon — la saisie manuelle reste
+            possible ; ✨ Remplir via IA sera disponible une fois le MJ connecté
+            (administration ou god mode).
           </p>
         )}
 
@@ -239,32 +226,14 @@ export function CharacterCreationWizard({
         </div>
 
         {step < identitySteps.length && (
-        <div className="char-interview-block">
-          <h3 style={{ fontSize: "1rem" }}>Laisser le MJ m&apos;interviewer</h3>
-          <div className="char-mj-log">
-            {mjLog.length === 0 ? (
-              <p className="muted">Le MJ peut vous guider question par question.</p>
-            ) : (
-              mjLog.map((line, i) => (
-                <p key={i} style={{ margin: "0.35rem 0", fontSize: "0.9rem" }}>
-                  {line}
-                </p>
-              ))
-            )}
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-            <input
-              value={interviewInput}
-              onChange={(e) => setInterviewInput(e.target.value)}
-              placeholder="Votre réponse ou « commence l'interview »…"
-              style={{ flex: 1 }}
-              disabled={!llmEnabled}
-            />
-            <button type="button" disabled={busy || !llmEnabled} onClick={handleInterview}>
-              Demander au MJ
-            </button>
-          </div>
-        </div>
+          <HeroAssistantPanel
+            playerId={player.id}
+            actorPlayerId={actorPlayerId}
+            roomId={player.roomId}
+            llmEnabled={llmEnabled}
+            mode="creation"
+            onError={onError}
+          />
         )}
 
         <div className="char-wizard-actions">

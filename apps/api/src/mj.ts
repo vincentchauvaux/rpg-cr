@@ -7,9 +7,13 @@ import {
   prepareMjResponse,
   DEFAULT_LOCALE,
   estimatePromptChars,
+  initialMjContextModeForModel,
+  isContextLengthLlmError,
   isLlmTimeoutError,
+  formatSmallContextModelHint,
   mjContextLimits,
   preflightLmStudioForMj,
+  resolveMjMaxTokens,
   resolveLlmTimeoutMs,
   type ChatCompletionMessage,
   type LlmRoomConfig,
@@ -73,7 +77,8 @@ function buildMjTurnMessages(
   estimatedChars: number;
 } {
   const limits = mjContextLimits(mode);
-  const slim = mode === "slim";
+  const slim = mode === "slim" || mode === "micro";
+  const micro = mode === "micro";
 
   const map = getMap(roomId);
   const quests = listQuests(roomId);
@@ -87,8 +92,8 @@ function buildMjTurnMessages(
   const mdContext = useExportedLore
     ? readCampaignContext(room.code)
     : { lore: "", journal: "" };
-  const loreCap = slim ? 1200 : 2500;
-  const journalCap = slim ? 800 : 1500;
+  const loreCap = micro ? 400 : slim ? 1200 : 2500;
+  const journalCap = micro ? 300 : slim ? 800 : 1500;
   const mdSnippet = [
     mdContext.lore.trim() ? `### Lore (fichier campagne)\n${mdContext.lore.slice(0, loreCap)}` : "",
     mdContext.journal.trim()
@@ -98,13 +103,12 @@ function buildMjTurnMessages(
     .filter(Boolean)
     .join("\n\n");
 
-  const factsLimit = slim ? 10 : 20;
+  const factsLimit = micro ? 5 : slim ? 10 : 20;
   const narrativeFacts = listNarrativeFacts(roomId, factsLimit);
   const factsBlock = formatNarrativeFactsForMj(narrativeFacts);
   const establishedCanon = buildEstablishedCanonSummary(roomId);
-  const establishedCanonBlock = slim
-    ? ""
-    : formatEstablishedCanonForMj(establishedCanon);
+  const establishedCanonBlock =
+    micro || slim ? "" : formatEstablishedCanonForMj(establishedCanon);
   const sceneBlock = formatSceneForMj(getSceneState(roomId));
   const arcBlock = formatNarrativeArcForMj(getNarrativeArc(roomId));
 
@@ -141,37 +145,50 @@ function buildMjTurnMessages(
   const playerNames = listPlayers(roomId)
     .filter((p) => p.kind === "human" && p.characterStatus === "ready")
     .map((p) => p.name);
-  const establishedCanonSummary = formatEstablishedCanonSummary({
+  let establishedCanonSummary = formatEstablishedCanonSummary({
     playerNames,
-    narrativeFactsBlock: factsBlock,
+    narrativeFactsBlock: micro ? "" : factsBlock,
     sceneBlock,
-    arcBlock,
+    arcBlock: micro ? "" : arcBlock,
   });
+  if (micro) {
+    establishedCanonSummary = truncateMjBlock(establishedCanonSummary, 900);
+  }
 
-  const worldParts = [
-    `Graine narrative du salon : ${worldSeed}.`,
-    `### Résumé canon établi (ne pas inventer au-delà)\n${establishedCanonSummary}`,
-    map
-      ? `Carte (graine ${map.seed}) : pays — ${map.countries.join(", ")}. POI : ${map.pois.map((p) => p.name).join("; ")}.`
-      : "Carte non générée.",
-    `Quêtes actives : ${quests.filter((q) => q.status === "active").map((q) => q.title).join(", ") || "aucune"}.`,
-    slim
-      ? ""
-      : `Dernier journal (DB) : ${journal.at(-1)?.title ?? "—"}.`,
-    mdSnippet || (slim ? "" : "Pas encore d'export .md — l'hôte peut quitter avec « Sauvegarder et quitter »."),
-    slim
-      ? ""
-      : `### Canon narratif établi (faits MJ)\n${factsBlock}`,
-    establishedCanonBlock
-      ? `### Éléments établis (ne pas inventer au-delà)\n${establishedCanonBlock}`
-      : "",
-    `### Scène actuelle (lieu + ambiance + tension)\n${sceneBlock}`,
-    slim ? "" : `### Trame de campagne\n${arcBlock}`,
-    tableAlignments ? `### Alignements à la table\n${tableAlignments}` : "",
-    playerSheetBlock
-      ? `### Capacités du joueur actif\n${truncateMjBlock(playerSheetBlock, limits.playerSheetMax)}`
-      : "",
-  ].filter(Boolean);
+  const worldParts = micro
+    ? [
+        `Graine : ${worldSeed}.`,
+        `### Canon (résumé)\n${establishedCanonSummary}`,
+        `### Scène\n${sceneBlock}`,
+        playerSheetBlock
+          ? `### PJ actif\n${truncateMjBlock(playerSheetBlock, limits.playerSheetMax)}`
+          : "",
+      ].filter(Boolean)
+    : [
+        `Graine narrative du salon : ${worldSeed}.`,
+        `### Résumé canon établi (ne pas inventer au-delà)\n${establishedCanonSummary}`,
+        map
+          ? `Carte (graine ${map.seed}) : pays — ${map.countries.join(", ")}. POI : ${map.pois.map((p) => p.name).join("; ")}.`
+          : "Carte non générée.",
+        `Quêtes actives : ${quests.filter((q) => q.status === "active").map((q) => q.title).join(", ") || "aucune"}.`,
+        slim
+          ? ""
+          : `Dernier journal (DB) : ${journal.at(-1)?.title ?? "—"}.`,
+        mdSnippet ||
+          (slim
+            ? ""
+            : "Pas encore d'export .md — l'hôte peut quitter avec « Sauvegarder et quitter »."),
+        slim ? "" : `### Canon narratif établi (faits MJ)\n${factsBlock}`,
+        establishedCanonBlock
+          ? `### Éléments établis (ne pas inventer au-delà)\n${establishedCanonBlock}`
+          : "",
+        `### Scène actuelle (lieu + ambiance + tension)\n${sceneBlock}`,
+        slim ? "" : `### Trame de campagne\n${arcBlock}`,
+        tableAlignments ? `### Alignements à la table\n${tableAlignments}` : "",
+        playerSheetBlock
+          ? `### Capacités du joueur actif\n${truncateMjBlock(playerSheetBlock, limits.playerSheetMax)}`
+          : "",
+      ].filter(Boolean);
 
   const worldContext = truncateMjBlock(worldParts.join("\n\n"), limits.worldMax);
 
@@ -193,7 +210,8 @@ function buildMjTurnMessages(
   const messages = buildMjMessages(
     worldContext,
     userPrompt,
-    config.systemPromptOverride
+    config.systemPromptOverride,
+    { compactSystem: limits.compactSystem }
   );
 
   return {
@@ -210,10 +228,12 @@ async function completeMjWithTimeout(
   apiKey?: string
 ) {
   const timeoutMs = resolveLlmTimeoutMs(config.providerId, estimatedChars);
+  const maxTokens = resolveMjMaxTokens(config.providerId, config.modelId);
   return completeAsMj(config, messages, {
     apiKey,
     lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
     timeoutMs,
+    maxTokens,
   });
 }
 
@@ -236,9 +256,11 @@ export async function runMjTurn(
     });
   }
 
-  let payload = buildMjTurnMessages(roomId, config, playerMessage, options, "full");
+  let mode: import("@rpg-cr/shared").MjContextMode =
+    initialMjContextModeForModel(config.modelId);
+  let payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
   devLogMjContext(
-    "full",
+    mode,
     payload.estimatedChars,
     resolveLlmTimeoutMs(config.providerId, payload.estimatedChars)
   );
@@ -252,22 +274,44 @@ export async function runMjTurn(
       apiKey
     );
   } catch (firstError) {
-    if (!isLlmTimeoutError(firstError)) throw firstError;
+    if (isContextLengthLlmError(firstError) && mode !== "micro") {
+      mode = "micro";
+      payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
+      devLogMjContext(
+        mode,
+        payload.estimatedChars,
+        resolveLlmTimeoutMs(config.providerId, payload.estimatedChars),
+        "retry after context overflow"
+      );
+      result = await completeMjWithTimeout(
+        config,
+        payload.messages,
+        payload.estimatedChars,
+        apiKey
+      );
+    } else if (isContextLengthLlmError(firstError)) {
+      throw new Error(
+        `Contexte trop long pour « ${config.modelId} ». ${formatSmallContextModelHint(config.modelId)}`
+      );
+    } else if (isLlmTimeoutError(firstError) && mode === "full") {
+      mode = "slim";
+      payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
+      devLogMjContext(
+        mode,
+        payload.estimatedChars,
+        resolveLlmTimeoutMs(config.providerId, payload.estimatedChars),
+        "retry after timeout"
+      );
 
-    payload = buildMjTurnMessages(roomId, config, playerMessage, options, "slim");
-    devLogMjContext(
-      "slim",
-      payload.estimatedChars,
-      resolveLlmTimeoutMs(config.providerId, payload.estimatedChars),
-      "retry after timeout"
-    );
-
-    result = await completeMjWithTimeout(
-      config,
-      payload.messages,
-      payload.estimatedChars,
-      apiKey
-    );
+      result = await completeMjWithTimeout(
+        config,
+        payload.messages,
+        payload.estimatedChars,
+        apiKey
+      );
+    } else {
+      throw firstError;
+    }
   }
 
   const prepared = prepareMjResponse(result.content);
