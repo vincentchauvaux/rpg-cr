@@ -55,6 +55,38 @@ function earliestLeakIndex(text: string): number {
   return earliest;
 }
 
+/** Coupe les boucles de fin (« Il reste. Il reste. … ») sur petits modèles. */
+export function collapseTrailingPhraseLoop(text: string): string {
+  let out = text.trim();
+  if (!out) return out;
+
+  const clause =
+    "([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9\\s''\\-—]{1,55}?)([.…!?])";
+  const loopStart = new RegExp(`^${clause}\\s*(?:\\1\\2\\s*){3,}`, "u");
+  const loopTail = new RegExp(`(${clause})(?:\\s*\\1\\2){4,}\\s*$`, "u");
+
+  const paragraphs = out.split(/\n\n+/);
+  const lastIdx = paragraphs.length - 1;
+  const last = paragraphs[lastIdx]?.trim() ?? "";
+  const startMatch = last.match(loopStart);
+  if (startMatch) {
+    paragraphs[lastIdx] = `${startMatch[1].trim()}${startMatch[2]}`;
+    return paragraphs.join("\n\n").trim();
+  }
+
+  const tailMatch = out.match(loopTail);
+  if (
+    tailMatch &&
+    tailMatch.index != null &&
+    tailMatch.index >= MIN_NARRATIVE_BEFORE_CUT
+  ) {
+    const end = tailMatch.index + tailMatch[1].length + tailMatch[2].length;
+    out = out.slice(0, end).trim();
+  }
+
+  return out;
+}
+
 function trimTrailingLeakBlock(text: string): string {
   const trailing = text.match(
     /\n{2,}(?:\d+\.\s*\*\*(?:Analyze|Review|Consider|Draft|Plan|Final)[\s\S]*)$/i
@@ -81,6 +113,7 @@ export function sanitizeMjResponse(text: string): string {
   }
 
   out = trimTrailingLeakBlock(out);
+  out = collapseTrailingPhraseLoop(out);
 
   return out.replace(/\n{3,}/g, "\n\n").trim();
 }

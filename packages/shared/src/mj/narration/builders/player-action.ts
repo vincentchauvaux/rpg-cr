@@ -21,7 +21,7 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
     `${name} **effectue une action** : « ${action} »${abilities}\n\n` +
     `## Consignes MJ\n` +
     `- **Interprète** l'action demandée et intègre-la au fil narratif en cours (conséquences, réactions du monde, PNJ).\n` +
-    `- Calibre la longueur : **1–2 paragraphes** pour une action simple ou routinière ; **2–4 paragraphes** si l'action est dramatique, risquée ou change la situation.\n` +
+    `- Calibre la longueur et le ton : **1–2 paragraphes sobres** si l'action est simple ou la scène calme ; **2–4 paragraphes** seulement si l'action est dramatique, risquée ou change vraiment la situation — pas de lyrisme gratuit.\n` +
     `- Ne rédige **pas** un chapitre entier sauf si l'action le justifie clairement.\n` +
     `- Résous partiellement ou totalement selon le contexte ; propose un **jet de dés** si l'issue est incertaine (combat, persuasion, discrétion, etc.).\n` +
     `- Tiens compte des compagnons présents et de la scène archivée ; ce que tu établis devient **canon**.\n` +

@@ -1,3 +1,5 @@
+import { isVisionLanguageModelId } from "./model-context-tier.js";
+
 /** Modèle LM Studio / OpenAI — chat vs embeddings (heuristique sur l'id). */
 
 export type LmModelKind = "chat" | "embedding" | "unknown";
@@ -18,6 +20,10 @@ export const EMBEDDING_MODEL_ERROR =
   "Ce modèle est un modèle d'embeddings (vecteurs), pas un modèle de chat. " +
   "Choisissez un modèle de conversation (ex. qwen2.5-7b-instruct, gemma, llama, hermes) dans LM Studio.";
 
+export const UNSUITABLE_MJ_VL_MODEL_ERROR =
+  "Les modèles « vision » (VL, multimodal) ne conviennent pas au MJ texte et plantent souvent sous charge. " +
+  "Dans LM Studio, chargez plutôt un modèle **instruct/chat** (ex. qwen2.5-7b-instruct, llama-3.1-8b-instruct).";
+
 export function classifyModelId(modelId: string): LmModelKind {
   const id = modelId.trim();
   if (!id) return "unknown";
@@ -36,10 +42,23 @@ export function isChatModelId(modelId: string): boolean {
   return kind === "chat";
 }
 
+/** Modèle VL / vision — mauvais choix pour le récit MJ (crash LM Studio fréquents). */
+export function isUnsuitableMjModelId(modelId: string): boolean {
+  return isVisionLanguageModelId(modelId);
+}
+
 /** Lève une erreur explicite si le modèle est clairement un embedding. */
 export function assertChatModelId(modelId: string): void {
   if (isEmbeddingModelId(modelId)) {
     throw new Error(`${EMBEDDING_MODEL_ERROR} (id : « ${modelId.trim()} »)`);
+  }
+}
+
+/** Chat + pas de modèle VL/vision pour les tours MJ. */
+export function assertMjSuitableModelId(modelId: string): void {
+  assertChatModelId(modelId);
+  if (isUnsuitableMjModelId(modelId)) {
+    throw new Error(`${UNSUITABLE_MJ_VL_MODEL_ERROR} (id : « ${modelId.trim()} »)`);
   }
 }
 
@@ -57,5 +76,7 @@ export function classifyLmStudioModelList(ids: string[]): LmStudioModelEntry[] {
 }
 
 export function filterChatModelIds(ids: string[]): string[] {
-  return ids.filter((id) => classifyModelId(id) !== "embedding");
+  return ids.filter(
+    (id) => classifyModelId(id) !== "embedding" && !isUnsuitableMjModelId(id)
+  );
 }

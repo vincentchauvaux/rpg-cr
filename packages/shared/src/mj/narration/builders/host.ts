@@ -16,7 +16,7 @@ export function buildHostPreambleNarration(ctx: NarrationContext): string {
     `## Interdictions\n` +
     `- Ne marque **pas** les joueurs comme « déjà présentés en histoire » : les PJ pourront encore faire leur **auto-présentation** à la table.\n` +
     `- Pas de tutoriel, pas de jets, pas de « Thinking Process ».\n` +
-    `- 4–6 paragraphes immersifs en français, puis 1–2 questions ou pistes d'action pour lancer la table.\n\n` +
+    `- **4–6 paragraphes** en français, ton **accessible** (pas de surenchère lyrique) : faits, lieux, personnages, enjeu — une touche d'atmosphère suffit. Puis 1–2 questions ou pistes d'action.\n\n` +
     `## Contexte salon « ${ctx.roomName ?? "—"} »\n` +
     `Graine narrative : \`${ctx.worldSeed ?? "—"}\`\n\n` +
     `### Scène archivée\n${ctx.sceneSummary?.trim() || "_Aucune scène archivée._"}\n\n` +

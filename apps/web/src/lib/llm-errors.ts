@@ -8,10 +8,22 @@ export function formatLlmTestError(message: string): string {
     lower.includes("réponse llm vide") ||
     lower.includes("modèle introuvable") ||
     lower.includes("embeddings") ||
+    lower.includes("vision") ||
+    lower.includes("crashed") ||
+    lower.includes("planté") ||
+    lower.includes("inadapté au mj") ||
     lower.includes("délai dépassé") ||
     lower.includes("connexion llm");
 
-  if (lower.includes("embeddings")) return message;
+  if (
+    lower.includes("embeddings") ||
+    lower.includes("vision (vl)") ||
+    lower.includes("inadapté au mj") ||
+    lower.includes("crashed") ||
+    lower.includes("planté dans lm studio")
+  ) {
+    return message;
+  }
 
   if (!isLlmIssue) return message;
 

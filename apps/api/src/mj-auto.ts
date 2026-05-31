@@ -17,6 +17,7 @@ import {
   buildNarrationPrompt,
   type NarrationContext,
   isCompanionNarrativelyActive,
+  formatLlmModelCrashRecoveryHint,
 } from "@rpg-cr/shared";
 import {
   getRoomById,
@@ -643,8 +644,27 @@ export function requestHostMjTrigger(
   return { ok: true };
 }
 
+function extractModelIdFromLlmError(msg: string): string {
+  const guillemets = msg.match(/«\s*([^»]+)\s*»/);
+  if (guillemets?.[1]?.trim()) return guillemets[1].trim();
+  const paren = msg.match(/LLM \d+ \(([^)]+)\)/);
+  if (paren?.[1]?.trim()) return paren[1].trim();
+  const refused = msg.match(/refusé le modèle «\s*([^»]+)\s*»/i);
+  if (refused?.[1]?.trim()) return refused[1].trim();
+  return "";
+}
+
 function formatMjFailureDetail(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
+  if (
+    /crashed|exit code|planté dans LM Studio|modèle « vision »|inadapté au MJ texte/i.test(
+      msg
+    )
+  ) {
+    const modelId = extractModelIdFromLlmError(msg);
+    if (/instruct 7B|READY.*Tester/i.test(msg) && msg.length < 420) return msg;
+    return formatLlmModelCrashRecoveryHint(modelId || "modèle LM Studio");
+  }
   if (/en chargement \(JIT\)|pas listé sur LM Studio|LM Studio injoignable/i.test(msg)) {
     return msg;
   }

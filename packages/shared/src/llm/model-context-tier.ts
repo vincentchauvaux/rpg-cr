@@ -41,6 +41,23 @@ export function isVisionLanguageModelId(modelId: string): boolean {
   return /-vl|vision|multimodal|qwen3-vl/i.test(id);
 }
 
+/** Message utilisateur quand LM Studio signale un crash du modèle chargé. */
+export function formatLlmModelCrashRecoveryHint(modelId: string): string {
+  const id = modelId.trim();
+  const steps =
+    "Dans LM Studio : déchargez le modèle → rechargez un modèle **instruct 7B+** (pas VL) → attendez **READY** → god mode → **Tester la connexion** → réessayez.";
+  if (isVisionLanguageModelId(id)) {
+    return `${UNSUITABLE_MJ_VL_HINT} ${steps}`;
+  }
+  return (
+    "Le processus du modèle a planté (souvent manque de RAM ou contexte trop grand). " +
+    steps
+  );
+}
+
+const UNSUITABLE_MJ_VL_HINT =
+  "Le modèle « vision » (VL) n'est pas fait pour le récit texte. ";
+
 export function formatSmallContextModelHint(modelId: string): string {
   const id = modelId.trim();
   let hint =

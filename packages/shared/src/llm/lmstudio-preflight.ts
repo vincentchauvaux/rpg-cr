@@ -1,4 +1,4 @@
-import { filterChatModelIds } from "./model-kind.js";
+import { assertMjSuitableModelId, filterChatModelIds } from "./model-kind.js";
 import { lmStudioModelsEndpoint, normalizeLmStudioV1BaseUrl } from "./lmstudio-url.js";
 import {
   formatSmallContextModelHint,
@@ -120,6 +120,14 @@ export async function preflightLmStudioForMj(
   if (!modelId) {
     throw new LmStudioNotReadyError(
       "Aucun modèle LM Studio configuré — choisissez un modèle **chat/instruct** en god mode."
+    );
+  }
+
+  try {
+    assertMjSuitableModelId(modelId);
+  } catch (e) {
+    throw new LmStudioNotReadyError(
+      e instanceof Error ? e.message : "Modèle inadapté au MJ"
     );
   }
 

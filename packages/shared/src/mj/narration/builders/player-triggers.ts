@@ -73,8 +73,8 @@ export function buildReclaimContinueNarration(ctx: NarrationContext): string {
   const name = ctx.playerName ?? "Un joueur";
   return (
     `[RÉCLAMER — SILENCE DU JOUEUR] ${name} ne prend pas la parole ; le MJ enrichit la scène.\n\n` +
-    "Le joueur observe ou attend. Développe la situation **sans changer de lieu** ni de tension archivée, sauf conséquence majeure : réactions du monde ou des PNJ, détails sensoriels. " +
-    "Ne force pas d'action du personnage. Pas de bloc `<!--scene:…-->` si lieu et tension restent les mêmes. 1–3 paragraphes.\n" +
+    "Le joueur observe ou attend. **Ton sobre** : pas de grandiloquence si rien ne bouge — un détail utile, une réaction de PNJ, une tension légère suffisent. " +
+    "Développe **sans changer de lieu** ni de tension archivée, sauf conséquence majeure. Ne force pas d'action du personnage. Pas de bloc `<!--scene:…-->` si rien ne change. **1–2 paragraphes** (3 max si événement net).\n" +
     "- Si des compagnons ou PNJ sont présents **sans rôle établi**, décris regards, tension ou attente **sans** leur inventer un titre (princesse, roi, etc.)." +
     sceneHint(ctx) +
     optionalBlock(ctx) +

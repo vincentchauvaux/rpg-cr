@@ -2,7 +2,11 @@
 
 import { useState, type FormEvent } from "react";
 import type { LlmCatalogEntry, LlmRoomConfig } from "@rpg-cr/shared";
-import { isEmbeddingModelId, normalizeLmStudioV1BaseUrl } from "@rpg-cr/shared";
+import {
+  isEmbeddingModelId,
+  isUnsuitableMjModelId,
+  normalizeLmStudioV1BaseUrl,
+} from "@rpg-cr/shared";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SettingsToggle } from "@/components/SettingsToggle";
 import {
@@ -66,13 +70,17 @@ export function AdminLlmForm({
   const selectedProvider = catalog.find((c) => c.id === llmForm.providerId);
   const modelIsEmbedding =
     llmForm.providerId === "lmstudio" && isEmbeddingModelId(llmForm.modelId);
+  const modelIsUnsuitableMj =
+    llmForm.providerId === "lmstudio" && isUnsuitableMjModelId(llmForm.modelId);
   const modelInLmStudioList =
     lmChatModels.length > 0 && lmChatModels.includes(llmForm.modelId.trim());
   const lmSelectValue =
     lmChatModels.includes(llmForm.modelId.trim()) ? llmForm.modelId.trim() : "";
 
   const modelState: FieldState =
-    modelValid(llmForm) && !modelIsEmbedding ? "valid" : "invalid";
+    modelValid(llmForm) && !modelIsEmbedding && !modelIsUnsuitableMj
+      ? "valid"
+      : "invalid";
   const baseUrlState: FieldState = isOptionalUrl(llmForm.baseUrl ?? "")
     ? "valid"
     : "invalid";
@@ -218,14 +226,20 @@ export function AdminLlmForm({
                 </datalist>
               )}
               <p className="llm-hint muted" style={{ marginTop: "0.35rem" }}>
-                Utilisez un modèle <strong>chat/instruct</strong>, pas un modèle{" "}
-                <strong>embedding</strong> (ex. interdit :{" "}
-                <code>text-embedding-nomic-embed-text-v1.5</code>).
+                Utilisez un modèle <strong>chat/instruct</strong> (contexte 8k+), pas un modèle{" "}
+                <strong>embedding</strong> ni un modèle <strong>vision (VL)</strong>.
               </p>
               {modelIsEmbedding && (
                 <p className="form-error" role="alert">
                   Ce modèle est un modèle d&apos;embeddings — choisissez un modèle de
                   conversation (qwen, gemma, llama, hermes…).
+                </p>
+              )}
+              {modelIsUnsuitableMj && (
+                <p className="form-error" role="alert">
+                  Ce modèle est un modèle <strong>vision (VL)</strong> — il plante souvent en MJ
+                  texte. Choisissez un instruct 7B+ (ex.{" "}
+                  <code>qwen2.5-7b-instruct</code>).
                 </p>
               )}
               {modelInLmStudioList && (

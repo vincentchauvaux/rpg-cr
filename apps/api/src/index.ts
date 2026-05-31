@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
-import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertChatModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat } from "@rpg-cr/shared";
+import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat } from "@rpg-cr/shared";
 import { initDb } from "./db.js";
 import {
   createRoom,
@@ -275,7 +275,7 @@ app.put<{
   const config = req.body.llmConfig;
   if (config?.modelId?.trim()) {
     try {
-      assertChatModelId(config.modelId);
+      assertMjSuitableModelId(config.modelId);
     } catch (e) {
       const err = e instanceof Error ? e.message : "Modèle invalide";
       return reply.status(400).send({ error: err });
@@ -300,7 +300,7 @@ app.post<{
   }
 
   try {
-    assertChatModelId(room.llmConfig.modelId);
+    assertMjSuitableModelId(room.llmConfig.modelId);
   } catch (e) {
     const err = e instanceof Error ? e.message : "Modèle invalide";
     return reply.status(400).send({ error: err });

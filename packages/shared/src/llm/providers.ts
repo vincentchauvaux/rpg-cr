@@ -1,6 +1,7 @@
 import { getCatalogEntry } from "./catalog.js";
 import { estimatePromptChars, resolveLlmTimeoutMs } from "./context-budget.js";
-import { assertChatModelId } from "./model-kind.js";
+import { assertChatModelId, isUnsuitableMjModelId } from "./model-kind.js";
+import { formatLlmModelCrashRecoveryHint } from "./model-context-tier.js";
 import { normalizeLmStudioV1BaseUrl } from "./lmstudio-url.js";
 import type { LlmRoomConfig } from "../types.js";
 
@@ -134,6 +135,17 @@ export function formatLlmHttpError(
       `Délai dépassé (${status}) pour « ${modelId} » — le modèle charge peut-être encore (JIT). ` +
       "Attendez READY puis réessayez « Tester la connexion »."
     );
+  }
+
+  const detail = `${errMsg ?? ""} ${bodyText}`.toLowerCase();
+  if (
+    status === 400 &&
+    (/crashed|exit code|model has crashed|without additional information/i.test(
+      detail
+    ) ||
+      isUnsuitableMjModelId(modelId))
+  ) {
+    return formatLlmModelCrashRecoveryHint(modelId);
   }
 
   if (errMsg) {
