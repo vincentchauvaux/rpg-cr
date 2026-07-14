@@ -261,6 +261,11 @@ export function CharacterSheetPanel({
             llmEnabled={llmEnabled}
             disabled={busy || generatingAll}
             onBusyChange={setGeneratingAll}
+            onProgress={(_percent, partial) => {
+              setDraft(buildDraft(normalizeCharacterSheet(partial)));
+              setEditing(true);
+              setExpanded(true);
+            }}
             onGenerated={(sheet) => {
               const base = editing ? draft : buildDraft(current.characterSheet);
               setDraft(buildDraft(mergeCharacterSheet(base, sheet)));

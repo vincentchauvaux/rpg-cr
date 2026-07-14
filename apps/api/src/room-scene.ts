@@ -25,6 +25,7 @@ import { db } from "./db.js";
 import { getRoomById } from "./rooms.js";
 import { listPlayers } from "./rooms.js";
 import { listMessages } from "./messages.js";
+import { queueBackgroundLlm } from "./room-llm-queue.js";
 
 function playerNamesForSceneGuard(roomId: string): string[] {
   return listPlayers(roomId)
@@ -293,10 +294,12 @@ export async function extractSceneFromText(
   if (heuristicOnly) return heuristicOnly;
 
   const messages = buildSceneExtractMessages(mjText, current);
-  const result = await completeAsMj(config, messages, {
-    apiKey,
-    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-  });
+  const result = await queueBackgroundLlm(roomId, "extract-scene", () =>
+    completeAsMj(config, messages, {
+      apiKey,
+      lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+    })
+  );
   let parsed = parseExtractedScene(result.content);
   if (!parsed) parsed = heuristicSceneFromMjText(mjText, current);
   const applied = parsed ? applySceneUpdate(roomId, parsed, sourceMessageId) : null;

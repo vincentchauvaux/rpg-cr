@@ -65,11 +65,12 @@ import {
   shouldBootstrapCampaignOpening,
 } from "./campaign-opening.js";
 import { getCampaignOpeningDone } from "./rooms.js";
+import {
+  queueInteractiveLlm,
+  queueNarrativeLlm,
+} from "./room-llm-queue.js";
 
 const DEBOUNCE_MS = 4000;
-const RETRY_BUSY_MS = 2500;
-/** ~2 min max en file d'attente si le salon reste occupé. */
-const MAX_BUSY_RETRIES = 48;
 
 const actionMjThinkingRooms = new Set<string>();
 
@@ -87,8 +88,6 @@ const lastTrigger = new Map<
     omitSpeakingPlayerSheet?: boolean;
   }
 >();
-const busyRooms = new Set<string>();
-
 function buildAbilitiesHintForPlayer(playerId: string): string | undefined {
   const player = getPlayerById(playerId);
   if (!player) return undefined;
@@ -167,6 +166,7 @@ function buildCirclePrompt(mode: "introduce" | "withdraw", player: Player): stri
 
 async function runBackgroundScrib(
   roomId: string,
+  _label: string,
   task: () => Promise<void>
 ): Promise<void> {
   mjThinkingBegin(roomId, { kind: "background" });
@@ -186,7 +186,7 @@ async function maybeExtractFacts(
 ): Promise<void> {
   const room = getRoomById(roomId);
   if (!room?.llmConfig || !shouldAutoExtractFacts(room.llmConfig)) return;
-  await runBackgroundScrib(roomId, async () => {
+  await runBackgroundScrib(roomId, "extract-facts", async () => {
     await extractNarrativeFactsFromText(
       roomId,
       messageId,
@@ -217,19 +217,19 @@ async function maybeExtractScene(
   };
 
   if (skipSceneExtract) {
-    await runBackgroundScrib(roomId, async () => {
+    await runBackgroundScrib(roomId, "scene-bootstrap", async () => {
       await runLightBootstrap();
     });
     return;
   }
   if (alreadyAppliedInline) {
-    await runBackgroundScrib(roomId, async () => {
+    await runBackgroundScrib(roomId, "scene-bootstrap", async () => {
       await runLightBootstrap();
     });
     return;
   }
 
-  await runBackgroundScrib(roomId, async () => {
+  await runBackgroundScrib(roomId, "extract-scene", async () => {
     const scene = await extractSceneFromText(
       roomId,
       messageId,
@@ -250,7 +250,7 @@ async function maybeExtractArc(
   const room = getRoomById(roomId);
   if (!room?.llmConfig || !shouldAutoExtractFacts(room.llmConfig)) return;
   if (alreadyAppliedInline) return;
-  await runBackgroundScrib(roomId, async () => {
+  await runBackgroundScrib(roomId, "extract-arc", async () => {
     await extractNarrativeArcFromText(
       roomId,
       mjContent,
@@ -263,11 +263,10 @@ async function maybeExtractArc(
 type MjNarrativePhase = "opening" | "turn";
 
 type ExecuteAutoMjOpts = {
-  /** Déjà émis en file d'attente (salon occupé) — évite un double `mjThinkingBegin`. */
+  /** Déjà émis avant entrée en file — évite un double `mjThinkingBegin`. */
   narrativeThinkingShown?: boolean;
   /** Phase passée à `mjThinkingBegin` quand `narrativeThinkingShown` — doit matcher `mjThinkingEnd`. */
   narrativePhase?: MjNarrativePhase;
-  busyRetryCount?: number;
   source?: string;
 };
 
@@ -311,38 +310,6 @@ async function executeAutoMj(
 ): Promise<void> {
   const source = execOpts.source ?? "auto";
 
-  if (busyRooms.has(roomId)) {
-    const retries = execOpts.busyRetryCount ?? 0;
-    if (retries >= MAX_BUSY_RETRIES) {
-      const detail = "le salon est resté occupé trop longtemps";
-      console.error(`[mj-auto] ${detail}`, { roomId, source });
-      broadcastMjFailure(roomId, detail);
-      finishMjTurn(roomId, execOpts);
-      return;
-    }
-    if (!execOpts.narrativeThinkingShown) {
-      mjThinkingBegin(roomId, execOpts.narrativePhase ?? "turn");
-    }
-    setTimeout(
-      () =>
-        void executeAutoMj(
-          roomId,
-          prompt,
-          speakingPlayerId,
-          onSuccess,
-          skipSceneExtract,
-          omitSpeakingPlayerSheet,
-          {
-            ...execOpts,
-            narrativeThinkingShown: true,
-            busyRetryCount: retries + 1,
-          }
-        ),
-      RETRY_BUSY_MS
-    );
-    return;
-  }
-
   const room = getRoomById(roomId);
   if (!room?.llmConfig) {
     const detail = "MJ non configuré";
@@ -353,63 +320,63 @@ async function executeAutoMj(
   }
 
   cancelPendingMjSchedule(roomId);
-  busyRooms.add(roomId);
   if (!execOpts.narrativeThinkingShown) {
     mjThinkingBegin(roomId, execOpts.narrativePhase ?? "turn");
   }
 
   try {
-    const speaker = speakingPlayerId ? getPlayerById(speakingPlayerId) : null;
-    const responseLocale = speaker?.preferredLocale ?? DEFAULT_LOCALE;
-    const { content, responseLocale: mjLocale, scenePatch, arcPatch } = await runMjTurn(
-      roomId,
-      room.llmConfig,
-      prompt,
-      process.env.OPENAI_API_KEY,
-      { speakingPlayerId, responseLocale, omitSpeakingPlayerSheet }
-    );
-    const mjMsg = saveMessage(
-      roomId,
-      "mj",
-      "MJ",
-      content,
-      "mj",
-      mjLocale ?? responseLocale
-    );
-    broadcastMessage(roomId, mjMsg);
-    let sceneApplied = false;
-    if (scenePatch) {
-      const scene = applySceneUpdate(roomId, scenePatch, mjMsg.id, {
-        explicitScene: true,
-      });
-      if (scene) {
-        broadcastScene(roomId, scene);
-        sceneApplied = true;
+    await queueNarrativeLlm(roomId, source, async () => {
+      const speaker = speakingPlayerId ? getPlayerById(speakingPlayerId) : null;
+      const responseLocale = speaker?.preferredLocale ?? DEFAULT_LOCALE;
+      const { content, responseLocale: mjLocale, scenePatch, arcPatch } =
+        await runMjTurn(
+          roomId,
+          room.llmConfig!,
+          prompt,
+          process.env.OPENAI_API_KEY,
+          { speakingPlayerId, responseLocale, omitSpeakingPlayerSheet }
+        );
+      const mjMsg = saveMessage(
+        roomId,
+        "mj",
+        "MJ",
+        content,
+        "mj",
+        mjLocale ?? responseLocale
+      );
+      broadcastMessage(roomId, mjMsg);
+      let sceneApplied = false;
+      if (scenePatch) {
+        const scene = applySceneUpdate(roomId, scenePatch, mjMsg.id, {
+          explicitScene: true,
+        });
+        if (scene) {
+          broadcastScene(roomId, scene);
+          sceneApplied = true;
+        }
       }
-    }
-    let arcApplied = false;
-    if (arcPatch && (arcPatch.mainPlot || arcPatch.currentBeat)) {
-      updateNarrativeArc(roomId, arcPatch);
-      arcApplied = true;
-    }
-    void maybeExtractFacts(roomId, mjMsg.id, content);
-    void maybeExtractScene(
-      roomId,
-      mjMsg.id,
-      content,
-      sceneApplied,
-      skipSceneExtract
-    );
-    void maybeExtractArc(roomId, content, arcApplied);
-    onSuccess?.();
+      let arcApplied = false;
+      if (arcPatch && (arcPatch.mainPlot || arcPatch.currentBeat)) {
+        updateNarrativeArc(roomId, arcPatch);
+        arcApplied = true;
+      }
+      void maybeExtractFacts(roomId, mjMsg.id, content);
+      void maybeExtractScene(
+        roomId,
+        mjMsg.id,
+        content,
+        sceneApplied,
+        skipSceneExtract
+      );
+      void maybeExtractArc(roomId, content, arcApplied);
+      onSuccess?.();
+    });
     finishMjTurn(roomId, execOpts);
   } catch (e) {
     const err = formatMjFailureDetail(e);
     console.error(`[mj-auto] tour MJ échoué (${source})`, { roomId, err });
     broadcastMjFailure(roomId, err);
     finishMjTurn(roomId, execOpts);
-  } finally {
-    busyRooms.delete(roomId);
   }
 }
 
@@ -884,37 +851,34 @@ export function scheduleAiPuppetGeneration(roomId: string, player: Player): void
     "alignment (une des 9 valeurs D&D), rank, background, family, secret, ambition, inventory, equipment, possessions, money, mount, notes, " +
     'stats (force,dexterite,...), spells[], attackTypes[], actions[], usableItems[].';
 
+  mjThinkingBegin(roomId);
   void (async () => {
-    if (busyRooms.has(roomId)) {
-      setTimeout(() => scheduleAiPuppetGeneration(roomId, player), RETRY_BUSY_MS);
-      return;
-    }
-    busyRooms.add(roomId);
-    mjThinkingBegin(roomId);
     try {
-      const { content, scenePatch, arcPatch } = await runMjTurn(
-        roomId,
-        room.llmConfig!,
-        prompt,
-        process.env.OPENAI_API_KEY
-      );
-      if (scenePatch) {
-        const scene = applySceneUpdate(roomId, scenePatch, null, {
-          explicitScene: true,
+      await queueInteractiveLlm(roomId, "ai-puppet-sheet", async () => {
+        const { content, scenePatch, arcPatch } = await runMjTurn(
+          roomId,
+          room.llmConfig!,
+          prompt,
+          process.env.OPENAI_API_KEY
+        );
+        if (scenePatch) {
+          const scene = applySceneUpdate(roomId, scenePatch, null, {
+            explicitScene: true,
+          });
+          if (scene) broadcastScene(roomId, scene);
+        }
+        if (arcPatch && (arcPatch.mainPlot || arcPatch.currentBeat)) {
+          updateNarrativeArc(roomId, arcPatch);
+        }
+        const sheet = parseSheetJson(content);
+        updateCharacter(player.id, {
+          characterStatus: "ready",
+          characterSheet: sheet,
         });
-        if (scene) broadcastScene(roomId, scene);
-      }
-      if (arcPatch && (arcPatch.mainPlot || arcPatch.currentBeat)) {
-        updateNarrativeArc(roomId, arcPatch);
-      }
-      const sheet = parseSheetJson(content);
-      updateCharacter(player.id, {
-        characterStatus: "ready",
-        characterSheet: sheet,
+        broadcastPlayers(roomId, listPlayers(roomId));
+        const updated = getPlayerById(player.id);
+        if (updated) scheduleCircleMj(roomId, "introduce", updated);
       });
-      broadcastPlayers(roomId, listPlayers(roomId));
-      const updated = getPlayerById(player.id);
-      if (updated) scheduleCircleMj(roomId, "introduce", updated);
     } catch {
       updateCharacter(player.id, {
         characterStatus: "ready",
@@ -927,7 +891,6 @@ export function scheduleAiPuppetGeneration(roomId: string, player: Player): void
       const updated = getPlayerById(player.id);
       if (updated) scheduleCircleMj(roomId, "introduce", updated);
     } finally {
-      busyRooms.delete(roomId);
       mjThinkingEnd(roomId);
     }
   })();

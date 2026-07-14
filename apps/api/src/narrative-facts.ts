@@ -8,6 +8,7 @@ import {
 import { db } from "./db.js";
 import { getRoomById } from "./rooms.js";
 import { listMessages } from "./messages.js";
+import { queueBackgroundLlm } from "./room-llm-queue.js";
 
 function rowToFact(row: Record<string, unknown>): NarrativeFact {
   let payload: Record<string, unknown> = {};
@@ -78,10 +79,12 @@ export async function extractNarrativeFactsFromText(
   apiKey?: string
 ): Promise<NarrativeFact[]> {
   const messages = buildNarrativeFactsExtractMessages(mjText);
-  const result = await completeAsMj(config, messages, {
-    apiKey,
-    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-  });
+  const result = await queueBackgroundLlm(roomId, "extract-facts", () =>
+    completeAsMj(config, messages, {
+      apiKey,
+      lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+    })
+  );
   const parsed = parseExtractedFacts(result.content);
   if (!parsed.length) return [];
   return saveNarrativeFacts(

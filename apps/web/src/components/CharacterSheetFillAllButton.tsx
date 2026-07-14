@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CharacterSheet, Player } from "@rpg-cr/shared";
 import {
   isCharacterSheetFilled,
@@ -12,6 +12,7 @@ import {
   cancelCharacterAllGeneration,
   generateCharacterAll,
   getCharacterAllGenerationLock,
+  getCharacterAllGenerationProgress,
 } from "@/lib/api";
 import { isHttpError } from "@/lib/api-errors";
 import { AiGenerationOverlay } from "@/components/AiGenerationOverlay";
@@ -35,6 +36,8 @@ interface Props {
   /** Propriétaire de la fiche ou admin en god mode — peut libérer un verrou bloqué. */
   canForceReleaseLock?: boolean;
   onGenerated: (sheet: CharacterSheet) => void;
+  /** Mise à jour progressive pendant la génération (phases + %). */
+  onProgress?: (percent: number, partialSheet: CharacterSheet, label: string) => void;
   onError: (msg: string) => void;
   disabled?: boolean;
   className?: string;
@@ -49,6 +52,7 @@ const LM_STUDIO_SLOW_HINT =
 
 const LOCK_POLL_INTERVAL_MS = 3000;
 const LOCK_POLL_MAX_MS = 90_000;
+const PROGRESS_POLL_INTERVAL_MS = 450;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -87,6 +91,7 @@ export function CharacterSheetFillAllButton({
   llmEnabled,
   canForceReleaseLock = false,
   onGenerated,
+  onProgress,
   onError,
   disabled = false,
   className,
@@ -94,11 +99,22 @@ export function CharacterSheetFillAllButton({
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [overlay, setOverlay] = useState<OverlayState>(null);
+  const [genProgress, setGenProgress] = useState<number | null>(null);
+  const [genProgressLabel, setGenProgressLabel] = useState<string | null>(null);
   const inFlightRef = useRef(false);
+  const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const snapshotRef = useRef(currentSheet);
 
-  if (!shouldShowFillAllButton(player, currentSheet)) {
-    return null;
+  function stopProgressPoll(): void {
+    if (progressPollRef.current) {
+      clearInterval(progressPollRef.current);
+      progressPollRef.current = null;
+    }
   }
+
+  useEffect(() => () => stopProgressPoll(), []);
+
+  const showButton = shouldShowFillAllButton(player, currentSheet);
 
   async function waitForLockClear(): Promise<boolean> {
     const deadline = Date.now() + LOCK_POLL_MAX_MS;
@@ -114,16 +130,45 @@ export function CharacterSheetFillAllButton({
     return shouldShowFillAllButton(player, currentSheet);
   }
 
+  function startProgressPoll(): void {
+    stopProgressPoll();
+    progressPollRef.current = setInterval(() => {
+      void getCharacterAllGenerationProgress(player.id, actorPlayerId)
+        .then((p) => {
+          if (!p.active) return;
+          setGenProgress(p.percent);
+          setGenProgressLabel(p.label || null);
+          if (p.sheet) {
+            const cumulative = normalizeCharacterSheet(p.sheet);
+            onProgress?.(p.percent, cumulative, p.label);
+          }
+        })
+        .catch(() => {
+          /* poll silencieux */
+        });
+    }, PROGRESS_POLL_INTERVAL_MS);
+  }
+
+  function resetProgressUi(): void {
+    stopProgressPoll();
+    setGenProgress(null);
+    setGenProgressLabel(null);
+  }
+
   async function runGeneration(): Promise<void> {
     if (!isFillAllAllowed()) return;
     const snapshot = normalizeCharacterSheet(currentSheet);
-    const { sheet } = await generateCharacterAll(
+    snapshotRef.current = snapshot;
+    const generation = generateCharacterAll(
       player.id,
       actorPlayerId,
       player.roomId,
       snapshot
     );
+    startProgressPoll();
+    const { sheet } = await generation;
     const merged = normalizeCharacterSheet(mergeCharacterSheet(snapshot, sheet));
+    resetProgressUi();
     setOverlay(null);
     onGenerated(merged);
   }
@@ -149,10 +194,13 @@ export function CharacterSheetFillAllButton({
     inFlightRef.current = true;
     setBusy(true);
     setOverlay("loading");
+    setGenProgress(0);
+    setGenProgressLabel("Préparation de la fiche…");
     onBusyChange?.(true);
     try {
       await runGeneration();
     } catch (e) {
+      resetProgressUi();
       const msg = formatFillAllError(e);
       logFillAllError(e);
       if (isHttpError(e) && e.status === 429) {
@@ -186,10 +234,13 @@ export function CharacterSheetFillAllButton({
     inFlightRef.current = true;
     setBusy(true);
     setOverlay("loading");
+    setGenProgress(0);
+    setGenProgressLabel("En attente…");
     onBusyChange?.(true);
     try {
       const cleared = await waitForLockClear();
       if (!cleared) {
+        resetProgressUi();
         const msg =
           "La génération est toujours en cours (autre appareil ou modèle lent). " +
           "Attendez encore un peu ou annulez le verrou.";
@@ -199,6 +250,7 @@ export function CharacterSheetFillAllButton({
       }
       await runGeneration();
     } catch (e) {
+      resetProgressUi();
       const msg = formatFillAllError(e);
       setOverlay(
         isHttpError(e) && e.status === 429 ? { error: msg, locked: true } : { error: msg }
@@ -236,6 +288,10 @@ export function CharacterSheetFillAllButton({
       ]
     : undefined;
 
+  if (!showButton) {
+    return null;
+  }
+
   if (!llmEnabled) {
     return (
       <p
@@ -250,7 +306,11 @@ export function CharacterSheetFillAllButton({
 
   return (
     <>
-      <AiGenerationOverlay visible={overlay === "loading"} />
+      <AiGenerationOverlay
+        visible={overlay === "loading"}
+        progress={genProgress}
+        progressLabel={genProgressLabel}
+      />
       <AiGenerationOverlay
         visible={overlayError !== null}
         variant="error"

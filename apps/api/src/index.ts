@@ -48,6 +48,8 @@ import {
   getMjStatusForRoom,
   mjThinkingBegin,
   mjThinkingEnd,
+  broadcastScene,
+  broadcastCharacterGenProgress,
 } from "./ws-hub.js";
 import { enrichPlayersWithPresence } from "./presence.js";
 import { runMjTurn, testLlmConnection } from "./mj.js";
@@ -77,6 +79,12 @@ import {
   tryAcquireCharacterAllGeneration,
 } from "./character-all-guard.js";
 import {
+  clearCharacterAllProgress,
+  getCharacterAllProgress,
+  initCharacterAllProgress,
+  setCharacterAllProgress,
+} from "./character-all-progress.js";
+import {
   listNarrativeFacts,
   extractFromLastMjMessage,
   extractNarrativeFactsFromText,
@@ -92,7 +100,7 @@ import {
   listSceneLog,
 } from "./room-scene.js";
 import { updateNarrativeArc } from "./room-narrative-arc.js";
-import { broadcastScene } from "./ws-hub.js";
+import { queueNarrativeLlm } from "./room-llm-queue.js";
 import {
   canManageAvatar,
   deletePlayerAvatar,
@@ -438,11 +446,13 @@ app.post<{
 
   try {
     const { content, usedFallback, responseLocale, scenePatch, arcPatch } =
-      await runMjTurn(
-        room.id,
-        room.llmConfig,
-        req.body.prompt,
-        req.body.apiKey ?? process.env.OPENAI_API_KEY
+      await queueNarrativeLlm(room.id, "god:mj", () =>
+        runMjTurn(
+          room.id,
+          room.llmConfig!,
+          req.body.prompt,
+          req.body.apiKey ?? process.env.OPENAI_API_KEY
+        )
       );
     const msg = saveMessage(room.id, "mj", "MJ", content, "mj", responseLocale);
     broadcastMessage(room.id, msg);
@@ -1235,6 +1245,18 @@ app.post<{
     });
   }
 
+  initCharacterAllProgress(target.id);
+
+  const pushProgress = (update: {
+    percent: number;
+    phase: string;
+    label: string;
+    sheet: import("@rpg-cr/shared").CharacterSheet;
+  }) => {
+    setCharacterAllProgress(target.id, update);
+    broadcastCharacterGenProgress(target.roomId, target.id, update);
+  };
+
   try {
     const sheet = await generateCharacterAll(
       target.roomId,
@@ -1243,7 +1265,8 @@ app.post<{
       target.name,
       process.env.OPENAI_API_KEY,
       req.body.hints,
-      actor.preferredLocale
+      actor.preferredLocale,
+      pushProgress
     );
     return { sheet };
   } catch (e) {
@@ -1262,8 +1285,22 @@ app.post<{
     }
     return reply.status(502).send({ error: err });
   } finally {
+    clearCharacterAllProgress(target.id);
     releaseCharacterAllGeneration(target.id);
   }
+});
+
+app.get<{
+  Params: { playerId: string };
+  Querystring: { actorPlayerId?: string };
+}>("/api/players/:playerId/character/generate-all-progress", async (req, reply) => {
+  const actor = getPlayerById(req.query.actorPlayerId ?? "");
+  const target = getPlayerById(req.params.playerId);
+  if (!actor || !target) return reply.status(404).send({ error: "Joueur introuvable" });
+  if (!canAccessCharacter(actor, target)) {
+    return reply.status(403).send({ error: "Non autorisé" });
+  }
+  return getCharacterAllProgress(target.id);
 });
 
 app.get<{
@@ -1290,6 +1327,7 @@ app.delete<{
     return reply.status(403).send({ error: "Non autorisé" });
   }
   const released = forceReleaseCharacterAllGeneration(target.id);
+  clearCharacterAllProgress(target.id);
   return { released };
 });
 

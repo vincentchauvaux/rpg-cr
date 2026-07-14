@@ -526,6 +526,22 @@ export function generateCharacterAll(
   });
 }
 
+export function getCharacterAllGenerationProgress(
+  playerId: string,
+  actorPlayerId: string
+): Promise<{
+  active: boolean;
+  percent: number;
+  phase: string;
+  label: string;
+  sheet: import("@rpg-cr/shared").CharacterSheet | null;
+  updatedAt: number | null;
+}> {
+  return fetchJson(
+    `/api/players/${playerId}/character/generate-all-progress?actorPlayerId=${encodeURIComponent(actorPlayerId)}`
+  );
+}
+
 export function getCharacterAllGenerationLock(
   playerId: string,
   actorPlayerId: string

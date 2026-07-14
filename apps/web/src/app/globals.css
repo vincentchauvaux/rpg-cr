@@ -1719,6 +1719,30 @@ label {
   animation: ai-gen-spin 0.75s linear infinite;
 }
 
+.ai-gen-overlay-progress {
+  margin-top: 1rem;
+}
+
+.ai-gen-overlay-progress-track {
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.ai-gen-overlay-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  transition: width 0.35s ease;
+}
+
+.ai-gen-overlay-progress-label {
+  margin: 0.5rem 0 0;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
 .ai-gen-overlay--error .ai-gen-overlay-title {
   animation: none;
   color: #e8a87c;

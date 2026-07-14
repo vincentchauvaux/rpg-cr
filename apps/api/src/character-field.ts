@@ -8,6 +8,7 @@ import {
 } from "@rpg-cr/shared";
 import { getMap, getRoomById } from "./rooms.js";
 import { readCampaignContext } from "./campaign-export.js";
+import { queueInteractiveLlm } from "./room-llm-queue.js";
 
 export async function generateCharacterField(
   roomId: string,
@@ -41,10 +42,12 @@ export async function generateCharacterField(
     preferredLocale
   );
 
-  const result = await completeAsMj(config, messages, {
-    apiKey,
-    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-  });
+  const result = await queueInteractiveLlm(roomId, `character-field:${field}`, () =>
+    completeAsMj(config, messages, {
+      apiKey,
+      lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+    })
+  );
 
   return sanitizeCharacterFieldValue(result.content, field, preferredLocale);
 }

@@ -218,6 +218,7 @@ export function CharacterCreationWizard({
             llmEnabled={llmEnabled}
             disabled={busy}
             onBusyChange={setGeneratingAll}
+            onProgress={(_percent, partial) => setSheet(normalizeCharacterSheet(partial))}
             onGenerated={(next) =>
               setSheet((prev) => normalizeCharacterSheet(mergeCharacterSheet(prev, next)))
             }

@@ -15,6 +15,7 @@ import {
   buildEstablishedCanonSummary,
   formatEstablishedCanonForMj,
 } from "./established-canon.js";
+import { queueInteractiveLlm } from "./room-llm-queue.js";
 
 const RECENT_TABLE_LINES = 12;
 
@@ -66,12 +67,14 @@ export async function runHeroAssistantTurn(
 
   let result;
   try {
-    result = await completeAsMj(config, messages, {
-      apiKey,
-      lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-      timeoutMs,
-      maxTokens: mode === "creation" ? 400 : 320,
-    });
+    result = await queueInteractiveLlm(player.roomId, "hero-assistant", () =>
+      completeAsMj(config, messages, {
+        apiKey,
+        lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+        timeoutMs,
+        maxTokens: mode === "creation" ? 400 : 320,
+      })
+    );
   } catch (e) {
     if (!isLlmTimeoutError(e)) throw e;
     const slimMessages = buildHeroAssistantMessages({
@@ -86,15 +89,17 @@ export async function runHeroAssistantTurn(
       establishedCanonBlock: "",
       preferredLocale: player.preferredLocale,
     });
-    result = await completeAsMj(config, slimMessages, {
-      apiKey,
-      lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-      timeoutMs: resolveLlmTimeoutMs(
-        config.providerId,
-        estimatePromptChars(slimMessages)
-      ),
-      maxTokens: 280,
-    });
+    result = await queueInteractiveLlm(player.roomId, "hero-assistant:slim", () =>
+      completeAsMj(config, slimMessages, {
+        apiKey,
+        lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+        timeoutMs: resolveLlmTimeoutMs(
+          config.providerId,
+          estimatePromptChars(slimMessages)
+        ),
+        maxTokens: 280,
+      })
+    );
   }
 
   const reply = formatMjMessageForDisplay(result.content).trim();

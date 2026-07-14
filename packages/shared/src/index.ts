@@ -22,6 +22,7 @@ export * from "./mj/sanitize-response.js";
 export * from "./mj/character-field-prompt.js";
 export * from "./mj/character-section-prompt.js";
 export * from "./mj/character-all-prompt.js";
+export * from "./mj/character-all-phases-prompt.js";
 export * from "./mj/player-mj-prompts.js";
 export * from "./mj/host-mj-prompts.js";
 export * from "./mj/narrative-facts-prompt.js";

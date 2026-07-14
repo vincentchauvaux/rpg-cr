@@ -1,5 +1,7 @@
 import {
-  buildCharacterAllMessages,
+  buildCharacterAbilitiesPhaseMessages,
+  buildCharacterMaterialPhaseMessages,
+  buildCharacterStoryPhaseMessages,
   completeAsMj,
   mergeCharacterSheet,
   normalizeCharacterSheet,
@@ -8,66 +10,38 @@ import {
 } from "@rpg-cr/shared";
 import { getMap, getRoomById } from "./rooms.js";
 import { readCampaignContext } from "./campaign-export.js";
+import { generateCharacterSection } from "./character-section.js";
+import { queueInteractiveLlm } from "./room-llm-queue.js";
 
-function parseFullSheetJson(raw: string): Partial<CharacterSheet> {
+export type CharacterAllProgressUpdate = {
+  percent: number;
+  phase: string;
+  label: string;
+  sheet: CharacterSheet;
+};
+
+function parseJsonObject(raw: string, label: string): Partial<CharacterSheet> {
   const trimmed = raw.trim();
   if (!trimmed) {
-    throw new Error("Réponse LLM vide");
+    throw new Error(`Réponse LLM vide (${label})`);
   }
   const match = trimmed.match(/\{[\s\S]*\}/);
   if (!match) {
-    throw new Error("Réponse LLM sans JSON de fiche");
+    throw new Error(`Réponse LLM sans JSON (${label})`);
   }
   try {
     return JSON.parse(match[0]) as Partial<CharacterSheet>;
   } catch {
-    throw new Error("JSON de fiche invalide");
+    throw new Error(`JSON invalide (${label})`);
   }
 }
 
-function patchHasContent(patch: Partial<CharacterSheet>): boolean {
-  const textKeys = [
-    "rank",
-    "background",
-    "family",
-    "secret",
-    "ambition",
-    "inventory",
-    "equipment",
-    "possessions",
-    "habitat",
-    "servants",
-    "money",
-    "mount",
-    "notes",
-  ] as const;
-  if (patch.alignment) return true;
-  if (textKeys.some((k) => Boolean(patch[k]?.trim()))) return true;
-  if (patch.stats && Object.values(patch.stats).some((v) => v != null)) return true;
-  if ((patch.spells?.length ?? 0) > 0) return true;
-  if ((patch.attackTypes?.length ?? 0) > 0) return true;
-  if ((patch.actions?.length ?? 0) > 0) return true;
-  if ((patch.usableItems?.length ?? 0) > 0) return true;
-  return false;
-}
-
-export async function generateCharacterAll(
-  roomId: string,
-  config: LlmRoomConfig,
-  currentSheet: CharacterSheet,
-  playerName: string,
-  apiKey?: string,
-  hints?: string,
-  preferredLocale?: string
-): Promise<CharacterSheet> {
+function buildWorldContext(roomId: string): string {
   const room = getRoomById(roomId);
   const map = getMap(roomId);
   const mdContext = room ? readCampaignContext(room.code) : { lore: "", journal: "" };
-
-  const worldContext = [
-    map
-      ? `Carte (graine ${map.seed}) : ${map.countries.join(", ")}.`
-      : "",
+  return [
+    map ? `Carte (graine ${map.seed}) : ${map.countries.join(", ")}.` : "",
     mdContext.lore.trim()
       ? `Lore campagne :\n${mdContext.lore.trim().slice(0, 2500)}`
       : "",
@@ -77,55 +51,105 @@ export async function generateCharacterAll(
   ]
     .filter(Boolean)
     .join("\n\n");
+}
 
-  const messages = buildCharacterAllMessages(
-    currentSheet,
-    playerName,
-    worldContext,
-    hints,
-    preferredLocale
+async function runPhaseLlm(
+  roomId: string,
+  label: string,
+  config: LlmRoomConfig,
+  messages: { role: "system" | "user"; content: string }[],
+  apiKey: string | undefined,
+  maxTokens: number
+): Promise<string> {
+  const result = await queueInteractiveLlm(roomId, label, () =>
+    completeAsMj(config, messages, {
+      apiKey,
+      lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+      timeoutMs: 120_000,
+      maxTokens,
+    })
   );
-
-  const result = await completeAsMj(config, messages, {
-    apiKey,
-    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-    timeoutMs: 180_000,
-    maxTokens: 2048,
-  });
-
   if (!result.content?.trim()) {
-    console.error("[character-all] empty LLM content", {
-      roomId,
-      playerName,
-      providerId: result.providerId,
-      modelId: result.modelId,
-    });
     throw new Error("Réponse LLM vide — réessayez ou vérifiez le modèle");
   }
+  return result.content;
+}
 
-  let patch: Partial<CharacterSheet>;
-  try {
-    patch = parseFullSheetJson(result.content);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "JSON de fiche invalide";
-    console.error("[character-all] JSON parse failed", {
-      roomId,
-      playerName,
-      error: msg,
-      preview: result.content.slice(0, 400),
-    });
-    throw e instanceof Error ? e : new Error(msg);
-  }
+function report(
+  onProgress: ((u: CharacterAllProgressUpdate) => void) | undefined,
+  sheet: CharacterSheet,
+  percent: number,
+  phase: string,
+  label: string
+): void {
+  onProgress?.({ percent, phase, label, sheet });
+}
 
-  if (!patchHasContent(patch)) {
-    console.error("[character-all] LLM JSON without sheet fields", {
-      roomId,
-      playerName,
-      preview: result.content.slice(0, 400),
-    });
-    throw new Error("Réponse IA sans contenu de fiche — réessayez");
-  }
+export async function generateCharacterAll(
+  roomId: string,
+  config: LlmRoomConfig,
+  currentSheet: CharacterSheet,
+  playerName: string,
+  apiKey?: string,
+  hints?: string,
+  preferredLocale?: string,
+  onProgress?: (update: CharacterAllProgressUpdate) => void
+): Promise<CharacterSheet> {
+  const worldContext = buildWorldContext(roomId);
+  let sheet = normalizeCharacterSheet(currentSheet);
 
-  const merged = mergeCharacterSheet(currentSheet, patch);
-  return normalizeCharacterSheet(merged);
+  report(onProgress, sheet, 0, "prepare", "Préparation de la fiche…");
+
+  report(onProgress, sheet, 5, "story", "Histoire et identité…");
+  const storyRaw = await runPhaseLlm(
+    roomId,
+    "character-all:story",
+    config,
+    buildCharacterStoryPhaseMessages(sheet, playerName, worldContext, hints, preferredLocale),
+    apiKey,
+    1200
+  );
+  const storyPatch = parseJsonObject(storyRaw, "histoire");
+  sheet = normalizeCharacterSheet(mergeCharacterSheet(sheet, storyPatch));
+  report(onProgress, sheet, 40, "story", "Histoire et identité…");
+
+  report(onProgress, sheet, 42, "stats", "Caractéristiques…");
+  sheet = await generateCharacterSection(
+    roomId,
+    config,
+    "stats",
+    sheet,
+    playerName,
+    apiKey,
+    preferredLocale
+  );
+  report(onProgress, sheet, 55, "stats", "Caractéristiques…");
+
+  report(onProgress, sheet, 57, "abilities", "Sorts et capacités…");
+  const abilitiesRaw = await runPhaseLlm(
+    roomId,
+    "character-all:abilities",
+    config,
+    buildCharacterAbilitiesPhaseMessages(sheet, playerName, worldContext, preferredLocale),
+    apiKey,
+    1024
+  );
+  const abilitiesPatch = parseJsonObject(abilitiesRaw, "capacités");
+  sheet = normalizeCharacterSheet(mergeCharacterSheet(sheet, abilitiesPatch));
+  report(onProgress, sheet, 80, "abilities", "Sorts et capacités…");
+
+  report(onProgress, sheet, 82, "material", "Biens et équipement…");
+  const materialRaw = await runPhaseLlm(
+    roomId,
+    "character-all:material",
+    config,
+    buildCharacterMaterialPhaseMessages(sheet, playerName, worldContext, preferredLocale),
+    apiKey,
+    1200
+  );
+  const materialPatch = parseJsonObject(materialRaw, "biens");
+  sheet = normalizeCharacterSheet(mergeCharacterSheet(sheet, materialPatch));
+  report(onProgress, sheet, 100, "done", "Fiche complète");
+
+  return sheet;
 }

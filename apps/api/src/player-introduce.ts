@@ -13,6 +13,7 @@ import {
 import { saveMessage } from "./messages.js";
 import { broadcastMessage, broadcastPlayers } from "./ws-hub.js";
 import { schedulePlayerIntroFollowUpMj } from "./mj-auto.js";
+import { queueInteractiveLlm } from "./room-llm-queue.js";
 
 export class PlayerIntroduceError extends Error {
   constructor(
@@ -42,11 +43,13 @@ async function generateSelfIntroduction(
     player.preferredLocale
   );
 
-  const result = await completeAsMj(room.llmConfig, messages, {
-    apiKey,
-    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-    maxTokens: 512,
-  });
+  const result = await queueInteractiveLlm(player.roomId, "player-intro-auto", () =>
+    completeAsMj(room.llmConfig!, messages, {
+      apiKey,
+      lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+      maxTokens: 512,
+    })
+  );
 
   const text = result.content.trim();
   if (!text) {

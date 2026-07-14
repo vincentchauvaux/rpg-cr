@@ -9,6 +9,7 @@ import {
 } from "@rpg-cr/shared";
 import { getMap, getRoomById } from "./rooms.js";
 import { readCampaignContext } from "./campaign-export.js";
+import { queueInteractiveLlm } from "./room-llm-queue.js";
 
 function parseSectionJson(
   section: CharacterSheetSectionKey,
@@ -65,10 +66,12 @@ export async function generateCharacterSection(
     preferredLocale
   );
 
-  const result = await completeAsMj(config, messages, {
-    apiKey,
-    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-  });
+  const result = await queueInteractiveLlm(roomId, `character-section:${section}`, () =>
+    completeAsMj(config, messages, {
+      apiKey,
+      lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+    })
+  );
 
   const patch = parseSectionJson(section, result.content);
   return normalizeCharacterSheet({ ...currentSheet, ...patch });

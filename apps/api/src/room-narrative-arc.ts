@@ -11,6 +11,7 @@ import {
 import { db } from "./db.js";
 import { getRoomById } from "./rooms.js";
 import { listMessages } from "./messages.js";
+import { queueBackgroundLlm } from "./room-llm-queue.js";
 
 export function getNarrativeArc(roomId: string): NarrativeArc | null {
   const row = db.prepare(`SELECT narrative_arc FROM rooms WHERE id = ?`).get(roomId) as
@@ -42,10 +43,12 @@ export async function extractNarrativeArcFromText(
   apiKey?: string
 ): Promise<NarrativeArc | null> {
   const messages = buildNarrativeArcExtractMessages(mjText);
-  const result = await completeAsMj(config, messages, {
-    apiKey,
-    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-  });
+  const result = await queueBackgroundLlm(roomId, "extract-arc", () =>
+    completeAsMj(config, messages, {
+      apiKey,
+      lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+    })
+  );
   const parsed = parseExtractedNarrativeArc(result.content);
   if (!parsed) return null;
   return updateNarrativeArc(roomId, parsed);

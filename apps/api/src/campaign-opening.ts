@@ -28,6 +28,7 @@ import {
 import { applySceneUpdate, bootstrapSceneLocationFromHistory } from "./room-scene.js";
 import { updateNarrativeArc } from "./room-narrative-arc.js";
 import { broadcastScene } from "./ws-hub.js";
+import { queueNarrativeLlm } from "./room-llm-queue.js";
 
 const openingBusy = new Set<string>();
 
@@ -111,14 +112,12 @@ export async function bootstrapCampaignOpening(
       hostSheet: host.characterSheet,
     };
 
-    const planResult = await completeAsMj(
-      room.llmConfig,
-      buildCampaignOpeningPlanMessages(ctx, host.preferredLocale),
-      {
+    const planResult = await queueNarrativeLlm(roomId, "campaign-opening-plan", () =>
+      completeAsMj(room.llmConfig!, buildCampaignOpeningPlanMessages(ctx, host.preferredLocale), {
         apiKey: process.env.OPENAI_API_KEY,
         lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
         maxTokens: 1200,
-      }
+      })
     );
 
     const plan =
@@ -126,12 +125,17 @@ export async function bootstrapCampaignOpening(
       fallbackPlan(worldSeed, map?.countries.join(", ") ?? "");
 
     const narrativePrompt = buildCampaignOpeningNarrativePrompt(plan, ctx);
-    const { content, scenePatch, arcPatch } = await runMjTurn(
+    const { content, scenePatch, arcPatch } = await queueNarrativeLlm(
       roomId,
-      room.llmConfig,
-      narrativePrompt,
-      process.env.OPENAI_API_KEY,
-      { speakingPlayerId: host.id, responseLocale: host.preferredLocale }
+      "campaign-opening-narrative",
+      () =>
+        runMjTurn(
+          roomId,
+          room.llmConfig!,
+          narrativePrompt,
+          process.env.OPENAI_API_KEY,
+          { speakingPlayerId: host.id, responseLocale: host.preferredLocale }
+        )
     );
 
     const mjMsg = saveMessage(roomId, "mj", "MJ", content, "mj", host.preferredLocale);

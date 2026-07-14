@@ -9,6 +9,7 @@ import {
 import { db } from "./db.js";
 import { getRoomById } from "./rooms.js";
 import { getMessageById } from "./messages.js";
+import { queueInteractiveLlm } from "./room-llm-queue.js";
 
 export interface TranslateResult {
   text: string;
@@ -113,12 +114,14 @@ export async function translateText(
   }
 
   const messages = buildTranslatePrompt(text, tgt, src);
-  const result = await completeAsMj(config, messages, {
-    apiKey,
-    lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-    maxTokens: Math.min(2048, text.length * 3 + 128),
-    timeoutMs: 60_000,
-  });
+  const result = await queueInteractiveLlm(roomId, "translate", () =>
+    completeAsMj(config, messages, {
+      apiKey,
+      lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+      maxTokens: Math.min(2048, text.length * 3 + 128),
+      timeoutMs: 60_000,
+    })
+  );
 
   const translated = result.content.trim() || text;
   if (messageId) {

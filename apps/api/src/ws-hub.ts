@@ -273,3 +273,23 @@ export function broadcastMjStatus(
 export function broadcastScene(roomId: string, scene: SceneState): void {
   broadcastToRoom(roomId, { type: "scene", scene });
 }
+
+export function broadcastCharacterGenProgress(
+  roomId: string,
+  playerId: string,
+  payload: {
+    percent: number;
+    phase: string;
+    label: string;
+    sheet: import("@rpg-cr/shared").CharacterSheet;
+  }
+): void {
+  broadcastToRoom(roomId, {
+    type: "character_gen_progress",
+    playerId,
+    percent: payload.percent,
+    phase: payload.phase,
+    label: payload.label,
+    sheet: payload.sheet,
+  });
+}
