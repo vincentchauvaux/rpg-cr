@@ -468,7 +468,7 @@ API : `GET/PATCH /api/players/:id/character`, `POST …/finalize`, `POST …/int
 | **429** fill-all / « déjà en cours » | Verrou actif (autre onglet, double-clic, requête lente) | **Annuler la génération** puis réessayer ; relance auto-libère le verrou si propriétaire ; TTL 4 min ; admin god peut libérer le verrou d’un PJ |
 | Annuler génération → **400** | `DELETE` lock avec `Content-Type: application/json` mais corps vide (Fastify `FST_ERR_CTP_EMPTY_JSON_BODY`) | Rebuild web : `fetchJson` n’envoie le header JSON que si `body` présent |
 | Deux fill-all en parallèle (LAN, même PJ) | Deux appels LLM lourds sur le même personnage | **429** mutex par `playerId` ; deux PJ différents **sérialisés** via la file salon (plus de collision LM Studio) |
-| **502** test LLM Ollama « Modèle introuvable » (ex. `qwen/qwen3.5-9b`) | Id **LM Studio** conservé après changement de provider — Ollama utilise un autre format (`qwen2.5:7b-instruct`) | God mode → **Ollama** → bouton **Lister modèles Ollama (chat)** ou `ollama list` sur le VPS ; `ollama pull qwen2.5:7b-instruct` si absent ; messages d'erreur adaptés Ollama/LM Studio (`local-llm.ts`, `llm-errors.ts`) |
+| **502** test LLM Ollama « Modèle introuvable » (ex. `qwen/qwen3.5-9b`) | Id **LM Studio** conservé après changement de provider — Ollama utilise un autre format (`qwen2.5:7b-instruct`) | God mode → **Ollama** → liste auto au chargement + correction id → **Enregistrer** puis **Tester** (le test lit la config **en base**, pas le champ non enregistré) |
 
 **Test curl** (remplacer `{playerId}`, `{roomId}` ; API + `llmConfig` requis pour generate-all) :
 

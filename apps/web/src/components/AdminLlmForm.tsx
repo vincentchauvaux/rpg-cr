@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { LlmCatalogEntry, LlmRoomConfig } from "@rpg-cr/shared";
 import {
   isEmbeddingModelId,
   isLocalLlmProvider,
+  isLikelyWrongModelIdForProvider,
   isUnsuitableMjModelId,
   normalizeLmStudioV1BaseUrl,
   defaultModelForLocalProvider,
@@ -74,6 +75,7 @@ export function AdminLlmForm({
   const [lmModelsLoading, setLmModelsLoading] = useState(false);
   const [lmModelsError, setLmModelsError] = useState<string | null>(null);
   const [lmModelsUrl, setLmModelsUrl] = useState<string | null>(null);
+  const [modelAutoFixed, setModelAutoFixed] = useState<string | null>(null);
 
   const selectedProvider = catalog.find((c) => c.id === llmForm.providerId);
   const isLocalProvider = isLocalLlmProvider(llmForm.providerId);
@@ -83,13 +85,22 @@ export function AdminLlmForm({
     isLocalProvider && isEmbeddingModelId(llmForm.modelId);
   const modelIsUnsuitableMj =
     isLocalProvider && isUnsuitableMjModelId(llmForm.modelId);
+  const modelLikelyWrongFormat =
+    isLocalProvider &&
+    isLikelyWrongModelIdForProvider(llmForm.providerId, llmForm.modelId);
   const modelInLmStudioList =
     lmChatModels.length > 0 && lmChatModels.includes(llmForm.modelId.trim());
+  const modelNotInRemoteList =
+    lmChatModels.length > 0 && !modelInLmStudioList;
   const lmSelectValue =
     lmChatModels.includes(llmForm.modelId.trim()) ? llmForm.modelId.trim() : "";
 
   const modelState: FieldState =
-    modelValid(llmForm) && !modelIsEmbedding && !modelIsUnsuitableMj
+    modelValid(llmForm) &&
+    !modelIsEmbedding &&
+    !modelIsUnsuitableMj &&
+    !modelLikelyWrongFormat &&
+    !modelNotInRemoteList
       ? "valid"
       : "invalid";
   const baseUrlState: FieldState = isOptionalUrl(llmForm.baseUrl ?? "")
@@ -147,19 +158,34 @@ export function AdminLlmForm({
   async function handleListLmModels() {
     setLmModelsLoading(true);
     setLmModelsError(null);
+    setModelAutoFixed(null);
     try {
       const baseUrl = resolvedLmBaseUrl();
       const result = await listLmStudioModels(baseUrl);
-      setLmChatModels(result.chatModels);
+      const chatModels = result.chatModels;
+      setLmChatModels(chatModels);
       setLmModelsUrl(result.modelsUrl);
       if (result.resolvedBaseUrl !== llmForm.baseUrl?.trim()) {
         setLlmForm((f) => ({ ...f, baseUrl: result.resolvedBaseUrl }));
       }
-      if (result.chatModels.length === 0) {
+      if (chatModels.length === 0) {
         setLmModelsError(
           result.embeddingModels.length
             ? `Seuls des modèles embedding détectés via ${result.modelsUrl} — chargez un modèle chat/instruct.`
             : `Aucun modèle chat via ${result.modelsUrl}`
+        );
+        return;
+      }
+
+      const current = llmForm.modelId.trim();
+      if (!chatModels.includes(current)) {
+        const next = chatModels[0];
+        setLlmForm((f) => ({ ...f, modelId: next }));
+        setSaved(false);
+        setTestStatus({ state: "idle" });
+        setModelAutoFixed(
+          `Id corrigé automatiquement : « ${current || "(vide)"} » → « ${next} ». ` +
+            "Cliquez **Enregistrer la config MJ** puis **Tester la connexion**."
         );
       }
     } catch (e) {
@@ -170,6 +196,12 @@ export function AdminLlmForm({
       setLmModelsLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!isLocalProvider) return;
+    void handleListLmModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- au montage et changement de provider local
+  }, [isLocalProvider, llmForm.providerId]);
 
   return (
     <CollapsibleSection
@@ -250,6 +282,19 @@ export function AdminLlmForm({
                 Utilisez un modèle <strong>chat/instruct</strong> (contexte 8k+), pas un modèle{" "}
                 <strong>embedding</strong> ni un modèle <strong>vision (VL)</strong>.
               </p>
+              {modelLikelyWrongFormat && (
+                <p className="form-error" role="alert">
+                  Format LM Studio détecté (<code>{llmForm.modelId.trim()}</code>) — sur Ollama
+                  utilisez un id du type <code>qwen2.5:7b-instruct</code>. Cliquez{" "}
+                  <strong>Lister modèles Ollama</strong> pour corriger automatiquement.
+                </p>
+              )}
+              {modelNotInRemoteList && !modelLikelyWrongFormat && (
+                <p className="form-error" role="alert">
+                  L&apos;id <code>{llmForm.modelId.trim()}</code> n&apos;est pas installé sur{" "}
+                  {localBackendLabel}. Choisissez dans la liste ci-dessous.
+                </p>
+              )}
               {modelIsEmbedding && (
                 <p className="form-error" role="alert">
                   Ce modèle est un modèle d&apos;embeddings — choisissez un modèle de
@@ -304,6 +349,15 @@ export function AdminLlmForm({
                 <p className="muted" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>
                   {lmChatModels.length} modèle(s) chat via{" "}
                   <code>{lmModelsUrl}</code>
+                </p>
+              )}
+              {modelAutoFixed && (
+                <p
+                  className="llm-hint muted"
+                  style={{ borderLeftColor: "var(--valid)", marginTop: "0.35rem" }}
+                  role="status"
+                >
+                  ✓ {modelAutoFixed}
                 </p>
               )}
               {lmModelsError && (

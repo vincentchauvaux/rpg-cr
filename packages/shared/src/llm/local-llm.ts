@@ -42,6 +42,21 @@ export function defaultModelForLocalProvider(providerId: string): string {
   return "";
 }
 
+/** Id type LM Studio (`vendor/nom`) — incompatible avec Ollama (`nom:tag`). */
+export function isLikelyLmStudioModelId(modelId: string): boolean {
+  return modelId.trim().includes("/");
+}
+
+export function isLikelyWrongModelIdForProvider(
+  providerId: string,
+  modelId: string
+): boolean {
+  const id = modelId.trim();
+  if (!id) return false;
+  if (providerId === "ollama") return isLikelyLmStudioModelId(id);
+  return false;
+}
+
 export function formatLocalLlmChecklist(
   backend: "ollama" | "lmstudio",
   modelId: string
