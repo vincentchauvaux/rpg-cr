@@ -2,7 +2,7 @@ import { getCatalogEntry } from "./catalog.js";
 import { estimatePromptChars, resolveLlmTimeoutMs } from "./context-budget.js";
 import { assertChatModelId, isUnsuitableMjModelId } from "./model-kind.js";
 import { formatLlmModelCrashRecoveryHint } from "./model-context-tier.js";
-import { isLocalLlmProvider } from "./local-llm.js";
+import { isLocalLlmProvider, formatLocalLlmChecklist, formatLocalLlmModelNotFoundError, inferLocalLlmBackend, localLlmBackendLabel } from "./local-llm.js";
 import { normalizeLmStudioV1BaseUrl, resolveLmStudioServerBaseUrl } from "./lmstudio-url.js";
 import type { LlmRoomConfig } from "../types.js";
 
@@ -98,15 +98,8 @@ export function extractAssistantText(message?: AssistantMessage): string {
   return chunks.join("\n\n").trim();
 }
 
-function lmStudioChecklist(modelId: string): string {
-  return (
-    `Checklist LM Studio pour « ${modelId} » :\n` +
-    "• Identifiant exact — copier depuis la sidebar ou `curl http://127.0.0.1:1234/v1/models`\n" +
-    "• Modèle **READY** (pas « Loading ») — JIT : attendre 30–90 s après un changement\n" +
-    "• Serveur LM Studio **Running**, URL `http://127.0.0.1:1234/v1`\n" +
-    "• God mode → **Enregistrer la config** → **Tester la connexion**\n" +
-    "• Si ça persiste : décharger/recharger le modèle dans LM Studio, puis relancer `npm run dev`"
-  );
+function localLlmChecklist(modelId: string, baseUrl: string): string {
+  return formatLocalLlmChecklist(inferLocalLlmBackend(baseUrl), modelId);
 }
 
 export function formatLlmHttpError(
@@ -115,6 +108,9 @@ export function formatLlmHttpError(
   modelId: string,
   baseUrl: string
 ): string {
+  const backend = inferLocalLlmBackend(baseUrl);
+  const backendLabel = localLlmBackendLabel(backend);
+
   let parsed: ChatCompletionResponse = {};
   try {
     parsed = JSON.parse(bodyText) as ChatCompletionResponse;
@@ -126,18 +122,15 @@ export function formatLlmHttpError(
   const errCode = parsed.error?.code;
 
   if (status === 404 || errCode === "model_not_found") {
-    return (
-      `Modèle introuvable « ${modelId} » sur ${baseUrl}. ` +
-      "Copiez l'id **exact** affiché dans LM Studio (sidebar) ou via GET /v1/models — " +
-      "souvent sans suffixe @quantization (ex. `qwen2.5-7b-instruct-1m`)."
-    );
+    return formatLocalLlmModelNotFoundError(backend, modelId, baseUrl);
   }
 
   if (status === 408 || status === 504) {
-    return (
-      `Délai dépassé (${status}) pour « ${modelId} » — le modèle charge peut-être encore (JIT). ` +
-      "Attendez READY puis réessayez « Tester la connexion »."
-    );
+    const waitHint =
+      backend === "ollama"
+        ? "Le modèle charge peut-être encore — réessayez « Tester la connexion »."
+        : "Le modèle charge peut-être encore (JIT). Attendez READY puis réessayez « Tester la connexion ».";
+    return `Délai dépassé (${status}) pour « ${modelId} » — ${waitHint}`;
   }
 
   const detail = `${errMsg ?? ""} ${bodyText}`.toLowerCase();
@@ -160,7 +153,8 @@ export function formatLlmHttpError(
 
 export function formatEmptyLlmResponseError(
   modelId: string,
-  data: ChatCompletionResponse
+  data: ChatCompletionResponse,
+  baseUrl = ""
 ): string {
   const choice = data.choices?.[0];
   const finish = choice?.finish_reason ?? "";
@@ -183,7 +177,7 @@ export function formatEmptyLlmResponseError(
     );
   }
 
-  return `Réponse LLM vide pour « ${modelId} ».\n${lmStudioChecklist(modelId)}`;
+  return `Réponse LLM vide pour « ${modelId} ».\n${localLlmChecklist(modelId, baseUrl)}`;
 }
 
 type ChatAttemptResult =
@@ -239,18 +233,25 @@ async function openAiCompatibleChatOnce(
       }
     }
     if (error instanceof DOMException && error.name === "TimeoutError") {
+      const backend = inferLocalLlmBackend(baseUrl);
+      const waitHint =
+        backend === "ollama"
+          ? "Le modèle est peut-être encore en chargement — réessayez."
+          : "Contexte peut-être trop long ou modèle encore en chargement (JIT) — attendez READY dans LM Studio, réduisez l'historique, puis réessayez Réclamer.";
       return {
         ok: false,
         empty: false,
         error: new Error(
-          `Délai dépassé (${Math.round(timeoutMs / 1000)} s) en appelant « ${modelId} » sur ${baseUrl}. ` +
-            "Contexte peut-être trop long ou modèle encore en chargement (JIT) — attendez READY dans LM Studio, réduisez l'historique, puis réessayez Réclamer."
+          `Délai dépassé (${Math.round(timeoutMs / 1000)} s) en appelant « ${modelId} » sur ${baseUrl}. ${waitHint}`
         ),
       };
     }
+    const backend = inferLocalLlmBackend(baseUrl);
     const hint =
       baseUrl.includes("127.0.0.1") || baseUrl.includes("localhost")
-        ? " Vérifiez que LM Studio tourne (serveur Running, modèle READY). CORS LM Studio : inutile (seule l'API appelle LM Studio)."
+        ? backend === "ollama"
+          ? " Vérifiez qu'Ollama tourne sur le VPS (`systemctl status ollama`)."
+          : " Vérifiez que LM Studio tourne (serveur Running, modèle READY). CORS LM Studio : inutile (seule l'API appelle LM Studio)."
         : "";
     return {
       ok: false,
@@ -280,7 +281,7 @@ async function openAiCompatibleChatOnce(
       ok: false,
       empty: false,
       error: new Error(
-        `Réponse LLM illisible (JSON invalide) pour « ${modelId} ». ${lmStudioChecklist(modelId)}`
+        `Réponse LLM illisible (JSON invalide) pour « ${modelId} ». ${localLlmChecklist(modelId, baseUrl)}`
       ),
     };
   }
@@ -358,7 +359,7 @@ async function openAiCompatibleChat(
         await sleep(JIT_RETRY_DELAY_MS);
         continue;
       }
-      throw new Error(formatEmptyLlmResponseError(modelId, lastEmptyData));
+      throw new Error(formatEmptyLlmResponseError(modelId, lastEmptyData, baseUrl));
     }
 
     if (
@@ -377,7 +378,7 @@ async function openAiCompatibleChat(
     throw result.error;
   }
 
-  throw new Error(formatEmptyLlmResponseError(modelId, lastEmptyData));
+  throw new Error(formatEmptyLlmResponseError(modelId, lastEmptyData, baseUrl));
 }
 
 export async function completeAsMj(

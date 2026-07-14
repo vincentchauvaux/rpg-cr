@@ -1,4 +1,4 @@
-import { isLocalLlmProvider } from "./local-llm.js";
+import { isLocalLlmProvider, formatLocalLlmModelNotFoundError, formatLocalLlmUnreachableError, localLlmBackendLabel, resolveLocalLlmBackend } from "./local-llm.js";
 import { assertMjSuitableModelId, filterChatModelIds } from "./model-kind.js";
 import { lmStudioModelsEndpoint, normalizeLmStudioV1BaseUrl, resolveLmStudioServerBaseUrl } from "./lmstudio-url.js";
 import {
@@ -29,22 +29,29 @@ export class LmStudioNotReadyError extends Error {
   }
 }
 
-async function fetchModelIds(baseUrl: string): Promise<string[]> {
+async function fetchModelIds(
+  baseUrl: string,
+  backend: "ollama" | "lmstudio"
+): Promise<string[]> {
   const modelsUrl = lmStudioModelsEndpoint(baseUrl);
   let res: Response;
   try {
     res = await fetch(modelsUrl, { signal: AbortSignal.timeout(PREFLIGHT_FETCH_MS) });
   } catch (error) {
     throw new LmStudioNotReadyError(
-      `LM Studio injoignable (${modelsUrl}). Démarrez le serveur (Running) puis réessayez. ` +
-        `Détail : ${error instanceof Error ? error.message : "réseau"}`
+      formatLocalLlmUnreachableError(
+        backend,
+        modelsUrl,
+        error instanceof Error ? error.message : "réseau"
+      )
     );
   }
 
   const bodyText = await res.text();
   if (!res.ok) {
+    const label = localLlmBackendLabel(backend);
     throw new LmStudioNotReadyError(
-      `LM Studio a répondu ${res.status} sur ${modelsUrl}. Vérifiez l'URL (…/v1) et le serveur.`
+      `${label} a répondu ${res.status} sur ${modelsUrl}. Vérifiez l'URL (…/v1) et le serveur.`
     );
   }
 
@@ -52,8 +59,9 @@ async function fetchModelIds(baseUrl: string): Promise<string[]> {
   try {
     data = JSON.parse(bodyText) as typeof data;
   } catch {
+    const label = localLlmBackendLabel(backend);
     throw new LmStudioNotReadyError(
-      `Réponse illisible depuis LM Studio (${modelsUrl}) — attendu JSON OpenAI.`
+      `Réponse illisible depuis ${label} (${modelsUrl}) — attendu JSON OpenAI.`
     );
   }
 
@@ -64,7 +72,8 @@ async function fetchModelIds(baseUrl: string): Promise<string[]> {
 
 async function probeModelResponsive(
   baseUrl: string,
-  modelId: string
+  modelId: string,
+  backend: "ollama" | "lmstudio"
 ): Promise<void> {
   const url = `${normalizeLmStudioV1BaseUrl(baseUrl).replace(/\/$/, "")}/chat/completions`;
   let res: Response;
@@ -83,26 +92,35 @@ async function probeModelResponsive(
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
   } catch (error) {
+    const label = localLlmBackendLabel(backend);
     if (error instanceof DOMException && error.name === "TimeoutError") {
+      const waitHint =
+        backend === "ollama"
+          ? "Le modèle charge peut-être encore — réessayez **Réclamer**."
+          : "Attendez **READY** dans LM Studio (30–90 s), puis réessayez **Réclamer**.";
       throw new LmStudioNotReadyError(
-        `Le modèle « ${modelId} » est encore en chargement (JIT). Attendez **READY** dans LM Studio (30–90 s), puis réessayez **Réclamer**.`
+        `Le modèle « ${modelId} » est encore en chargement. ${waitHint}`
       );
     }
     throw new LmStudioNotReadyError(
-      `Impossible de solliciter « ${modelId} » sur ${baseUrl}. Le modèle charge peut-être encore — attendez READY.`
+      `Impossible de solliciter « ${modelId} » sur ${baseUrl}. ` +
+        (backend === "ollama"
+          ? "Vérifiez `ollama list` et que le modèle est téléchargé."
+          : "Le modèle charge peut-être encore — attendez READY.")
     );
   }
 
   if (res.status === 404) {
     throw new LmStudioNotReadyError(
-      `Modèle « ${modelId} » introuvable sur LM Studio. Chargez-le dans la sidebar (état READY) ou corrigez l'id (GET /v1/models).`
+      formatLocalLlmModelNotFoundError(backend, modelId, baseUrl)
     );
   }
 
   if (!res.ok) {
     const snippet = (await res.text()).slice(0, 180);
+    const label = localLlmBackendLabel(backend);
     throw new LmStudioNotReadyError(
-      `LM Studio a refusé le modèle « ${modelId} » (${res.status}) : ${snippet || "erreur"}.`
+      `${label} a refusé le modèle « ${modelId} » (${res.status}) : ${snippet || "erreur"}.`
     );
   }
 }
@@ -117,10 +135,12 @@ export async function preflightLmStudioForMj(
 ): Promise<void> {
   if (!isLocalLlmProvider(config.providerId)) return;
 
+  const backend = resolveLocalLlmBackend(config.providerId, config.baseUrl);
+  const backendLabel = localLlmBackendLabel(backend);
   const modelId = config.modelId?.trim();
   if (!modelId) {
     throw new LmStudioNotReadyError(
-      "Aucun modèle LM Studio configuré — choisissez un modèle **chat/instruct** en god mode."
+      `Aucun modèle ${backendLabel} configuré — choisissez un modèle **chat/instruct** en god mode.`
     );
   }
 
@@ -134,7 +154,7 @@ export async function preflightLmStudioForMj(
 
   const baseUrl = resolveLmStudioServerBaseUrl(config, options?.lmStudioBaseUrl);
 
-  const ids = await fetchModelIds(baseUrl);
+  const ids = await fetchModelIds(baseUrl, backend);
   const chatIds = filterChatModelIds(ids);
 
   const inList =
@@ -146,16 +166,18 @@ export async function preflightLmStudioForMj(
       ? ` Modèles chat visibles : ${chatIds.slice(0, 4).join(", ")}${chatIds.length > 4 ? "…" : ""}.`
       : "";
     throw new LmStudioNotReadyError(
-      `Le modèle « ${modelId} » n'est pas chargé ou pas listé sur LM Studio.${hint} ` +
-        "Ouvrez LM Studio → chargez le modèle jusqu'à **READY** → god mode → Tester la connexion."
+      `Le modèle « ${modelId} » n'est pas chargé ou pas listé sur ${backendLabel}.${hint} ` +
+        (backend === "ollama"
+          ? "Sur le VPS : `ollama pull <nom>` puis god mode → Tester la connexion."
+          : "Ouvrez LM Studio → chargez le modèle jusqu'à **READY** → god mode → Tester la connexion.")
     );
   }
 
   if (isVisionLanguageModelId(modelId) || inferModelContextTier(modelId) === "small") {
     console.warn(
-      `[LM Studio] Modèle à petite fenêtre « ${modelId} » — ${formatSmallContextModelHint(modelId)}`
+      `[${backendLabel}] Modèle à petite fenêtre « ${modelId} » — ${formatSmallContextModelHint(modelId)}`
     );
   }
 
-  await probeModelResponsive(baseUrl, modelId);
+  await probeModelResponsive(baseUrl, modelId, backend);
 }

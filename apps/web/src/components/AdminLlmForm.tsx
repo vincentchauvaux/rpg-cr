@@ -7,6 +7,7 @@ import {
   isLocalLlmProvider,
   isUnsuitableMjModelId,
   normalizeLmStudioV1BaseUrl,
+  defaultModelForLocalProvider,
 } from "@rpg-cr/shared";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SettingsToggle } from "@/components/SettingsToggle";
@@ -189,10 +190,17 @@ export function AdminLlmForm({
               const id = e.target.value;
               const entry = catalog.find((c) => c.id === id);
               const isLocal = isLocalLlmProvider(id);
+              const wasLocal = isLocalLlmProvider(llmForm.providerId);
+              let nextModelId = llmForm.modelId;
+              if (isLocal && (!wasLocal || llmForm.providerId !== id)) {
+                nextModelId = defaultModelForLocalProvider(id);
+              } else if (!isLocal) {
+                nextModelId = entry?.models[0]?.id ?? llmForm.modelId;
+              }
               setLlmForm((f) => ({
                 ...f,
                 providerId: id,
-                modelId: isLocal ? f.modelId : (entry?.models[0]?.id ?? f.modelId),
+                modelId: nextModelId,
                 baseUrl: entry?.defaultBaseUrl ?? f.baseUrl,
               }));
               touch("provider");
@@ -434,7 +442,7 @@ export function AdminLlmForm({
                 const raw = e instanceof Error ? e.message : "Test échoué";
                 setTestStatus({
                   state: "error",
-                  detail: formatLlmTestError(raw),
+                  detail: formatLlmTestError(raw, llmForm.providerId),
                 });
               }
             }}

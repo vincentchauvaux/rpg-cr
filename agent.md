@@ -323,7 +323,7 @@ Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**
 
 **URL publique** : `https://vps-e09ed6db.vps.ovh.net/rpg-cr` — same-origin API/WS via [config.ts](apps/web/src/lib/config.ts) + `basePath` Next.js.
 
-**MJ local (gratuit)** : l'API appelle un endpoint OpenAI-compatible via `LM_STUDIO_BASE_URL` (nom historique — **Ollama** `http://127.0.0.1:11434/v1` ou **LM Studio** `http://127.0.0.1:1234/v1`). Provider UI « LM Studio (local) » pour les deux. `resolveLmStudioServerBaseUrl` ([lmstudio-url.ts](packages/shared/src/llm/lmstudio-url.ts)) prime sur l'URL affichée dans l'UI. **Sans Mac** : installer Ollama sur le VPS ([deploy/OLLAMA-VPS.md](deploy/OLLAMA-VPS.md)). **Avec GPU Mac** : tunnel SSH `-R 1234:127.0.0.1:1234` ([deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md)).
+**MJ local (gratuit)** : l'API appelle un endpoint OpenAI-compatible via `LM_STUDIO_BASE_URL` (nom historique — **Ollama** `http://127.0.0.1:11434/v1` ou **LM Studio** `http://127.0.0.1:1234/v1`). Providers UI distincts : **Ollama (VPS / local)** et **LM Studio (Mac + tunnel)**. `resolveLmStudioServerBaseUrl` ([lmstudio-url.ts](packages/shared/src/llm/lmstudio-url.ts)) prime sur l'URL affichée dans l'UI. **Sans Mac** : installer Ollama sur le VPS ([deploy/OLLAMA-VPS.md](deploy/OLLAMA-VPS.md)). **Avec GPU Mac** : tunnel SSH `-R 1234:127.0.0.1:1234` ([deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md)).
 
 **État VPS (2026-07-14)** : Docker actif ; **MJ via Ollama sur le VPS** (`LM_STUDIO_BASE_URL=http://127.0.0.1:11434/v1`) — plus de tunnel Mac requis. Déploiement : `bash deploy/push-deploy.sh` (Mac) ou `bash deploy/deploy.sh` (VPS). Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`.
 
@@ -468,6 +468,7 @@ API : `GET/PATCH /api/players/:id/character`, `POST …/finalize`, `POST …/int
 | **429** fill-all / « déjà en cours » | Verrou actif (autre onglet, double-clic, requête lente) | **Annuler la génération** puis réessayer ; relance auto-libère le verrou si propriétaire ; TTL 4 min ; admin god peut libérer le verrou d’un PJ |
 | Annuler génération → **400** | `DELETE` lock avec `Content-Type: application/json` mais corps vide (Fastify `FST_ERR_CTP_EMPTY_JSON_BODY`) | Rebuild web : `fetchJson` n’envoie le header JSON que si `body` présent |
 | Deux fill-all en parallèle (LAN, même PJ) | Deux appels LLM lourds sur le même personnage | **429** mutex par `playerId` ; deux PJ différents **sérialisés** via la file salon (plus de collision LM Studio) |
+| **502** test LLM Ollama « Modèle introuvable » (ex. `qwen/qwen3.5-9b`) | Id **LM Studio** conservé après changement de provider — Ollama utilise un autre format (`qwen2.5:7b-instruct`) | God mode → **Ollama** → bouton **Lister modèles Ollama (chat)** ou `ollama list` sur le VPS ; `ollama pull qwen2.5:7b-instruct` si absent ; messages d'erreur adaptés Ollama/LM Studio (`local-llm.ts`, `llm-errors.ts`) |
 
 **Test curl** (remplacer `{playerId}`, `{roomId}` ; API + `llmConfig` requis pour generate-all) :
 
@@ -645,15 +646,21 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
   - **Utilisateur** : en prod sans extension, pas d’erreur ; si overlay persiste → désactiver extensions (Password Manager, Cursor, Google) ou ignorer en dev ; rafraîchissement forcé iPhone après déploiement ; `npm run dev:clean` si bundle périmé.
   - **Console salon** : `chrome-extension://invalid/` et `listener … asynchronous response` = extensions Chrome — pas d’action côté RPG-CR ; avertissement `[DOM] autocomplete` sur `#llm-api-key` corrigé (`new-password`).
 
-## Config LM Studio (utilisateur)
+## Config LLM local (Ollama / LM Studio)
 
 ### Architecture
 
 ```
-Navigateur (:3000) → API (:4000) → LM Studio (127.0.0.1:1234)
+Navigateur (:3000) → API (:4000) → Ollama (127.0.0.1:11434) ou LM Studio (127.0.0.1:1234)
 ```
 
-Le navigateur **ne contacte jamais LM Studio**. CORS LM Studio = sans effet.
+Le navigateur **ne contacte jamais** Ollama ni LM Studio directement. CORS local = sans effet.
+
+### Ollama (VPS)
+
+1. `sudo bash deploy/ollama-setup.sh` (ou `ollama pull qwen2.5:7b-instruct`).
+2. God mode → **Ollama (VPS / local)**, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` (id **exact** de `ollama list` — pas un id LM Studio du type `qwen/qwen3.5-9b`).
+3. **Enregistrer** puis **Tester la connexion** — bouton **Lister modèles Ollama (chat)** pour choisir l'id.
 
 ### Réglages LM Studio
 
@@ -749,7 +756,7 @@ Deux canaux distincts, opt-in séparés, déclenchés uniquement sur événement
 
 - Bordures **vertes** / **rouges** (`--valid` / `--invalid`) au blur ou à la soumission.
 - Section **Connexion MJ (LLM)** : repliée avec titre vert + ✓ après enregistrement réussi ; clic pour rouvrir.
-- **Test LLM** : endpoint `POST /api/rooms/:roomId/llm/test` (god mode) — mini completion `max_tokens: 5` ; rejet HTTP **400** si modèle embedding ou **VL** ; liste modèles chat : `GET /api/llm/lmstudio/models?baseUrl=…` (VL filtrés) → appelle **`GET {baseUrl}/models`** avec base normalisée **`/v1`** obligatoire (`http://127.0.0.1:1234/v1/models`, pas `/models` seul).
+- **Test LLM** : endpoint `POST /api/rooms/:roomId/llm/test` (god mode) — mini completion `max_tokens: 5` ; rejet HTTP **400** si modèle embedding ou **VL** ; liste modèles chat : `GET /api/llm/lmstudio/models?baseUrl=…` (VL filtrés) → appelle **`GET {baseUrl}/models`** avec base normalisée **`/v1`** obligatoire ; messages d'erreur test adaptés au backend (Ollama vs LM Studio via `formatLlmTestError` + `resolveLocalLlmBackend`) ; changement de provider local réinitialise le modèle par défaut (`qwen2.5:7b-instruct` pour Ollama).
 - **Clé API (god mode)** : champ `#llm-api-key` — `autoComplete="new-password"` (évite l’avertissement Chrome DOM sur les champs `type=password` hors formulaire de connexion).
 
 ## LLM local — timeouts, contexte, préflight

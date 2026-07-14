@@ -49,7 +49,7 @@ export function HostSetupWizard({
     } catch (e) {
       setLlmTested(false);
       const raw = e instanceof Error ? e.message : "Test échoué";
-      setTestError(formatLlmTestError(raw));
+      setTestError(formatLlmTestError(raw, llmForm.providerId));
     } finally {
       setTesting(false);
     }
