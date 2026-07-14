@@ -6,6 +6,7 @@ import { AdminLlmForm } from "@/components/AdminLlmForm";
 import { LmStudioTunnelBanner } from "@/components/LmStudioTunnelBanner";
 import { formatLlmTestError } from "@/lib/llm-errors";
 import { isVpsLmStudioHostMode } from "@/lib/lmstudio-tunnel";
+import { useAutoHostTunnel } from "@/hooks/use-auto-host-tunnel";
 
 interface Props {
   roomCode: string;
@@ -35,6 +36,8 @@ export function HostSetupWizard({
   const [llmTested, setLlmTested] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
+
+  useAutoHostTunnel(isVpsLmStudioHostMode() && llmForm.providerId === "lmstudio");
 
   async function handleTest() {
     if (!hasLlmConfig || testing) return;

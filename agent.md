@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-07-14 (MJ standby : resync mjStatus GET salon, ouverture campagne, introduce timeout)
+> Dernière mise à jour : 2026-07-14 (profils Google OAuth + tunnel auto hôte + déploiement VPS)
 
 ## Vision
 
@@ -497,7 +497,7 @@ curl -X POST "http://127.0.0.1:4000/api/players/{playerId}/character/generate-al
 - **Déclenchement unique** quand l'**hôte** (admin humain) finalise sa fiche (`POST …/character/finalize`) ou passe `ready` + `story_locked` : `scheduleCampaignOpening` → `bootstrapCampaignOpening` (`apps/api/src/campaign-opening.ts`).
 - Deux appels LLM : plan JSON (`packages/shared/src/mj/campaign-opening-prompt.ts`) puis récit MJ long (Acte I, hook, enjeu) intégrant la fiche hôte — **pas** de second message d'intégration pour l'hôte. Le prompt d'ouverture injecte les pays / territoires / POI de la carte et interdit les noms legacy sauf s'ils sont déjà dans `map_json` (anciennes parties).
 - WS `mj_status` phase `opening` → placeholder barre de chat « Le MJ prépare le monde… » ; message système discret au démarrage.
-- **Resync client** : `GET /api/rooms/:code` expose `mjStatus` (refcount serveur) ; `RoomView.refresh` réapplique l'état MJ si WS manqué ; heuristique messages (« Le MJ prépare le monde… » sans récit MJ ni échec) → statut occupé même sans WS.
+- **Resync client** : `GET /api/rooms/:code` expose `mjStatus` (refcount serveur) ; `RoomView.refresh` réapplique l'état MJ si WS manqué ; heuristique messages (« Le MJ prépare le monde… » sans récit MJ ni échec) → statut occupé ; si échec ouverture déjà dans le fil → **clear** du spinner bloqué (WS `message` + refresh).
 - **Échec ouverture visible joueurs** : message `L'ouverture de campagne a échoué…` n'est plus filtré comme message technique admin ; pendant l'ouverture, panneau « Se présenter » remplacé par attente.
 - **`POST …/introduce` (auto)** : timeout client **270 s** (comme MJ) — évite l'erreur générique « requête échouée alors que le serveur répond » à 30 s.
 - `lore.md` / journal export : injectés dans le prompt MJ **seulement** si `campaign_opening_done` et export existant (évite le biais des anciennes intros sur une nouvelle partie).
@@ -584,9 +584,22 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Scroll chat** (`RoomView`) : scroll **dans** `.chat-log` uniquement (`scrollTop`, pas `scrollIntoView` — évite les sauts de page sur mobile) ; auto-bas si proche du bas ; resync API (`refresh`, focus, poll 30 s) **conserve** la position si l'utilisateur lit l'historique ; ignore le resync si la liste de messages est inchangée.
 - **Clé API** : `OPENAI_API_KEY` côté serveur pour l'auto ; champ god mode utile surtout pour « Tester la connexion ».
 
+## Comptes joueurs (Google OAuth — MVP)
+
+- **Table** `users` (SQLite) : `google_sub`, `email`, `display_name`, `avatar_url` ; colonne `players.user_id` optionnelle.
+- **Auth** : NextAuth v5 (`apps/web/src/auth.ts`) — provider Google ; sync API `POST /api/auth/sync` (secret interne `AUTH_INTERNAL_SECRET`).
+- **UI accueil** : `GoogleAuthPanel` — connexion / déconnexion ; graines fusionnées local + `GET /api/users/:id/grains`.
+- **Création / join** : body optionnel `userId` sur `POST /api/rooms` et `POST …/join` ; reprise graine → `POST …/link-user`.
+- **Tunnel auto hôte** : `useAutoHostTunnel` — si connecté + mode VPS (`NEXT_PUBLIC_BASE_PATH`), tente `tryStartLocalTunnel()` à l’accueil et dans `HostSetupWizard` (LM Studio).
+- **Nginx** : bloc `location /rpg-cr/api/auth/` → conteneur **web** (3010), pas l’API Fastify — voir `deploy/nginx-rpg-cr.conf.example`.
+- **Google Cloud Console** : URI de redirection autorisée  
+  `https://vps-e09ed6db.vps.ovh.net/rpg-cr/api/auth/callback/google`
+- **Variables** (`.env` VPS, **jamais commitées**) : `AUTH_SECRET`, `AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_INTERNAL_SECRET`, `API_INTERNAL_URL=http://127.0.0.1:4010`.
+- **Anonyme** : créer/rejoindre sans compte reste possible.
+
 ## Roadmap v2
 
-- Auth persistante / comptes SaaS et facturation LLM
+- Auth persistante / comptes SaaS et facturation LLM *(MVP Google OAuth livré — voir section Comptes joueurs)*
 - Flag « MJ auto OFF » par salon (au lieu du booléen global `AUTO_MJ_ON_PLAYER_MESSAGES`) ou debounce configurable
 - Tours de combat, file d’interruptions, incarnation PJ absents
 - Édition carte + journal côté MJ dans l’UI

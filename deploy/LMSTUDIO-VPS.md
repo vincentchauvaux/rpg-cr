@@ -5,7 +5,7 @@ Le MJ appelle le LLM **depuis l’API sur le VPS**, pas depuis le navigateur. Po
 ## Architecture
 
 ```
-Joueurs (Internet) → Nginx VPS → API Docker → host.docker.internal:1234
+Joueurs (Internet) → Nginx VPS → API (réseau hôte) → 127.0.0.1:1234
                                                       ↓
                                             VPS localhost:1234
                                                       ↓
@@ -17,15 +17,16 @@ Joueurs (Internet) → Nginx VPS → API Docker → host.docker.internal:1234
 ## Avant chaque partie (Mac)
 
 1. Ouvrir **LM Studio** → serveur **Running** → charger un modèle **chat/instruct** jusqu’à **READY** (pas VL, pas embedding).
-2. Lancer le tunnel — **trois options** :
+2. Lancer la session — **deux options simples** :
 
-| Méthode | Commande / action |
-|---------|-------------------|
-| **Assistant (recommandé)** | Une fois : `npm run tunnel:helper` (laisser tourner). Puis dans le wizard hôte : bouton **Démarrer le tunnel (Mac)** |
-| **Terminal auto** | `npm run tunnel:open` — ouvre Terminal.app avec le tunnel |
-| **Manuel** | `bash deploy/lmstudio-tunnel.sh` ou télécharger le `.command` depuis le wizard |
+| Méthode | Commande |
+|---------|----------|
+| **Tout-en-un (recommandé)** | `npm run host` — démarre l’assistant si besoin, ouvre le tunnel et le navigateur |
+| **Service auto (une fois)** | `npm run tunnel:helper:install` — l’assistant tourne à chaque connexion Mac ; ensuite bouton **Démarrer le tunnel** dans le wizard |
 
-Le navigateur **ne peut pas** ouvrir Terminal tout seul (sécurité) ; l’assistant local ou le `.command` s’en rapprochent.
+Autres options : `npm run tunnel:open` (Terminal), `bash deploy/lmstudio-tunnel.sh`, ou fichier `.command` depuis le wizard.
+
+Le navigateur **ne peut pas** ouvrir Terminal tout seul (sécurité).
 
 3. Vérifier depuis le **VPS** :
 
@@ -36,7 +37,7 @@ ssh root@vps-e09ed6db.vps.ovh.net 'curl -sf http://127.0.0.1:1234/v1/models | he
 ## Configuration VPS (.env)
 
 ```bash
-LM_STUDIO_BASE_URL=http://host.docker.internal:1234/v1
+LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1
 ```
 
 Pas besoin de `OPENAI_API_KEY` pour ce mode.

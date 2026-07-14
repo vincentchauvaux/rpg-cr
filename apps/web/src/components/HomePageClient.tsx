@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { AuthProvider } from "@/components/AuthProvider";
 
 const HomePageContent = dynamic(
   () =>
@@ -20,5 +21,9 @@ const HomePageContent = dynamic(
 
 /** Accueil sans SSR — évite mismatch hydratation (attributs injectés sur les inputs). */
 export function HomePageClient() {
-  return <HomePageContent />;
+  return (
+    <AuthProvider>
+      <HomePageContent />
+    </AuthProvider>
+  );
 }

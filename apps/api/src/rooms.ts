@@ -70,6 +70,7 @@ export function rowToPlayer(row: Record<string, unknown>): Player {
     preferredLocale: (row.preferred_locale as string) ?? DEFAULT_LOCALE,
     storyLocked: Number(row.story_locked) === 1,
     introducedInStory: Number(row.introduced_in_story) === 1,
+    userId: (row.user_id as string) ?? null,
   };
 }
 
@@ -136,6 +137,7 @@ function insertPlayer(
     displayColor?: string;
     characterStatus?: CharacterStatus;
     characterSheet?: CharacterSheet;
+    userId?: string | null;
   } = {}
 ): Player {
   const id = uuid();
@@ -147,8 +149,8 @@ function insertPlayer(
   const sheetJson = JSON.stringify(opts.characterSheet ?? EMPTY_CHARACTER_SHEET);
 
   db.prepare(
-    `INSERT INTO players (id, room_id, name, role, is_god_mode, joined_at, player_kind, circle_status, display_color, character_status, character_sheet, preferred_locale)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO players (id, room_id, name, role, is_god_mode, joined_at, player_kind, circle_status, display_color, character_status, character_sheet, preferred_locale, user_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     roomId,
@@ -161,7 +163,8 @@ function insertPlayer(
     color,
     characterStatus,
     sheetJson,
-    DEFAULT_LOCALE
+    DEFAULT_LOCALE,
+    opts.userId ?? null
   );
 
   return rowToPlayer({
@@ -177,6 +180,7 @@ function insertPlayer(
     character_status: characterStatus,
     character_sheet: sheetJson,
     preferred_locale: DEFAULT_LOCALE,
+    user_id: opts.userId ?? null,
   });
 }
 
@@ -262,7 +266,11 @@ export function getLastActivity(roomId: string): string | null {
   return row?.last_at ?? null;
 }
 
-export function createRoom(name: string, adminName: string): {
+export function createRoom(
+  name: string,
+  adminName: string,
+  userId?: string | null
+): {
   room: Room;
   admin: Player;
   map: ProceduralMap;
@@ -288,6 +296,7 @@ export function createRoom(name: string, adminName: string): {
     kind: "human",
     circleStatus: "active",
     characterStatus: "draft",
+    userId: userId ?? null,
   });
 
   db.prepare(
@@ -343,7 +352,8 @@ export function joinRoom(
   roomId: string,
   playerName: string,
   asAdmin = false,
-  existingPlayerId?: string
+  existingPlayerId?: string,
+  userId?: string | null
 ): { player: Player; rejoined: boolean } | null {
   const room = getRoomById(roomId);
   if (!room) return null;
@@ -362,7 +372,25 @@ export function joinRoom(
           existingPlayerId
         );
         const updated = getPlayerById(existingPlayerId);
-        if (updated) return { player: updated, rejoined: true };
+        if (updated) {
+          if (userId && !updated.userId) {
+            db.prepare(`UPDATE players SET user_id = ? WHERE id = ?`).run(
+              userId,
+              existingPlayerId
+            );
+            const linked = getPlayerById(existingPlayerId);
+            if (linked) return { player: linked, rejoined: true };
+          }
+          return { player: updated, rejoined: true };
+        }
+      }
+      if (userId && !existing.userId) {
+        db.prepare(`UPDATE players SET user_id = ? WHERE id = ?`).run(
+          userId,
+          existingPlayerId
+        );
+        const linked = getPlayerById(existingPlayerId);
+        if (linked) return { player: linked, rejoined: true };
       }
       return { player: existing, rejoined: true };
     }
@@ -374,6 +402,7 @@ export function joinRoom(
     kind: "human",
     circleStatus: "active",
     characterStatus: "draft",
+    userId: userId ?? null,
   });
   return { player, rejoined: false };
 }

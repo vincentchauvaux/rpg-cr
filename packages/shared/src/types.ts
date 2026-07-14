@@ -102,6 +102,8 @@ export interface Player {
   characterSheet: CharacterSheet;
   /** Fichier portrait sur disque — ex. `{playerId}.jpg` */
   avatarPath: string | null;
+  /** Compte utilisateur lié (Google OAuth) — optionnel */
+  userId?: string | null;
   /** Présence temps réel — enrichi à la diffusion WS, absent en SQLite */
   presenceStatus?: PresenceStatus;
   /** Langue d'affichage / traduction chat */
@@ -120,6 +122,27 @@ export interface PlayerMeta {
   karma: number;
   parcours: string;
   notes: string;
+}
+
+/** Compte joueur persistant (Google OAuth). */
+export interface UserProfile {
+  id: string;
+  email: string | null;
+  displayName: string;
+  avatarUrl: string | null;
+  createdAt: string;
+  lastLoginAt: string;
+}
+
+/** Salon lié à un compte utilisateur (graines cross-appareil). */
+export interface UserGrain {
+  roomId: string;
+  roomCode: string;
+  roomName: string;
+  playerId: string;
+  playerName: string;
+  role: PlayerRole;
+  lastActivityAt: string | null;
 }
 
 export interface Npc {

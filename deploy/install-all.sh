@@ -33,7 +33,7 @@ fi
 if ! grep -qE '^LM_STUDIO_BASE_URL=.+' .env 2>/dev/null; then
   echo ""
   echo ">>> LM_STUDIO_BASE_URL manquante dans .env"
-  echo "    nano .env   # LM_STUDIO_BASE_URL=http://host.docker.internal:1234/v1"
+  echo "    nano .env   # LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1"
   exit 1
 fi
 

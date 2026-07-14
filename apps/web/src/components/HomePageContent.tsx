@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createRoom, getRoom, joinRoom, listCampaigns } from "@/lib/api";
+import { createRoom, getRoom, joinRoom, listCampaigns, listUserGrainsFromApi, linkPlayerToUserApi } from "@/lib/api";
+import { GoogleAuthPanel, useAppUserId } from "@/components/GoogleAuthPanel";
+import { useAutoHostTunnel } from "@/hooks/use-auto-host-tunnel";
 import { markHostLlmSetupPending } from "@/lib/host-llm-setup";
 import { randomPlayerName, randomRoomName } from "@/lib/random-names";
 import {
@@ -37,6 +39,8 @@ function formatActivity(iso: string | null): string {
 
 export function HomePageContent() {
   const router = useRouter();
+  const appUserId = useAppUserId();
+  useAutoHostTunnel(Boolean(appUserId));
   const [tab, setTab] = useState<"create" | "join" | "grains">("create");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,13 +67,42 @@ export function HomePageContent() {
 
   const refreshGrains = useCallback(async () => {
     const local = listGrains();
-    setGrains(local);
-    if (!local.length) {
+    let merged = [...local];
+    if (appUserId) {
+      try {
+        const { grains: serverGrains } = await listUserGrainsFromApi(appUserId);
+        for (const sg of serverGrains) {
+          const idx = merged.findIndex(
+            (g) => g.roomCode.toUpperCase() === sg.roomCode.toUpperCase()
+          );
+          const record: GrainRecord = {
+            roomId: sg.roomId,
+            roomCode: sg.roomCode,
+            roomName: sg.roomName,
+            playerId: sg.playerId,
+            playerName: sg.playerName,
+            role: sg.role,
+            lastVisitedAt: sg.lastActivityAt ?? new Date().toISOString(),
+          };
+          if (idx >= 0) merged[idx] = { ...merged[idx], ...record };
+          else merged.push(record);
+        }
+        merged.sort((a, b) => {
+          const ta = a.lastVisitedAt ? Date.parse(a.lastVisitedAt) : 0;
+          const tb = b.lastVisitedAt ? Date.parse(b.lastVisitedAt) : 0;
+          return tb - ta;
+        });
+      } catch {
+        /* grains locales seulement */
+      }
+    }
+    setGrains(merged);
+    if (!merged.length) {
       setGrainMeta({});
       return;
     }
     try {
-      const { campaigns } = await listCampaigns(local.map((g) => g.roomCode));
+      const { campaigns } = await listCampaigns(merged.map((g) => g.roomCode));
       const map: Record<string, { lastActivityAt: string | null; hasExport: boolean }> =
         {};
       for (const c of campaigns) {
@@ -82,7 +115,7 @@ export function HomePageContent() {
     } catch {
       /* liste locale seulement */
     }
-  }, []);
+  }, [appUserId]);
 
   useEffect(() => {
     if (tab === "grains") refreshGrains();
@@ -102,7 +135,7 @@ export function HomePageContent() {
     const name = resolvePlaceholderValue(roomValue, roomSuggestion);
     const adminName = resolvePlaceholderValue(adminValue, adminSuggestion);
     try {
-      const { room, admin } = await createRoom(name, adminName);
+      const { room, admin } = await createRoom(name, adminName, appUserId);
       markHostLlmSetupPending(room.id);
       const session = {
         roomId: room.id,
@@ -157,7 +190,7 @@ export function HomePageContent() {
       }
 
       const { room } = await getRoom(code);
-      const { player } = await joinRoom(room.id, playerName);
+      const { player } = await joinRoom(room.id, playerName, undefined, appUserId);
       const session = {
         roomId: room.id,
         roomCode: room.code,
@@ -179,6 +212,9 @@ export function HomePageContent() {
   }
 
   function resumeGrain(g: GrainRecord) {
+    if (appUserId) {
+      void linkPlayerToUserApi(g.playerId, appUserId).catch(() => undefined);
+    }
     saveSession({
       roomId: g.roomId,
       roomCode: g.roomCode,
@@ -212,6 +248,10 @@ export function HomePageContent() {
           pas oublié ses dés).
         </p>
       </header>
+
+      <div style={{ maxWidth: 520, margin: "0 auto 1rem" }}>
+        <GoogleAuthPanel />
+      </div>
 
       <div className="panel" style={{ maxWidth: 520, margin: "0 auto" }}>
         <div className="home-tabs">

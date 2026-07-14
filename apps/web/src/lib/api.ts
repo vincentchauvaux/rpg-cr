@@ -132,14 +132,22 @@ export function listLmStudioModels(baseUrl?: string): Promise<{
   return fetchJson(`/api/llm/lmstudio/models${q}`);
 }
 
-export function createRoom(name: string, adminName: string): Promise<{
+export function createRoom(
+  name: string,
+  adminName: string,
+  userId?: string
+): Promise<{
   room: Room;
   admin: Player;
   map: ProceduralMap;
 }> {
   return fetchJson("/api/rooms", {
     method: "POST",
-    body: JSON.stringify({ name, adminName }),
+    body: JSON.stringify({
+      name,
+      adminName,
+      ...(userId ? { userId } : {}),
+    }),
   });
 }
 
@@ -162,14 +170,32 @@ export function getRoom(code: string): Promise<{
 export function joinRoom(
   roomId: string,
   playerName: string,
-  existingPlayerId?: string
+  existingPlayerId?: string,
+  userId?: string
 ): Promise<{ player: Player; players: Player[]; rejoined?: boolean }> {
   return fetchJson(`/api/rooms/${roomId}/join`, {
     method: "POST",
     body: JSON.stringify({
       playerName,
       ...(existingPlayerId ? { playerId: existingPlayerId } : {}),
+      ...(userId ? { userId } : {}),
     }),
+  });
+}
+
+export function listUserGrainsFromApi(
+  userId: string
+): Promise<{ grains: import("@rpg-cr/shared").UserGrain[] }> {
+  return fetchJson(`/api/users/${userId}/grains`);
+}
+
+export function linkPlayerToUserApi(
+  playerId: string,
+  userId: string
+): Promise<{ player: Player }> {
+  return fetchJson(`/api/players/${playerId}/link-user`, {
+    method: "POST",
+    body: JSON.stringify({ userId }),
   });
 }
 

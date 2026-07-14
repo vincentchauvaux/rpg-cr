@@ -343,22 +343,29 @@ export function RoomView({ code }: Props) {
       )
     );
     replaceMessagesFromServer(data.messages);
-    applyMjStatusSnapshot(data.mjStatus, {
-      mjPromptPending: mjPromptPendingRef.current,
-      setMjThinking,
-      setMjBackgroundScrib,
-      setMjPhase,
-      mjThinkingSinceRef,
-    });
-    if (!data.mjStatus?.thinking && !mjPromptPendingRef.current) {
+    if (!mjPromptPendingRef.current) {
       const openingUnsettled = isCampaignOpeningUnsettled(
         data.messages,
         data.room.campaignOpeningDone
       );
-      if (openingUnsettled) {
+      const serverThinking = Boolean(data.mjStatus?.thinking);
+      if (serverThinking) {
+        applyMjStatusSnapshot(data.mjStatus, {
+          mjPromptPending: false,
+          setMjThinking,
+          setMjBackgroundScrib,
+          setMjPhase,
+          mjThinkingSinceRef,
+        });
+      } else if (openingUnsettled) {
         setMjThinking(true);
         setMjPhase("opening");
         mjThinkingSinceRef.current = Date.now();
+      } else {
+        setMjThinking(false);
+        setMjBackgroundScrib(false);
+        setMjPhase("turn");
+        mjThinkingSinceRef.current = null;
       }
     }
     if (mjPromptPendingRef.current) {
@@ -489,6 +496,11 @@ export function RoomView({ code }: Props) {
           } else {
             setReclaimError(null);
           }
+          clearMjThinking();
+        } else if (
+          data.message.kind === "system" &&
+          data.message.content.startsWith("L'ouverture de campagne a échoué")
+        ) {
           clearMjThinking();
         }
       }

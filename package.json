@@ -15,6 +15,9 @@
     "tunnel": "bash deploy/lmstudio-tunnel.sh",
     "tunnel:open": "bash deploy/lmstudio-tunnel-open-terminal.sh",
     "tunnel:helper": "node deploy/tunnel-helper.mjs",
+    "tunnel:helper:install": "bash deploy/install-tunnel-helper-service.sh",
+    "tunnel:helper:uninstall": "bash deploy/uninstall-tunnel-helper-service.sh",
+    "host": "bash deploy/host-session.sh",
     "build": "npm run build -w @rpg-cr/shared && npm run build -w @rpg-cr/api && npm run build -w @rpg-cr/web",
     "start": "concurrently -n api,web \"npm run start -w @rpg-cr/api\" \"npm run start -w @rpg-cr/web\"",
     "dev:kill": "lsof -ti:3000 | xargs kill -9 2>/dev/null; lsof -ti:4000 | xargs kill -9 2>/dev/null; true"

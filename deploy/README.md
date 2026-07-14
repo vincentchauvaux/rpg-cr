@@ -17,14 +17,17 @@ Par défaut, le MJ utilise **LM Studio sur votre Mac** (gratuit), relié au VPS 
 Guide détaillé : **[LMSTUDIO-VPS.md](./LMSTUDIO-VPS.md)**
 
 ```bash
-# Sur le Mac, avant chaque partie (LM Studio Running + modèle READY) :
-bash deploy/lmstudio-tunnel.sh
+# Une fois (Mac) — assistant auto à chaque connexion :
+npm run tunnel:helper:install
+
+# Avant chaque partie (LM Studio Running + READY) :
+npm run host
 ```
 
 `.env` sur le VPS :
 
 ```bash
-LM_STUDIO_BASE_URL=http://host.docker.internal:1234/v1
+LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1
 NEXT_PUBLIC_BASE_PATH=/rpg-cr
 ```
 
@@ -99,7 +102,7 @@ HTTPS :443 (Nginx)
   /rpg-cr/ws    → 127.0.0.1:4010  (WebSocket)
   /rpg-cr/health → 127.0.0.1:4010/health
 
-API Docker → host.docker.internal:1234 → tunnel SSH → Mac LM Studio
+API (host network) → 127.0.0.1:1234 → tunnel SSH → Mac LM Studio
 ```
 
 Le client ([config.ts](../apps/web/src/lib/config.ts)) utilise le **même origin** quand `NEXT_PUBLIC_BASE_PATH` est défini.

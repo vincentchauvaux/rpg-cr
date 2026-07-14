@@ -3103,3 +3103,40 @@ textarea.field-invalid {
   background: var(--bg-panel);
   color: var(--text);
 }
+
+/* Profil joueur — Google OAuth */
+.auth-panel {
+  margin-bottom: 0;
+}
+
+.auth-profile-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.auth-profile-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.auth-profile-avatar--placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-panel);
+  font-size: 1.25rem;
+}
+
+.auth-signout-btn {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+.auth-google-btn {
+  width: 100%;
+}

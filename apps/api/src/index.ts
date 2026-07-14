@@ -5,6 +5,12 @@ import multipart from "@fastify/multipart";
 import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl } from "@rpg-cr/shared";
 import { initDb } from "./db.js";
 import {
+  getUserById,
+  linkPlayerToUser,
+  listUserGrains,
+  upsertUserFromGoogle,
+} from "./users.js";
+import {
   createRoom,
   getRoomByCode,
   getRoomById,
@@ -99,7 +105,6 @@ import { fetchLmStudioModels } from "./lmstudio-models.js";
 import { setPlayerLocale } from "./player-locale.js";
 import { translateForRoom } from "./translate.js";
 import { isSupportedLocale } from "@rpg-cr/shared";
-initDb();
 
 const app = Fastify({ logger: true });
 const PORT = Number(process.env.PORT ?? 4000);
@@ -112,6 +117,68 @@ await app.register(cors, {
 await app.register(websocket);
 await app.register(multipart, {
   limits: { fileSize: AVATAR_MAX_BYTES, files: 1 },
+});
+
+initDb();
+
+function requireAuthInternal(req: { headers: Record<string, unknown> }): boolean {
+  const secret = process.env.AUTH_INTERNAL_SECRET?.trim();
+  if (!secret) return false;
+  const auth = String(req.headers.authorization ?? "");
+  return auth === `Bearer ${secret}`;
+}
+
+app.post<{
+  Body: {
+    googleSub: string;
+    email?: string | null;
+    displayName: string;
+    avatarUrl?: string | null;
+  };
+}>("/api/auth/sync", async (req, reply) => {
+  if (!requireAuthInternal(req)) {
+    return reply.status(401).send({ error: "Non autorisé" });
+  }
+  const { googleSub, email, displayName, avatarUrl } = req.body ?? {};
+  if (!googleSub?.trim() || !displayName?.trim()) {
+    return reply.status(400).send({ error: "googleSub et displayName requis" });
+  }
+  const user = upsertUserFromGoogle({
+    googleSub: googleSub.trim(),
+    email,
+    displayName: displayName.trim(),
+    avatarUrl,
+  });
+  return { user };
+});
+
+app.get<{ Params: { userId: string } }>("/api/users/:userId", async (req, reply) => {
+  const user = getUserById(req.params.userId);
+  if (!user) return reply.status(404).send({ error: "Utilisateur introuvable" });
+  return { user };
+});
+
+app.get<{ Params: { userId: string } }>(
+  "/api/users/:userId/grains",
+  async (req, reply) => {
+    const user = getUserById(req.params.userId);
+    if (!user) return reply.status(404).send({ error: "Utilisateur introuvable" });
+    return { grains: listUserGrains(user.id) };
+  }
+);
+
+app.post<{
+  Params: { playerId: string };
+  Body: { userId: string };
+}>("/api/players/:playerId/link-user", async (req, reply) => {
+  const user = getUserById(req.body?.userId ?? "");
+  const player = getPlayerById(req.params.playerId);
+  if (!user || !player) {
+    return reply.status(404).send({ error: "Joueur ou utilisateur introuvable" });
+  }
+  linkPlayerToUser(player.id, user.id);
+  const updated = getPlayerById(player.id);
+  return { player: updated };
 });
 
 app.get("/health", async () => ({ ok: true }));
@@ -150,14 +217,21 @@ app.get("/api/llm/tunnel-status", async (_req, reply) => {
   }
 });
 
-app.post<{ Body: { name: string; adminName: string } }>(
+app.post<{ Body: { name: string; adminName: string; userId?: string } }>(
   "/api/rooms",
   async (req, reply) => {
-    const { name, adminName } = req.body ?? {};
+    const { name, adminName, userId } = req.body ?? {};
     if (!name?.trim() || !adminName?.trim()) {
       return reply.status(400).send({ error: "name et adminName requis" });
     }
-    const { room, admin, map } = createRoom(name.trim(), adminName.trim());
+    if (userId && !getUserById(userId)) {
+      return reply.status(400).send({ error: "userId invalide" });
+    }
+    const { room, admin, map } = createRoom(
+      name.trim(),
+      adminName.trim(),
+      userId?.trim() || null
+    );
     return { room, admin, map };
   }
 );
@@ -180,17 +254,21 @@ app.get<{ Params: { code: string } }>("/api/rooms/:code", async (req, reply) => 
 
 app.post<{
   Params: { id: string };
-  Body: { playerName: string; playerId?: string };
+  Body: { playerName: string; playerId?: string; userId?: string };
 }>("/api/rooms/:id/join", async (req, reply) => {
-  const { playerName, playerId: existingPlayerId } = req.body ?? {};
+  const { playerName, playerId: existingPlayerId, userId } = req.body ?? {};
   if (!playerName?.trim()) {
     return reply.status(400).send({ error: "playerName requis" });
+  }
+  if (userId && !getUserById(userId)) {
+    return reply.status(400).send({ error: "userId invalide" });
   }
   const result = joinRoom(
     req.params.id,
     playerName.trim(),
     false,
-    existingPlayerId?.trim()
+    existingPlayerId?.trim(),
+    userId?.trim() || null
   );
   if (!result) return reply.status(404).send({ error: "Salon introuvable" });
   const { player, rejoined } = result;

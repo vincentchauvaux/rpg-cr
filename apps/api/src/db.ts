@@ -169,4 +169,21 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_message_translations_message
       ON message_translations(message_id);
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      google_sub TEXT UNIQUE NOT NULL,
+      email TEXT,
+      display_name TEXT NOT NULL,
+      avatar_url TEXT,
+      created_at TEXT NOT NULL,
+      last_login_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub);
+  `);
+
+  ensureColumn("players", "user_id", "TEXT REFERENCES users(id)");
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_players_user ON players(user_id);`);
 }
