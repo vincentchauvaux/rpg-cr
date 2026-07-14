@@ -45,7 +45,8 @@ async function syncUserToApi(profile: {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
-  basePath: AUTH_BASE_PATH,
+  /** Chemin public complet — callbacks Google : /rpg-cr/api/auth/callback/google */
+  basePath: AUTH_PUBLIC_BASE_PATH,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
