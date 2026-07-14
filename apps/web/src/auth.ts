@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import { getBasePath, withBasePath } from "@/lib/config";
+import { withBasePath } from "@/lib/config";
 
 /** Montage interne (Nginx retire /rpg-cr avant le conteneur web). */
 export const AUTH_BASE_PATH = "/api/auth";
@@ -45,7 +45,7 @@ async function syncUserToApi(profile: {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
-  basePath: getBasePath() ? "api/auth" : "/api/auth",
+  basePath: AUTH_BASE_PATH,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
