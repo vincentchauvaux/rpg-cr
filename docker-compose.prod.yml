@@ -43,7 +43,8 @@ services:
       - NODE_ENV=production
       - NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH:-/rpg-cr}
       - AUTH_SECRET=${AUTH_SECRET:-}
-      - AUTH_URL=${AUTH_URL:-https://vps-e09ed6db.vps.ovh.net/rpg-cr}
+      # Origine seule — ne pas inclure /rpg-cr (Auth.js compose basePath /rpg-cr/api/auth)
+      - AUTH_URL=${AUTH_URL:-https://vps-e09ed6db.vps.ovh.net}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - AUTH_INTERNAL_SECRET=${AUTH_INTERNAL_SECRET:-}
