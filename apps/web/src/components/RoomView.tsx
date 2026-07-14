@@ -1205,7 +1205,6 @@ export function RoomView({ code }: Props) {
                 llmEnabled={hasLlmConfig}
                 mode="play"
                 title="Conseiller du personnage"
-                defaultCollapsed={false}
                 onError={setError}
               />
             </div>
@@ -1503,7 +1502,6 @@ export function RoomView({ code }: Props) {
                   llmEnabled={hasLlmConfig}
                   mode="play"
                   title="Aide personnelle du héros"
-                  defaultCollapsed={false}
                   onError={setError}
                 />
               )}

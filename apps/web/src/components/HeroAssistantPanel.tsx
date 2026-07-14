@@ -30,7 +30,7 @@ export function HeroAssistantPanel({
   mode,
   title,
   placeholder,
-  defaultCollapsed = false,
+  defaultCollapsed = true,
   onError,
 }: Props) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);

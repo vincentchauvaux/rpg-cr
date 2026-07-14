@@ -134,7 +134,7 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 - **Rôle** : conseiller intime du PJ (pas le MJ public de table) — réponses privées, **non** diffusées dans le fil de récit.
 - **API** : `POST /api/players/:playerId/hero-assistant` — `{ actorPlayerId, question, mode?: "creation" | "play" }` ; le joueur ne peut interroger que **sa propre** fiche.
 - **Contexte** : fiche complète ; en jeu (`play`) : canon établi + **12** derniers messages publics du salon ; prompt `hero-assistant-prompt.ts` — n’invente pas ; si info inconnue, indique **comment la obtenir en jeu**.
-- **UI** : `HeroAssistantPanel` — wizard (étape fiche) + sous le compositeur chat en partie (`mode=play`, tous les joueurs avec fiche prête) ; **Entrée** envoie ; mentions **@** comme le chat ; bordure animée pendant la réponse ; markdown sur les réponses.
+- **UI** : `HeroAssistantPanel` — wizard (étape fiche) + sous le compositeur chat en partie (`mode=play`, tous les joueurs avec fiche prête) ; **réduit par défaut** (bouton « Afficher ») ; **Entrée** envoie ; mentions **@** comme le chat ; bordure animée pendant la réponse ; markdown sur les réponses.
 - **Legacy** : `POST …/character/ask-mj` délègue au même moteur (`mode=creation`).
 
 ### Continuité narrative / canon (anti-invention MJ)
