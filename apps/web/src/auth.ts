@@ -2,7 +2,9 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { withBasePath } from "@/lib/config";
 
-export const AUTH_BASE_PATH = withBasePath("/api/auth");
+export const AUTH_BASE_PATH = "/api/auth";
+/** Chemin public (navigateur) — inclut le basePath Next.js en prod. */
+export const AUTH_PUBLIC_BASE_PATH = withBasePath("/api/auth");
 
 async function syncUserToApi(profile: {
   googleSub: string;
