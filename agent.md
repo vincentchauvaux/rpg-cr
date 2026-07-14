@@ -591,10 +591,12 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **UI accueil** : `GoogleAuthPanel` — connexion / déconnexion ; graines fusionnées local + `GET /api/users/:id/grains`.
 - **Création / join** : body optionnel `userId` sur `POST /api/rooms` et `POST …/join` ; reprise graine → `POST …/link-user`.
 - **Tunnel auto hôte** : `useAutoHostTunnel` — si connecté + mode VPS (`NEXT_PUBLIC_BASE_PATH`), tente `tryStartLocalTunnel()` à l’accueil et dans `HostSetupWizard` (LM Studio).
-- **Nginx** : bloc `location /rpg-cr/api/auth/` → conteneur **web** (3010), pas l’API Fastify — voir `deploy/nginx-rpg-cr.conf.example`.
-- **Google Cloud Console** : URI de redirection autorisée  
-  `https://vps-e09ed6db.vps.ovh.net/rpg-cr/api/auth/callback/google`
-- **Variables** (`.env` VPS, **jamais commitées**) : `AUTH_SECRET`, `AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_INTERNAL_SECRET`, `API_INTERNAL_URL=http://127.0.0.1:4010`.
+- **Auth.js** : `basePath` serveur `/api/auth` (Nginx retire `/rpg-cr`) ; `SessionProvider` client `/rpg-cr/api/auth`. Callback Google canonique : `https://…/api/auth/callback/google` (repli Nginx).
+- **Nginx** : `location /rpg-cr/api/auth/` → conteneur **web** (3010) ; repli `location /api/auth/` pour le callback OAuth sans préfixe — voir `deploy/nginx-rpg-cr.conf.example`.
+- **Google Cloud Console** : URI de redirection autorisée :
+  - `https://vps-e09ed6db.vps.ovh.net/api/auth/callback/google` (canonique — généré par Auth.js)
+  - `https://vps-e09ed6db.vps.ovh.net/rpg-cr/api/auth/callback/google` (optionnel — même backend via Nginx)
+- **Variables** (`.env` VPS, **jamais commitées**) : `AUTH_SECRET`, `AUTH_URL=https://…/rpg-cr` (racine app, pas `/api/auth`), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_INTERNAL_SECRET`, `API_INTERNAL_URL=http://127.0.0.1:4010`.
 - **Anonyme** : créer/rejoindre sans compte reste possible.
 
 ## Roadmap v2
