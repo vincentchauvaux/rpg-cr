@@ -92,6 +92,8 @@ import {
   isHostLlmSetupComplete,
   markHostLlmSetupComplete,
 } from "@/lib/host-llm-setup";
+import { useAutoHostTunnel } from "@/hooks/use-auto-host-tunnel";
+import { isVpsLmStudioHostMode } from "@/lib/lmstudio-tunnel";
 import { CharacterSheetPanel } from "@/components/CharacterSheetPanel";
 import { NarrativeCanonPanel } from "@/components/NarrativeCanonPanel";
 import { SceneIndicator } from "@/components/SceneIndicator";
@@ -207,6 +209,7 @@ function applyMjStatusSnapshot(
 export function RoomView({ code }: Props) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
+  useAutoHostTunnel(isVpsLmStudioHostMode() && session?.role === "admin");
   const [room, setRoom] = useState<Room | null>(null);
   const [scene, setScene] = useState<SceneState | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);

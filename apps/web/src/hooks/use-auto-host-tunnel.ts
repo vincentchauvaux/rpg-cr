@@ -1,24 +1,18 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import {
-  fetchTunnelStatusFromApi,
-  isVpsLmStudioHostMode,
-  tryStartLocalTunnel,
-} from "@/lib/lmstudio-tunnel";
+import { ensureHostTunnel, isVpsLmStudioHostMode } from "@/lib/lmstudio-tunnel";
 
-/** Démarre automatiquement le tunnel Mac → VPS pour l'hôte (mode VPS + LM Studio). */
-export function useAutoHostTunnel(enabled: boolean): void {
-  const startedRef = useRef(false);
+/**
+ * Démarre automatiquement le tunnel Mac → VPS (mode VPS).
+ * Utilisé à l'accueil, à l'entrée salon hôte et dans le wizard MJ.
+ */
+export function useAutoHostTunnel(enabled = true): void {
+  const ranRef = useRef(false);
 
   useEffect(() => {
-    if (!enabled || !isVpsLmStudioHostMode() || startedRef.current) return;
-    startedRef.current = true;
-
-    void (async () => {
-      const reachable = await fetchTunnelStatusFromApi();
-      if (reachable) return;
-      await tryStartLocalTunnel();
-    })();
+    if (!enabled || !isVpsLmStudioHostMode() || ranRef.current) return;
+    ranRef.current = true;
+    void ensureHostTunnel();
   }, [enabled]);
 }

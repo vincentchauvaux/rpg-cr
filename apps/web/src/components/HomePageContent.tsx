@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { createRoom, getRoom, joinRoom, listCampaigns, listUserGrainsFromApi, linkPlayerToUserApi } from "@/lib/api";
 import { GoogleAuthPanel, useAppUserId } from "@/components/GoogleAuthPanel";
 import { useAutoHostTunnel } from "@/hooks/use-auto-host-tunnel";
+import {
+  ensureHostTunnel,
+  isVpsLmStudioHostMode,
+  tunnelEnsureHint,
+} from "@/lib/lmstudio-tunnel";
 import { markHostLlmSetupPending } from "@/lib/host-llm-setup";
 import { randomPlayerName, randomRoomName } from "@/lib/random-names";
 import {
@@ -40,9 +45,10 @@ function formatActivity(iso: string | null): string {
 export function HomePageContent() {
   const router = useRouter();
   const appUserId = useAppUserId();
-  useAutoHostTunnel(Boolean(appUserId));
+  useAutoHostTunnel(isVpsLmStudioHostMode());
   const [tab, setTab] = useState<"create" | "join" | "grains">("create");
   const [loading, setLoading] = useState(false);
+  const [tunnelHint, setTunnelHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -128,6 +134,15 @@ export function HomePageContent() {
     setAdminValue("");
   }
 
+  async function prepareHostTunnel(): Promise<void> {
+    if (!isVpsLmStudioHostMode()) return;
+    setTunnelHint("Connexion tunnel MJ (Mac → VPS)…");
+    const result = await ensureHostTunnel({ maxWaitMs: 20_000 });
+    setTunnelHint(null);
+    const hint = tunnelEnsureHint(result);
+    if (hint) setError(hint);
+  }
+
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
@@ -135,6 +150,7 @@ export function HomePageContent() {
     const name = resolvePlaceholderValue(roomValue, roomSuggestion);
     const adminName = resolvePlaceholderValue(adminValue, adminSuggestion);
     try {
+      await prepareHostTunnel();
       const { room, admin } = await createRoom(name, adminName, appUserId);
       markHostLlmSetupPending(room.id);
       const session = {
@@ -211,7 +227,16 @@ export function HomePageContent() {
     }
   }
 
-  function resumeGrain(g: GrainRecord) {
+  async function resumeGrain(g: GrainRecord) {
+    setError(null);
+    if (g.role === "admin") {
+      setLoading(true);
+      try {
+        await prepareHostTunnel();
+      } finally {
+        setLoading(false);
+      }
+    }
     if (appUserId) {
       void linkPlayerToUserApi(g.playerId, appUserId).catch(() => undefined);
     }
@@ -280,6 +305,11 @@ export function HomePageContent() {
 
         {error && (
           <p style={{ color: "var(--danger)", marginBottom: "1rem" }}>{error}</p>
+        )}
+        {tunnelHint && (
+          <p className="muted" style={{ marginBottom: "1rem" }} aria-live="polite">
+            {tunnelHint}
+          </p>
         )}
 
         {tab === "create" ? (

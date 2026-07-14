@@ -37,7 +37,7 @@ export function HostSetupWizard({
   const [testing, setTesting] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
 
-  useAutoHostTunnel(isVpsLmStudioHostMode() && llmForm.providerId === "lmstudio");
+  useAutoHostTunnel(isVpsLmStudioHostMode());
 
   async function handleTest() {
     if (!hasLlmConfig || testing) return;
@@ -56,8 +56,7 @@ export function HostSetupWizard({
   }
 
   const canContinue = hasLlmConfig && llmTested;
-  const showTunnelBanner =
-    isVpsLmStudioHostMode() && llmForm.providerId === "lmstudio";
+  const showTunnelBanner = isVpsLmStudioHostMode();
 
   return (
     <div

@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-07-14 (profils Google OAuth + tunnel auto hôte + déploiement VPS)
+> Dernière mise à jour : 2026-07-14 (tunnel auto création/reprise partie + OAuth Google)
 
 ## Vision
 
@@ -336,7 +336,7 @@ sudo cp deploy/nginx-rpg-cr.conf.example /etc/nginx/snippets/rpg-cr.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-**Sur le Mac** : `npm run tunnel:helper:install` (auto au login, une fois) ; avant partie `npm run host` ou bouton wizard. Scripts : `install-tunnel-helper-service.sh`, `host-session.sh`.
+**Sur le Mac** : `npm run tunnel:helper:install` (une fois, assistant au login) ; tunnel auto à la **création** ou **reprise** de partie hôte (navigateur → `127.0.0.1:17434`). Secours CLI : `npm run tunnel:ensure` ou `npm run host` (tunnel + navigateur). Scripts : `ensure-tunnel.sh`, `host-session.sh`, `tunnel-helper.mjs`.
 
 **Dev local** : sans `NEXT_PUBLIC_BASE_PATH` → ports `:3000` / `:4000` inchangés.
 
@@ -590,7 +590,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Auth** : NextAuth v5 (`apps/web/src/auth.ts`) — provider Google ; sync API `POST /api/auth/sync` (secret interne `AUTH_INTERNAL_SECRET`).
 - **UI accueil** : `GoogleAuthPanel` — connexion / déconnexion ; graines fusionnées local + `GET /api/users/:id/grains`.
 - **Création / join** : body optionnel `userId` sur `POST /api/rooms` et `POST …/join` ; reprise graine → `POST …/link-user`.
-- **Tunnel auto hôte** : `useAutoHostTunnel` — si connecté + mode VPS (`NEXT_PUBLIC_BASE_PATH`), tente `tryStartLocalTunnel()` à l’accueil et dans `HostSetupWizard` (LM Studio).
+- **Tunnel auto hôte** : `ensureHostTunnel()` — à la création salon, reprise graine (admin), entrée salon hôte et wizard MJ (mode VPS). Appelle l'assistant local `POST http://127.0.0.1:17434/start`, puis poll `GET /api/llm/tunnel-status` jusqu'à `reachable:true`. CLI : `npm run tunnel:ensure`.
 - **Auth.js** : `basePath` serveur `/api/auth` (Nginx retire `/rpg-cr`) ; `SessionProvider` client `/rpg-cr/api/auth`. Callback Google canonique : `https://…/api/auth/callback/google` (repli Nginx).
 - **Nginx** : `location /rpg-cr/api/auth/` → conteneur **web** (3010) ; repli `location /api/auth/` pour le callback OAuth sans préfixe — voir `deploy/nginx-rpg-cr.conf.example`.
 - **Google Cloud Console** : URI de redirection autorisée :

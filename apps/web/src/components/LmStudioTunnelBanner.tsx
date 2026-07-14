@@ -107,9 +107,9 @@ export function LmStudioTunnelBanner({ refreshKey = 0 }: Props) {
       )}
 
       <p className="muted lm-tunnel-banner__footnote">
-        Une fois : sur le Mac, dans le dossier du projet,{" "}
-        <code>npm run tunnel:helper</code> (laissez tourner). Ensuite le bouton ci-dessus
-        ouvre le tunnel sans Terminal manuel.
+        <strong>Auto</strong> : le tunnel se lance à la création ou reprise de partie (hôte).
+        Installez une fois l&apos;assistant : <code>npm run tunnel:helper:install</code>.
+        Sinon : <code>npm run host</code> ou <code>npm run tunnel:ensure</code> avant de jouer.
       </p>
     </div>
   );

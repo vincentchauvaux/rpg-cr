@@ -17,6 +17,7 @@
     "tunnel:helper": "node deploy/tunnel-helper.mjs",
     "tunnel:helper:install": "bash deploy/install-tunnel-helper-service.sh",
     "tunnel:helper:uninstall": "bash deploy/uninstall-tunnel-helper-service.sh",
+    "tunnel:ensure": "bash deploy/ensure-tunnel.sh",
     "host": "bash deploy/host-session.sh",
     "build": "npm run build -w @rpg-cr/shared && npm run build -w @rpg-cr/api && npm run build -w @rpg-cr/web",
     "start": "concurrently -n api,web \"npm run start -w @rpg-cr/api\" \"npm run start -w @rpg-cr/web\"",
