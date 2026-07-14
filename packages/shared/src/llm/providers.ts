@@ -2,6 +2,7 @@ import { getCatalogEntry } from "./catalog.js";
 import { estimatePromptChars, resolveLlmTimeoutMs } from "./context-budget.js";
 import { assertChatModelId, isUnsuitableMjModelId } from "./model-kind.js";
 import { formatLlmModelCrashRecoveryHint } from "./model-context-tier.js";
+import { isLocalLlmProvider } from "./local-llm.js";
 import { normalizeLmStudioV1BaseUrl, resolveLmStudioServerBaseUrl } from "./lmstudio-url.js";
 import type { LlmRoomConfig } from "../types.js";
 
@@ -388,8 +389,7 @@ export async function completeAsMj(
   if (!entry) throw new Error(`Provider inconnu: ${config.providerId}`);
 
   const rawBase = config.baseUrl ?? entry.defaultBaseUrl ?? "https://api.openai.com/v1";
-  const primaryBase =
-    config.providerId === "lmstudio"
+  const primaryBase = isLocalLlmProvider(config.providerId)
       ? resolveLmStudioServerBaseUrl(config, options.lmStudioBaseUrl)
       : rawBase;
   const apiKey = options.apiKey;
@@ -398,8 +398,8 @@ export async function completeAsMj(
     options.timeoutMs ?? resolveLlmTimeoutMs(config.providerId, estimatedChars);
   const maxTokens = options.maxTokens ?? 2048;
   const retryOnEmpty =
-    options.retryOnEmpty ?? config.providerId === "lmstudio";
-  const retryOnTimeout = config.providerId === "lmstudio";
+    options.retryOnEmpty ?? isLocalLlmProvider(config.providerId);
+  const retryOnTimeout = isLocalLlmProvider(config.providerId);
 
   assertChatModelId(config.modelId);
 
@@ -418,7 +418,7 @@ export async function completeAsMj(
       usedFallback: false,
     };
   } catch (primaryError) {
-    if (!config.useFallbackLmStudio || config.providerId === "lmstudio") {
+    if (!config.useFallbackLmStudio || isLocalLlmProvider(config.providerId)) {
       throw primaryError;
     }
 

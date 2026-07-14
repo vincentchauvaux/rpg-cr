@@ -1,3 +1,4 @@
+import { isLocalLlmProvider } from "./local-llm.js";
 import { assertMjSuitableModelId, filterChatModelIds } from "./model-kind.js";
 import { lmStudioModelsEndpoint, normalizeLmStudioV1BaseUrl, resolveLmStudioServerBaseUrl } from "./lmstudio-url.js";
 import {
@@ -114,7 +115,7 @@ export async function preflightLmStudioForMj(
   config: LlmRoomConfig,
   options?: { lmStudioBaseUrl?: string }
 ): Promise<void> {
-  if (config.providerId !== "lmstudio") return;
+  if (!isLocalLlmProvider(config.providerId)) return;
 
   const modelId = config.modelId?.trim();
   if (!modelId) {

@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import type { LlmCatalogEntry, LlmRoomConfig } from "@rpg-cr/shared";
 import {
   isEmbeddingModelId,
+  isLocalLlmProvider,
   isUnsuitableMjModelId,
   normalizeLmStudioV1BaseUrl,
 } from "@rpg-cr/shared";
@@ -34,7 +35,7 @@ interface Props {
 }
 
 function modelValid(form: LlmRoomConfig): boolean {
-  if (form.providerId === "lmstudio") return isNonEmpty(form.modelId);
+  if (isLocalLlmProvider(form.providerId)) return isNonEmpty(form.modelId);
   return isNonEmpty(form.modelId);
 }
 
@@ -74,10 +75,13 @@ export function AdminLlmForm({
   const [lmModelsUrl, setLmModelsUrl] = useState<string | null>(null);
 
   const selectedProvider = catalog.find((c) => c.id === llmForm.providerId);
+  const isLocalProvider = isLocalLlmProvider(llmForm.providerId);
+  const localBackendLabel =
+    llmForm.providerId === "ollama" ? "Ollama" : "LM Studio";
   const modelIsEmbedding =
-    llmForm.providerId === "lmstudio" && isEmbeddingModelId(llmForm.modelId);
+    isLocalProvider && isEmbeddingModelId(llmForm.modelId);
   const modelIsUnsuitableMj =
-    llmForm.providerId === "lmstudio" && isUnsuitableMjModelId(llmForm.modelId);
+    isLocalProvider && isUnsuitableMjModelId(llmForm.modelId);
   const modelInLmStudioList =
     lmChatModels.length > 0 && lmChatModels.includes(llmForm.modelId.trim());
   const lmSelectValue =
@@ -113,8 +117,7 @@ export function AdminLlmForm({
     setSaving(true);
     setSaveError(null);
     try {
-      const normalizedBase =
-        llmForm.providerId === "lmstudio"
+      const normalizedBase = isLocalProvider
           ? resolvedLmBaseUrl()
           : llmForm.baseUrl?.trim() || selectedProvider?.defaultBaseUrl || undefined;
       const config: LlmRoomConfig = {
@@ -185,11 +188,11 @@ export function AdminLlmForm({
             onChange={(e) => {
               const id = e.target.value;
               const entry = catalog.find((c) => c.id === id);
-              const isLm = id === "lmstudio";
+              const isLocal = isLocalLlmProvider(id);
               setLlmForm((f) => ({
                 ...f,
                 providerId: id,
-                modelId: isLm ? f.modelId : (entry?.models[0]?.id ?? f.modelId),
+                modelId: isLocal ? f.modelId : (entry?.models[0]?.id ?? f.modelId),
                 baseUrl: entry?.defaultBaseUrl ?? f.baseUrl,
               }));
               touch("provider");
@@ -205,11 +208,11 @@ export function AdminLlmForm({
 
         <div className="field-block">
           <label htmlFor="llm-model">
-            {llmForm.providerId === "lmstudio"
-              ? "Identifiant modèle (copier depuis LM Studio)"
+            {isLocalProvider
+              ? `Identifiant modèle (${localBackendLabel})`
               : "Modèle"}
           </label>
-          {llmForm.providerId === "lmstudio" ? (
+          {isLocalProvider ? (
             <>
               <input
                 id="llm-model"
@@ -220,7 +223,11 @@ export function AdminLlmForm({
                   setLlmForm((f) => ({ ...f, modelId: e.target.value }));
                   touch("model");
                 }}
-                placeholder="google/gemma-4-e2b"
+                placeholder={
+                  llmForm.providerId === "ollama"
+                    ? "qwen2.5:7b-instruct"
+                    : "google/gemma-4-e2b"
+                }
                 spellCheck={false}
                 list={lmChatModels.length ? "lm-chat-models" : undefined}
               />
@@ -250,7 +257,7 @@ export function AdminLlmForm({
               )}
               {modelInLmStudioList && (
                 <p className="llm-hint muted" style={{ borderLeftColor: "var(--valid)" }}>
-                  ✓ Modèle configuré présent dans LM Studio :{" "}
+                  ✓ Modèle configuré présent dans {localBackendLabel} :{" "}
                   <code>{llmForm.modelId.trim()}</code>
                 </p>
               )}
@@ -263,7 +270,7 @@ export function AdminLlmForm({
                   disabled={lmModelsLoading}
                   onClick={handleListLmModels}
                 >
-                  {lmModelsLoading ? "Chargement…" : "Lister modèles LM Studio (chat)"}
+                  {lmModelsLoading ? "Chargement…" : `Lister modèles ${localBackendLabel} (chat)`}
                 </button>
                 {lmChatModels.length > 0 && (
                   <select
@@ -333,7 +340,7 @@ export function AdminLlmForm({
             }}
             placeholder={selectedProvider?.defaultBaseUrl ?? ""}
           />
-          {llmForm.providerId === "lmstudio" && (
+          {isLocalProvider && (
             <p className="muted" style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>
               Doit se terminer par <code>/v1</code> — normalisé auto si omis (ex.{" "}
               <code>{resolvedLmBaseUrl()}</code>).
@@ -398,11 +405,20 @@ export function AdminLlmForm({
           Enregistre en base sans tester la connexion — le MJ répondra automatiquement
           aux messages Dire/Action une fois configuré.
         </p>
-        {llmForm.providerId === "lmstudio" && (
+        {isLocalProvider && (
           <p className="llm-hint muted">
-            LM Studio : serveur sur cette machine (<code>{resolvedLmBaseUrl()}</code>
-            ), modèle READY = identifiant ci-dessus (ex. <code>google/gemma-4-e2b</code>).
-            Après changement de modèle, attendez le statut <strong>READY</strong> (JIT 30–90 s).
+            {localBackendLabel} : serveur sur cette machine (
+            <code>{resolvedLmBaseUrl()}</code>
+            ), modèle chargé = identifiant ci-dessus
+            {llmForm.providerId === "ollama" ? (
+              <> (ex. <code>qwen2.5:7b-instruct</code> — <code>ollama pull</code> si absent).</>
+            ) : (
+              <>
+                {" "}
+                (ex. <code>google/gemma-4-e2b</code>). Après changement, attendez{" "}
+                <strong>READY</strong> (JIT 30–90 s).
+              </>
+            )}
           </p>
         )}
 

@@ -12,7 +12,7 @@ COMPOSE_FILE="docker-compose.prod.yml"
 if [[ ! -f .env ]]; then
   echo "Fichier .env manquant."
   echo "  cp deploy/.env.production.example .env"
-  echo "  nano .env   # LM_STUDIO_BASE_URL (tunnel Mac) ou OPENAI_API_KEY (cloud)"
+  echo "  nano .env   # LM_STUDIO_BASE_URL (Ollama VPS ou tunnel Mac) ou OPENAI_API_KEY (cloud)"
   exit 1
 fi
 
@@ -28,7 +28,12 @@ BASE_PATH="${BASE_PATH%/}"
 
 if ! grep -qE '^OPENAI_API_KEY=.+' .env 2>/dev/null; then
   if grep -qE '^LM_STUDIO_BASE_URL=.+' .env 2>/dev/null; then
-    echo "MJ : LM Studio via tunnel Mac (LM_STUDIO_BASE_URL). Voir deploy/LMSTUDIO-VPS.md"
+    LM_URL="$(grep -E '^LM_STUDIO_BASE_URL=' .env | cut -d= -f2- | tr -d '"' | tr -d "'")"
+    if echo "${LM_URL}" | grep -q ':11434'; then
+      echo "MJ : Ollama sur le VPS (${LM_URL}). Voir deploy/OLLAMA-VPS.md"
+    else
+      echo "MJ : LM Studio via tunnel Mac (${LM_URL}). Voir deploy/LMSTUDIO-VPS.md"
+    fi
   else
     echo "Attention : ni OPENAI_API_KEY ni LM_STUDIO_BASE_URL — MJ bloqué."
   fi
@@ -83,4 +88,4 @@ echo "  sudo cp deploy/nginx-rpg-cr.conf.example /etc/nginx/snippets/rpg-cr.conf
 echo "  # include snippets/rpg-cr.conf; dans le server HTTPS"
 echo "  sudo nginx -t && sudo systemctl reload nginx"
 echo ""
-echo "Étape suivante : deploy/HOST-SETUP.md + deploy/LMSTUDIO-VPS.md (tunnel Mac)"
+echo "Étape suivante : deploy/HOST-SETUP.md + deploy/OLLAMA-VPS.md (Ollama) ou deploy/LMSTUDIO-VPS.md (tunnel Mac)"

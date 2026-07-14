@@ -10,11 +10,16 @@ RPG-CR cohabite avec **canopee.be** et **streamTv** sur le même VPS.
 
 Conteneurs en **écoute locale** (`127.0.0.1:3010` / `4010`) — seul **Nginx** est public (443).
 
-## MJ gratuit : LM Studio + tunnel Mac
+## MJ gratuit
 
-Par défaut, le MJ utilise **LM Studio sur votre Mac** (gratuit), relié au VPS par un tunnel SSH inverse. Pas de clé OpenAI requise.
+Deux options locales gratuites :
 
-Guide détaillé : **[LMSTUDIO-VPS.md](./LMSTUDIO-VPS.md)**
+| Option | Quand l’utiliser | Guide |
+|--------|------------------|-------|
+| **Ollama sur le VPS** | Pas de Mac, pas de tunnel — LLM sur la même machine que l’API | **[OLLAMA-VPS.md](./OLLAMA-VPS.md)** |
+| **LM Studio + tunnel Mac** | GPU sur le Mac, VPS léger | **[LMSTUDIO-VPS.md](./LMSTUDIO-VPS.md)** |
+
+Par défaut historique : LM Studio sur le Mac + tunnel SSH. Pour Ollama : `LM_STUDIO_BASE_URL=http://127.0.0.1:11434/v1` dans `.env`.
 
 ```bash
 # Une fois (Mac) — assistant auto à chaque connexion :
@@ -82,7 +87,8 @@ Sans Nginx : ouvrir 3000/4000, utiliser `docker-compose.yml` et laisser `NEXT_PU
 
 | Fichier | Rôle |
 |---------|------|
-| [LMSTUDIO-VPS.md](./LMSTUDIO-VPS.md) | MJ gratuit — tunnel Mac |
+| [OLLAMA-VPS.md](./OLLAMA-VPS.md) | MJ gratuit — Ollama sur le VPS (sans Mac) |
+| [LMSTUDIO-VPS.md](./LMSTUDIO-VPS.md) | MJ gratuit — tunnel Mac + LM Studio |
 | [lmstudio-tunnel.sh](./lmstudio-tunnel.sh) | Script tunnel SSH (Mac) |
 | [nginx-rpg-cr.conf.example](./nginx-rpg-cr.conf.example) | Snippet Nginx `/rpg-cr` |
 | [vps-setup.sh](./vps-setup.sh) | Docker + UFW |

@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
-import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl } from "@rpg-cr/shared";
+import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel } from "@rpg-cr/shared";
 import { initDb } from "./db.js";
 import {
   getUserById,
@@ -212,18 +212,30 @@ app.get<{ Querystring: { baseUrl?: string } }>(
   }
 );
 
-/** VPS + tunnel Mac : le serveur teste si LM Studio est joignable via LM_STUDIO_BASE_URL. */
+/** Statut LLM local : Ollama sur VPS (pas de tunnel) ou LM Studio via tunnel Mac. */
 app.get("/api/llm/tunnel-status", async (_req, reply) => {
-  const baseUrl = resolveLmStudioServerBaseUrl({}, process.env.LM_STUDIO_BASE_URL);
-  if (!process.env.LM_STUDIO_BASE_URL?.trim()) {
-    return { reachable: true, mode: "local" };
+  const envUrl = process.env.LM_STUDIO_BASE_URL?.trim();
+  const baseUrl = resolveLmStudioServerBaseUrl({}, envUrl);
+  const backend = inferLocalLlmBackend(envUrl || baseUrl);
+  const needsTunnel = Boolean(envUrl) && localLlmNeedsMacTunnel(envUrl);
+
+  if (!envUrl) {
+    return { reachable: true, mode: "local", backend: "none", needsTunnel: false };
   }
+
   try {
     const url = `${baseUrl.replace(/\/$/, "")}/models`;
     const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    return { reachable: res.ok, mode: "vps_tunnel" };
+    const mode = backend === "ollama" ? "ollama" : "vps_tunnel";
+    return { reachable: res.ok, mode, backend, needsTunnel };
   } catch {
-    return reply.status(200).send({ reachable: false, mode: "vps_tunnel" });
+    const mode = backend === "ollama" ? "ollama" : "vps_tunnel";
+    return reply.status(200).send({
+      reachable: false,
+      mode,
+      backend,
+      needsTunnel,
+    });
   }
 });
 

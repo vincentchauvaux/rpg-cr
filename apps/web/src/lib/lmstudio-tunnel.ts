@@ -6,7 +6,7 @@ export const TUNNEL_HELPER_URL = "http://127.0.0.1:17434";
 export const TUNNEL_SSH_COMMAND =
   "ssh -N -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -R 1234:127.0.0.1:1234 root@vps-e09ed6db.vps.ovh.net";
 
-/** Mode VPS Nginx (/rpg-cr) : LM Studio sur le Mac + tunnel SSH requis. */
+/** Mode VPS Nginx (/rpg-cr) : hébergement derrière le préfixe public. */
 export function isVpsLmStudioHostMode(): boolean {
   return getBasePath().length > 0;
 }
@@ -17,6 +17,7 @@ export type TunnelHelperResult =
 
 export type TunnelEnsureReason =
   | "not_vps"
+  | "ollama_on_vps"
   | "already_ok"
   | "helper_missing"
   | "helper_error"
@@ -27,6 +28,12 @@ export type TunnelEnsureResult = {
   tunnelStarted: boolean;
   reason?: TunnelEnsureReason;
   detail?: string;
+};
+
+export type TunnelStatusSnapshot = {
+  reachable: boolean | null;
+  needsTunnel: boolean;
+  backend?: string;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -51,11 +58,43 @@ export async function tryStartLocalTunnel(): Promise<TunnelHelperResult> {
   }
 }
 
+export async function fetchTunnelStatusSnapshot(): Promise<TunnelStatusSnapshot> {
+  try {
+    const { getApiUrl } = await import("@/lib/config");
+    const res = await fetch(`${getApiUrl()}/api/llm/tunnel-status`, {
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return { reachable: null, needsTunnel: isVpsLmStudioHostMode() };
+    }
+    const data = (await res.json()) as {
+      reachable?: boolean;
+      needsTunnel?: boolean;
+      backend?: string;
+      mode?: string;
+    };
+    const needsTunnel =
+      data.needsTunnel ??
+      (data.mode === "vps_tunnel" || data.backend === "lmstudio");
+    return {
+      reachable: Boolean(data.reachable),
+      needsTunnel,
+      backend: data.backend,
+    };
+  } catch {
+    return { reachable: null, needsTunnel: isVpsLmStudioHostMode() };
+  }
+}
+
+/** @deprecated Préférer fetchTunnelStatusSnapshot — compat booléen reachable. */
+export async function fetchTunnelStatusFromApi(): Promise<boolean | null> {
+  const snap = await fetchTunnelStatusSnapshot();
+  return snap.reachable;
+}
+
 /**
  * Assure le tunnel Mac → VPS avant création / reprise de partie hôte.
- * 1. Vérifie le statut API VPS
- * 2. Démarre le tunnel via l'assistant local (127.0.0.1:17434)
- * 3. Attend que le VPS voie LM Studio
+ * No-op si Ollama tourne sur le VPS (pas de tunnel requis).
  */
 export async function ensureHostTunnel(options?: {
   maxWaitMs?: number;
@@ -65,11 +104,19 @@ export async function ensureHostTunnel(options?: {
     return { reachable: true, tunnelStarted: false, reason: "not_vps" };
   }
 
+  const initialSnap = await fetchTunnelStatusSnapshot();
+  if (!initialSnap.needsTunnel) {
+    return {
+      reachable: initialSnap.reachable ?? true,
+      tunnelStarted: false,
+      reason: "ollama_on_vps",
+    };
+  }
+
   const maxWaitMs = options?.maxWaitMs ?? 20_000;
   const pollIntervalMs = options?.pollIntervalMs ?? 1_000;
 
-  const initial = await fetchTunnelStatusFromApi();
-  if (initial) {
+  if (initialSnap.reachable) {
     return { reachable: true, tunnelStarted: false, reason: "already_ok" };
   }
 
@@ -85,8 +132,8 @@ export async function ensureHostTunnel(options?: {
 
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
-    const reachable = await fetchTunnelStatusFromApi();
-    if (reachable) {
+    const snap = await fetchTunnelStatusSnapshot();
+    if (snap.reachable) {
       return { reachable: true, tunnelStarted: !start.already };
     }
     await sleep(pollIntervalMs);
@@ -98,6 +145,7 @@ export async function ensureHostTunnel(options?: {
 /** Message FR court pour l'UI quand le tunnel n'est pas prêt. */
 export function tunnelEnsureHint(result: TunnelEnsureResult): string | null {
   if (result.reachable) return null;
+  if (result.reason === "ollama_on_vps") return null;
   if (result.reason === "helper_missing") {
     return (
       "Tunnel MJ indisponible sur ce Mac — lancez une fois : npm run tunnel:helper:install " +
@@ -128,18 +176,4 @@ ${TUNNEL_SSH_COMMAND}
   a.download = "start-rpg-cr-tunnel.command";
   a.click();
   URL.revokeObjectURL(url);
-}
-
-export async function fetchTunnelStatusFromApi(): Promise<boolean | null> {
-  try {
-    const { getApiUrl } = await import("@/lib/config");
-    const res = await fetch(`${getApiUrl()}/api/llm/tunnel-status`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { reachable?: boolean };
-    return Boolean(data.reachable);
-  } catch {
-    return null;
-  }
 }

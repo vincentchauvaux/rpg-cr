@@ -9,6 +9,7 @@ import {
   estimatePromptChars,
   initialMjContextModeForModel,
   isContextLengthLlmError,
+  isLocalLlmProvider,
   isLlmTimeoutError,
   formatSmallContextModelHint,
   mjContextLimits,
@@ -345,7 +346,7 @@ export async function testLlmConnection(
     lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
     timeoutMs: resolveLlmTimeoutMs(config.providerId, estimatedChars),
     maxTokens: 5,
-    retryOnEmpty: config.providerId === "lmstudio",
+    retryOnEmpty: isLocalLlmProvider(config.providerId),
   });
 
   return {

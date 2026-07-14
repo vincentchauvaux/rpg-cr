@@ -94,6 +94,7 @@ import {
 } from "@/lib/host-llm-setup";
 import { useAutoHostTunnel } from "@/hooks/use-auto-host-tunnel";
 import { isVpsLmStudioHostMode } from "@/lib/lmstudio-tunnel";
+import { getBasePath } from "@/lib/config";
 import { CharacterSheetPanel } from "@/components/CharacterSheetPanel";
 import { NarrativeCanonPanel } from "@/components/NarrativeCanonPanel";
 import { SceneIndicator } from "@/components/SceneIndicator";
@@ -327,11 +328,15 @@ export function RoomView({ code }: Props) {
   );
   adminOpenRef.current = adminOpen;
 
-  const [llmForm, setLlmForm] = useState<LlmRoomConfig>({
-    providerId: "openai",
-    modelId: "gpt-4o-mini",
-    useFallbackLmStudio: true,
-    autoExtractFacts: true,
+  const [llmForm, setLlmForm] = useState<LlmRoomConfig>(() => {
+    const onVps = getBasePath().length > 0;
+    return {
+      providerId: onVps ? "ollama" : "openai",
+      modelId: onVps ? "qwen2.5:7b-instruct" : "gpt-4o-mini",
+      baseUrl: onVps ? "http://127.0.0.1:11434/v1" : undefined,
+      useFallbackLmStudio: !onVps,
+      autoExtractFacts: true,
+    };
   });
 
   const refresh = useCallback(async (playerId?: string) => {

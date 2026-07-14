@@ -52,8 +52,13 @@ if [[ -f .env ]]; then
   if grep -qE '^LM_STUDIO_BASE_URL=.+' .env 2>/dev/null; then
     echo "OK   LM_STUDIO_BASE_URL renseignée"
     LM_URL="$(grep -E '^LM_STUDIO_BASE_URL=' .env | cut -d= -f2- | tr -d '"' | tr -d "'")"
-    # Tunnel Mac : LM Studio joignable sur l'hôte VPS (127.0.0.1:1234)
-    if curl -sf --max-time 3 "http://127.0.0.1:1234/v1/models" >/dev/null 2>&1; then
+    if echo "${LM_URL}" | grep -q ':11434'; then
+      if curl -sf --max-time 3 "http://127.0.0.1:11434/v1/models" >/dev/null 2>&1; then
+        echo "OK   Ollama joignable sur VPS (:11434)"
+      else
+        echo "!!   Ollama injoignable — sudo bash deploy/ollama-setup.sh"
+      fi
+    elif curl -sf --max-time 3 "http://127.0.0.1:1234/v1/models" >/dev/null 2>&1; then
       echo "OK   LM Studio joignable sur VPS (tunnel Mac actif)"
     else
       echo "!!   LM Studio injoignable sur VPS:1234 — lancez deploy/lmstudio-tunnel.sh sur le Mac"

@@ -10,6 +10,7 @@ export * from "./character-sheet.js";
 export * from "./character-progression.js";
 export * from "./llm/catalog.js";
 export * from "./llm/model-kind.js";
+export * from "./llm/local-llm.js";
 export * from "./llm/lmstudio-url.js";
 export * from "./llm/context-budget.js";
 export * from "./llm/model-context-tier.js";

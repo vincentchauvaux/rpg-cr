@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   downloadTunnelCommandFile,
-  fetchTunnelStatusFromApi,
+  fetchTunnelStatusSnapshot,
   TUNNEL_SSH_COMMAND,
   tryStartLocalTunnel,
+  type TunnelStatusSnapshot,
 } from "@/lib/lmstudio-tunnel";
 
 type Props = {
@@ -14,13 +15,16 @@ type Props = {
 };
 
 export function LmStudioTunnelBanner({ refreshKey = 0 }: Props) {
-  const [reachable, setReachable] = useState<boolean | null>(null);
+  const [status, setStatus] = useState<TunnelStatusSnapshot>({
+    reachable: null,
+    needsTunnel: true,
+  });
   const [starting, setStarting] = useState(false);
   const [helperMsg, setHelperMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const refreshStatus = useCallback(async () => {
-    setReachable(await fetchTunnelStatusFromApi());
+    setStatus(await fetchTunnelStatusSnapshot());
   }, []);
 
   useEffect(() => {
@@ -28,6 +32,10 @@ export function LmStudioTunnelBanner({ refreshKey = 0 }: Props) {
     const id = window.setInterval(() => void refreshStatus(), 8000);
     return () => window.clearInterval(id);
   }, [refreshStatus, refreshKey]);
+
+  if (status.needsTunnel === false) {
+    return null;
+  }
 
   async function handleStartTunnel() {
     setStarting(true);
@@ -62,6 +70,8 @@ export function LmStudioTunnelBanner({ refreshKey = 0 }: Props) {
       setCopied(false);
     }
   }
+
+  const { reachable } = status;
 
   return (
     <div className="lm-tunnel-banner panel" role="region" aria-label="Tunnel LM Studio">
@@ -110,6 +120,8 @@ export function LmStudioTunnelBanner({ refreshKey = 0 }: Props) {
         <strong>Auto</strong> : le tunnel se lance à la création ou reprise de partie (hôte).
         Installez une fois l&apos;assistant : <code>npm run tunnel:helper:install</code>.
         Sinon : <code>npm run host</code> ou <code>npm run tunnel:ensure</code> avant de jouer.
+        — <em>Ollama sur le VPS ?</em> voir{" "}
+        <code>deploy/OLLAMA-VPS.md</code> (pas de tunnel).
       </p>
     </div>
   );

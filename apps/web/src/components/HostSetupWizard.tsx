@@ -70,7 +70,7 @@ export function HostSetupWizard({
         <h2 id="host-setup-title">Configurer le MJ (LLM)</h2>
         <p className="muted">
           Salon <strong>{roomCode}</strong> — avant de créer votre personnage,
-          connectez LM Studio sur cette machine ou un fournisseur cloud. Les autres
+          connectez Ollama (VPS), LM Studio ou un fournisseur cloud. Les autres
           joueurs utiliseront cette configuration.
         </p>
 

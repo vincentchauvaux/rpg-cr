@@ -1,4 +1,5 @@
 import type { ChatCompletionMessage } from "./providers.js";
+import { isLocalLlmProvider } from "./local-llm.js";
 import { inferModelContextTier } from "./model-context-tier.js";
 
 /** Cible caractères « monde » pour un tour MJ complet (hors prompt système de base). */
@@ -64,7 +65,7 @@ export function resolveLlmTimeoutMs(
   providerId: string,
   estimatedChars: number
 ): number {
-  const isLocal = providerId === "lmstudio";
+  const isLocal = isLocalLlmProvider(providerId);
   if (!isLocal) {
     if (estimatedChars > 28_000) return 120_000;
     if (estimatedChars > 16_000) return 100_000;
@@ -92,5 +93,5 @@ export function resolveMjMaxTokens(providerId: string, modelId: string): number 
   const tier = inferModelContextTier(modelId);
   if (tier === "small") return 640;
   if (tier === "medium") return 1200;
-  return providerId === "lmstudio" ? 1536 : 2048;
+  return isLocalLlmProvider(providerId) ? 1536 : 2048;
 }

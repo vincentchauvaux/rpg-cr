@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-07-14 (fix wizard « Suite » après fill-all)
+> Dernière mise à jour : 2026-07-14 (Ollama VPS — provider dédié, sans tunnel Mac)
 
 ## Vision
 
@@ -154,7 +154,8 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 - Mode Action : menu « Utiliser… » (sorts/objets/actions de la fiche).
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.
 
-   - **LM Studio** : provider dédié, URL défaut `http://127.0.0.1:1234/v1`, **model id saisi à la main** (ex. `google/gemma-3-4b`) ; « Enregistrer la config MJ » = sauvegarde SQLite uniquement, pas de test réseau
+   - **Ollama (VPS)** : provider dédié, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` — install `deploy/ollama-setup.sh`, pas de tunnel Mac
+   - **LM Studio (Mac + tunnel)** : URL `http://127.0.0.1:1234/v1`, modèle saisi à la main ; « Enregistrer la config MJ » = sauvegarde SQLite uniquement
 5. **LLM** — catalogue statique, config par salon ; **MJ auto Dire** désactivé (`AUTO_MJ_ON_PLAYER_MESSAGES`) ; **MJ auto Action** actif (`scheduleActionMj`) ; Réclamer / routes hôte ; endpoint `POST /api/rooms/:id/mj` conservé (API interne / v2)
 6. **Carte** — génération procédurale (simplex noise, biomes, effets toxic/fog/evil/buff, POI, territoires, SVG)
 7. **Modèles** — tables SQLite : messages, quêtes, journal, propositions archivées (+ endpoints REST)
@@ -312,7 +313,8 @@ Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**
 |-------|-------------------|
 | Prérequis VPS | `sudo bash deploy/vps-setup.sh` |
 | Nginx | `deploy/nginx-rpg-cr.conf.example` → `include` dans server HTTPS `vps-e09ed6db.vps.ovh.net` |
-| MJ gratuit | [deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md) — LM Studio Mac + tunnel ; `npm run tunnel:helper` + bouton wizard **Démarrer le tunnel** |
+| MJ gratuit (VPS) | [deploy/OLLAMA-VPS.md](deploy/OLLAMA-VPS.md) — Ollama sur le VPS (`LM_STUDIO_BASE_URL=http://127.0.0.1:11434/v1`), sans Mac |
+| MJ gratuit (Mac) | [deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md) — LM Studio + tunnel ; `npm run tunnel:helper` + bouton wizard **Démarrer le tunnel** |
 | Secrets | `.env` : `LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1`, `NEXT_PUBLIC_BASE_PATH=/rpg-cr` ; `OPENAI_API_KEY` optionnel |
 | Déploiement | `bash deploy/deploy.sh` — Docker `127.0.0.1:3010` / `4010`, `extra_hosts` host-gateway |
 | Compose | `docker-compose.prod.yml` — build `NEXT_PUBLIC_BASE_PATH`, volume `rpg-data` |
@@ -321,9 +323,9 @@ Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**
 
 **URL publique** : `https://vps-e09ed6db.vps.ovh.net/rpg-cr` — same-origin API/WS via [config.ts](apps/web/src/lib/config.ts) + `basePath` Next.js.
 
-**MJ VPS (gratuit)** : l'API Docker appelle LM Studio via `LM_STUDIO_BASE_URL` ; tunnel SSH `-R 1234:127.0.0.1:1234` depuis le Mac. `resolveLmStudioServerBaseUrl` ([lmstudio-url.ts](packages/shared/src/llm/lmstudio-url.ts)) prime sur l'URL affichée dans l'UI (`127.0.0.1:1234`).
+**MJ local (gratuit)** : l'API appelle un endpoint OpenAI-compatible via `LM_STUDIO_BASE_URL` (nom historique — **Ollama** `http://127.0.0.1:11434/v1` ou **LM Studio** `http://127.0.0.1:1234/v1`). Provider UI « LM Studio (local) » pour les deux. `resolveLmStudioServerBaseUrl` ([lmstudio-url.ts](packages/shared/src/llm/lmstudio-url.ts)) prime sur l'URL affichée dans l'UI. **Sans Mac** : installer Ollama sur le VPS ([deploy/OLLAMA-VPS.md](deploy/OLLAMA-VPS.md)). **Avec GPU Mac** : tunnel SSH `-R 1234:127.0.0.1:1234` ([deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md)).
 
-**État VPS (2026-07-14)** : Docker installé, conteneurs `rpg-cr-api` / `rpg-cr-web` actifs (`:4010` / `:3010`). Nginx snippet `rpg-cr` activé dans `streamtv` — `proxy_pass …/rpg-cr/` (préfixe conservé). Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/` → **200** ; salon `/rpg-cr/salon/CODE/` → assets `/rpg-cr/_next/…` OK. Déploiement code : `rsync` depuis le Mac (pas de `.git` sur le VPS) puis `bash deploy/deploy.sh`. **Dernier déploiement** : fix wizard « Suite » après fill-all (web rebuild). MJ : tunnel Mac requis (`deploy/lmstudio-tunnel.sh` + LM Studio Running).
+**État VPS (2026-07-14)** : Docker actif ; **MJ via Ollama sur le VPS** (`LM_STUDIO_BASE_URL=http://127.0.0.1:11434/v1`) — plus de tunnel Mac requis. Déploiement : `bash deploy/push-deploy.sh` (Mac) ou `bash deploy/deploy.sh` (VPS). Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`.
 
 **Suite sur le VPS** :
 ```bash

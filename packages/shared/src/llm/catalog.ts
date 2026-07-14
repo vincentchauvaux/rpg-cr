@@ -34,9 +34,28 @@ export const LLM_CATALOG: LlmCatalogEntry[] = [
     ],
   },
   {
+    id: "ollama",
+    vendor: "Ollama",
+    name: "Ollama (VPS / local)",
+    openAiCompatible: true,
+    defaultBaseUrl: "http://127.0.0.1:11434/v1",
+    requiresApiKey: false,
+    characteristics: [
+      "Gratuit",
+      "Sur le VPS — pas de Mac ni tunnel",
+      "Modèle chat/instruct (`ollama pull qwen2.5:7b-instruct`)",
+    ],
+    models: [
+      {
+        id: "",
+        label: "Nom Ollama — voir ollama list ou GET /v1/models",
+      },
+    ],
+  },
+  {
     id: "lmstudio",
     vendor: "LM Studio",
-    name: "LM Studio (local)",
+    name: "LM Studio (Mac + tunnel)",
     openAiCompatible: true,
     defaultBaseUrl: "http://127.0.0.1:1234/v1",
     requiresApiKey: false,
