@@ -73,7 +73,9 @@ import {
 } from "./player-introduce.js";
 import {
   forceReleaseCharacterAllGeneration,
+  getCharacterAllAbortSignal,
   getCharacterAllGenerationLock,
+  isGenerationCancelledError,
   isLlmTimeoutError,
   releaseCharacterAllGeneration,
   tryAcquireCharacterAllGeneration,
@@ -1236,7 +1238,8 @@ app.post<{
     });
   }
 
-  if (!tryAcquireCharacterAllGeneration(target.id)) {
+  const lockToken = tryAcquireCharacterAllGeneration(target.id);
+  if (!lockToken) {
     const lock = getCharacterAllGenerationLock(target.id);
     return reply.status(429).send({
       error:
@@ -1266,11 +1269,19 @@ app.post<{
       process.env.OPENAI_API_KEY,
       req.body.hints,
       actor.preferredLocale,
-      pushProgress
+      pushProgress,
+      {
+        playerId: target.id,
+        lockToken,
+        abortSignal: getCharacterAllAbortSignal(target.id, lockToken),
+      }
     );
     return { sheet };
   } catch (e) {
     const err = e instanceof Error ? e.message : "Erreur LLM";
+    if (isGenerationCancelledError(e)) {
+      return reply.status(409).send({ error: "Génération annulée" });
+    }
     req.log.error(
       {
         err: e,
@@ -1286,7 +1297,7 @@ app.post<{
     return reply.status(502).send({ error: err });
   } finally {
     clearCharacterAllProgress(target.id);
-    releaseCharacterAllGeneration(target.id);
+    releaseCharacterAllGeneration(target.id, lockToken);
   }
 });
 
@@ -1318,9 +1329,10 @@ app.get<{
 
 app.delete<{
   Params: { playerId: string };
+  Querystring: { actorPlayerId?: string };
   Body: { actorPlayerId?: string };
 }>("/api/players/:playerId/character/generate-all-lock", async (req, reply) => {
-  const actor = getPlayerById(req.body?.actorPlayerId ?? "");
+  const actor = getPlayerById(req.query.actorPlayerId ?? req.body?.actorPlayerId ?? "");
   const target = getPlayerById(req.params.playerId);
   if (!actor || !target) return reply.status(404).send({ error: "Joueur introuvable" });
   if (!canCancelCharacterAllGeneration(actor, target)) {

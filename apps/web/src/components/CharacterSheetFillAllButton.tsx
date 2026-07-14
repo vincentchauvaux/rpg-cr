@@ -14,16 +14,23 @@ import {
   getCharacterAllGenerationLock,
   getCharacterAllGenerationProgress,
 } from "@/lib/api";
-import { isHttpError } from "@/lib/api-errors";
+import { isHttpError, ApiHttpError } from "@/lib/api-errors";
 import { AiGenerationOverlay } from "@/components/AiGenerationOverlay";
 
 /** Afficher le bouton ✨ Tout remplir uniquement avant scellement / remplissage. */
+export function canRunFillAllGeneration(
+  player: Pick<Player, "storyLocked" | "characterStatus">
+): boolean {
+  if (isStoryLocked(player)) return false;
+  if (player.characterStatus === "ready") return false;
+  return true;
+}
+
 export function shouldShowFillAllButton(
   player: Pick<Player, "storyLocked" | "characterStatus">,
   sheet: CharacterSheet
 ): boolean {
-  if (isStoryLocked(player)) return false;
-  if (player.characterStatus === "ready") return false;
+  if (!canRunFillAllGeneration(player)) return false;
   if (isCharacterSheetFilled(sheet)) return false;
   return true;
 }
@@ -56,6 +63,13 @@ const PROGRESS_POLL_INTERVAL_MS = 450;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function isUserCancelledError(error: unknown): boolean {
+  if (isHttpError(error) && error.status === 409) return true;
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error instanceof Error && /annulée|aborted|abort/i.test(error.message)) return true;
+  return false;
 }
 
 function formatFillAllError(error: unknown): string {
@@ -102,6 +116,7 @@ export function CharacterSheetFillAllButton({
   const [genProgress, setGenProgress] = useState<number | null>(null);
   const [genProgressLabel, setGenProgressLabel] = useState<string | null>(null);
   const inFlightRef = useRef(false);
+  const fetchAbortRef = useRef<AbortController | null>(null);
   const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const snapshotRef = useRef(currentSheet);
 
@@ -127,7 +142,16 @@ export function CharacterSheetFillAllButton({
   }
 
   function isFillAllAllowed(): boolean {
-    return shouldShowFillAllButton(player, currentSheet);
+    return canRunFillAllGeneration(player);
+  }
+
+  async function ensureLockClear(): Promise<boolean> {
+    const lock = await getCharacterAllGenerationLock(player.id, actorPlayerId);
+    if (!lock.inFlight) return true;
+    if (canForceReleaseLock) {
+      await cancelCharacterAllGeneration(player.id, actorPlayerId);
+    }
+    return waitForLockClear();
   }
 
   function startProgressPoll(): void {
@@ -157,13 +181,22 @@ export function CharacterSheetFillAllButton({
 
   async function runGeneration(): Promise<void> {
     if (!isFillAllAllowed()) return;
+    const cleared = await ensureLockClear();
+    if (!cleared) {
+      throw new ApiHttpError(
+        429,
+        "Verrou de génération encore actif — annulez puis réessayez."
+      );
+    }
     const snapshot = normalizeCharacterSheet(currentSheet);
     snapshotRef.current = snapshot;
     const generation = generateCharacterAll(
       player.id,
       actorPlayerId,
       player.roomId,
-      snapshot
+      snapshot,
+      undefined,
+      fetchAbortRef.current?.signal
     );
     startProgressPoll();
     const { sheet } = await generation;
@@ -173,8 +206,15 @@ export function CharacterSheetFillAllButton({
     onGenerated(merged);
   }
 
+  function finishBusyState(): void {
+    inFlightRef.current = false;
+    fetchAbortRef.current = null;
+    setBusy(false);
+    onBusyChange?.(false);
+  }
+
   function logFillAllError(e: unknown): void {
-    if (isHttpError(e) && (e.status === 403 || e.status === 429)) return;
+    if (isHttpError(e) && (e.status === 403 || e.status === 429 || e.status === 409)) return;
     if (isHttpError(e)) {
       console.error("[generate-all] HTTP error", e.status, e.message);
       return;
@@ -192,6 +232,7 @@ export function CharacterSheetFillAllButton({
     if (!ok) return;
 
     inFlightRef.current = true;
+    fetchAbortRef.current = new AbortController();
     setBusy(true);
     setOverlay("loading");
     setGenProgress(0);
@@ -200,6 +241,11 @@ export function CharacterSheetFillAllButton({
     try {
       await runGeneration();
     } catch (e) {
+      if (isUserCancelledError(e)) {
+        resetProgressUi();
+        setOverlay(null);
+        return;
+      }
       resetProgressUi();
       const msg = formatFillAllError(e);
       logFillAllError(e);
@@ -210,16 +256,35 @@ export function CharacterSheetFillAllButton({
       }
       onError(msg);
     } finally {
-      inFlightRef.current = false;
-      setBusy(false);
-      onBusyChange?.(false);
+      finishBusyState();
     }
+  }
+
+  async function handleCancelDuringLoad() {
+    if (!canForceReleaseLock) return;
+    fetchAbortRef.current?.abort();
+    try {
+      await cancelCharacterAllGeneration(player.id, actorPlayerId);
+    } catch {
+      /* serveur peut déjà avoir libéré */
+    }
+    resetProgressUi();
+    setOverlay(null);
+    finishBusyState();
   }
 
   async function handleCancelLock() {
     if (!canForceReleaseLock) return;
     try {
       await cancelCharacterAllGeneration(player.id, actorPlayerId);
+      const cleared = await waitForLockClear();
+      if (!cleared) {
+        const msg = "Le verrou n'a pas pu être libéré — réessayez dans quelques secondes.";
+        setOverlay({ error: msg, locked: true });
+        onError(msg);
+        return;
+      }
+      resetProgressUi();
       setOverlay(null);
       onError("Verrou de génération libéré — vous pouvez relancer « Remplir la fiche ».");
     } catch (e) {
@@ -232,13 +297,14 @@ export function CharacterSheetFillAllButton({
   async function handleRetryAfterLock() {
     if (inFlightRef.current || !isFillAllAllowed()) return;
     inFlightRef.current = true;
+    fetchAbortRef.current = new AbortController();
     setBusy(true);
     setOverlay("loading");
     setGenProgress(0);
     setGenProgressLabel("En attente…");
     onBusyChange?.(true);
     try {
-      const cleared = await waitForLockClear();
+      const cleared = await ensureLockClear();
       if (!cleared) {
         resetProgressUi();
         const msg =
@@ -250,6 +316,11 @@ export function CharacterSheetFillAllButton({
       }
       await runGeneration();
     } catch (e) {
+      if (isUserCancelledError(e)) {
+        resetProgressUi();
+        setOverlay(null);
+        return;
+      }
       resetProgressUi();
       const msg = formatFillAllError(e);
       setOverlay(
@@ -257,9 +328,7 @@ export function CharacterSheetFillAllButton({
       );
       onError(msg);
     } finally {
-      inFlightRef.current = false;
-      setBusy(false);
-      onBusyChange?.(false);
+      finishBusyState();
     }
   }
 
@@ -288,7 +357,13 @@ export function CharacterSheetFillAllButton({
       ]
     : undefined;
 
-  if (!showButton) {
+  // Garder overlay + onBusyChange actifs jusqu'à la fin même si la fiche devient
+  // « remplie » en cours de route (phase histoire) — sinon pointer-events bloqués sans feedback.
+  if (!showButton && !busy) {
+    return null;
+  }
+
+  if (!showButton && !llmEnabled) {
     return null;
   }
 
@@ -310,6 +385,10 @@ export function CharacterSheetFillAllButton({
         visible={overlay === "loading"}
         progress={genProgress}
         progressLabel={genProgressLabel}
+        showCancel={canForceReleaseLock}
+        onCancel={() => {
+          void handleCancelDuringLoad();
+        }}
       />
       <AiGenerationOverlay
         visible={overlayError !== null}
@@ -319,18 +398,20 @@ export function CharacterSheetFillAllButton({
         onDismiss={() => setOverlay(null)}
         secondaryActions={secondaryActions}
       />
-      <button
-        type="button"
-        className={`char-fill-all-btn${className ? ` ${className}` : ""}`}
-        disabled={busy || disabled}
-        title={title}
-        aria-busy={busy}
-        onClick={() => {
-          void handleFillAll().catch(logFillAllError);
-        }}
-      >
-        {busy ? "Génération…" : "✨ Remplir la fiche"}
-      </button>
+      {showButton ? (
+        <button
+          type="button"
+          className={`char-fill-all-btn${className ? ` ${className}` : ""}`}
+          disabled={busy || disabled}
+          title={title}
+          aria-busy={busy}
+          onClick={() => {
+            void handleFillAll().catch(logFillAllError);
+          }}
+        >
+          {busy ? "Génération…" : "✨ Remplir la fiche"}
+        </button>
+      ) : null}
     </>
   );
 }

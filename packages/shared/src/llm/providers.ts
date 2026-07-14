@@ -26,6 +26,8 @@ export interface LlmProviderOptions {
   retryOnEmpty?: boolean;
   /** Limite tokens completion — défaut 2048 ; test connexion : 5 */
   maxTokens?: number;
+  /** Annulation externe (ex. fill-all annulé par le joueur) */
+  abortSignal?: AbortSignal;
 }
 
 type AssistantMessage = {
@@ -194,13 +196,20 @@ async function openAiCompatibleChatOnce(
   modelId: string,
   messages: ChatCompletionMessage[],
   timeoutMs: number,
-  maxTokens: number
+  maxTokens: number,
+  abortSignal?: AbortSignal
 ): Promise<ChatAttemptResult> {
   assertChatModelId(modelId);
 
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const signal =
+    abortSignal != null
+      ? AbortSignal.any([timeoutSignal, abortSignal])
+      : timeoutSignal;
 
   let res: Response;
   try {
@@ -213,9 +222,21 @@ async function openAiCompatibleChatOnce(
         temperature: 0.85,
         max_tokens: maxTokens,
       }),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal,
     });
   } catch (error) {
+    if (
+      error instanceof DOMException &&
+      (error.name === "AbortError" || error.name === "TimeoutError")
+    ) {
+      if (abortSignal?.aborted) {
+        return {
+          ok: false,
+          empty: false,
+          error: new Error("Génération annulée"),
+        };
+      }
+    }
     if (error instanceof DOMException && error.name === "TimeoutError") {
       return {
         ok: false,
@@ -299,6 +320,7 @@ async function openAiCompatibleChat(
     retryOnEmpty: boolean;
     maxTokens: number;
     retryOnTimeout?: boolean;
+    abortSignal?: AbortSignal;
   }
 ): Promise<string> {
   let lastEmptyData: ChatCompletionResponse = {};
@@ -307,6 +329,10 @@ async function openAiCompatibleChat(
   const maxAttempts = Math.max(emptyAttempts, timeoutAttempts);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (options.abortSignal?.aborted) {
+      throw new Error("Génération annulée");
+    }
+
     const attemptTimeout =
       attempt > 1 && options.retryOnTimeout
         ? options.timeoutMs + JIT_TIMEOUT_BACKOFF_MS
@@ -318,7 +344,8 @@ async function openAiCompatibleChat(
       modelId,
       messages,
       attemptTimeout,
-      options.maxTokens
+      options.maxTokens,
+      options.abortSignal
     );
 
     if (result.ok) return result.content;
@@ -382,7 +409,7 @@ export async function completeAsMj(
       apiKey,
       config.modelId,
       messages,
-      { timeoutMs, retryOnEmpty, maxTokens, retryOnTimeout }
+      { timeoutMs, retryOnEmpty, maxTokens, retryOnTimeout, abortSignal: options.abortSignal }
     );
     return {
       content,
@@ -403,7 +430,13 @@ export async function completeAsMj(
       undefined,
       config.modelId || "local-model",
       messages,
-      { timeoutMs, retryOnEmpty: true, maxTokens, retryOnTimeout: true }
+      {
+        timeoutMs,
+        retryOnEmpty: true,
+        maxTokens,
+        retryOnTimeout: true,
+        abortSignal: options.abortSignal,
+      }
     );
     return {
       content,

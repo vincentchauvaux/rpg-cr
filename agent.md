@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-07-14 (progression fill-all fiche + file LLM salon)
+> Dernière mise à jour : 2026-07-14 (fix wizard « Suite » après fill-all)
 
 ## Vision
 
@@ -323,7 +323,7 @@ Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**
 
 **MJ VPS (gratuit)** : l'API Docker appelle LM Studio via `LM_STUDIO_BASE_URL` ; tunnel SSH `-R 1234:127.0.0.1:1234` depuis le Mac. `resolveLmStudioServerBaseUrl` ([lmstudio-url.ts](packages/shared/src/llm/lmstudio-url.ts)) prime sur l'URL affichée dans l'UI (`127.0.0.1:1234`).
 
-**État VPS (2026-07-14)** : Docker installé, conteneurs `rpg-cr-api` / `rpg-cr-web` actifs (`:4010` / `:3010`). Nginx snippet `rpg-cr` activé dans `streamtv` — `proxy_pass …/rpg-cr/` (préfixe conservé). Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/` → **200** ; salon `/rpg-cr/salon/CODE/` → assets `/rpg-cr/_next/…` OK. Déploiement code : `rsync` depuis le Mac (pas de `.git` sur le VPS) puis `bash deploy/deploy.sh`. MJ : tunnel Mac requis (`deploy/lmstudio-tunnel.sh` + LM Studio Running).
+**État VPS (2026-07-14)** : Docker installé, conteneurs `rpg-cr-api` / `rpg-cr-web` actifs (`:4010` / `:3010`). Nginx snippet `rpg-cr` activé dans `streamtv` — `proxy_pass …/rpg-cr/` (préfixe conservé). Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/` → **200** ; salon `/rpg-cr/salon/CODE/` → assets `/rpg-cr/_next/…` OK. Déploiement code : `rsync` depuis le Mac (pas de `.git` sur le VPS) puis `bash deploy/deploy.sh`. **Dernier déploiement** : fix wizard « Suite » après fill-all (web rebuild). MJ : tunnel Mac requis (`deploy/lmstudio-tunnel.sh` + LM Studio Running).
 
 **Suite sur le VPS** :
 ```bash
@@ -434,9 +434,9 @@ API : `GET/PATCH /api/players/:id/character`, `POST …/finalize`, `POST …/int
 - Bouton **✨** en bas à droite de chaque zone texte (wizard + édition fiche).
 - Endpoint `POST /api/players/:id/character/generate-field` — body `{ field, currentSheet, actorPlayerId }`.
 - Endpoint `POST /api/players/:id/character/generate-all` — body `{ actorPlayerId, roomId, currentSheet?, hints? }` ; **4 phases LLM** séquentielles : histoire (0→40 %) → stats (55 %) → capacités (80 %) → biens (100 %) ; `GET …/generate-all-progress` (poll client ~450 ms) + WS `{ type: "character_gen_progress", playerId, percent, label, sheet }` ; timeout **120 s** par phase ; client **240 s** ; prompts `character-all-phases-prompt.ts`.
-- **Mutex par joueur** : une seule génération fill-all par `playerId` (cible) à la fois → **429** si doublon (double-clic, autre appareil) ; TTL verrou **4 min** ; `finally` libère toujours ; `DELETE …/generate-all-lock` (propriétaire ou admin god) ; `GET …/generate-all-lock` pour polling.
+- **Mutex par joueur** : une seule génération fill-all par `playerId` (cible) à la fois → **429** si doublon (double-clic, autre appareil) ; TTL verrou **4 min** ; libération par **jeton** (une requête lente ne libère pas le verrou d'une relance) ; `finally` libère toujours ; `DELETE …/generate-all-lock?actorPlayerId=…` (propriétaire ou admin god) ; `GET …/generate-all-lock` pour polling.
 - **HTTP** : timeout LM Studio → **504** `{ error }` (message « Délai dépassé… ») ; autres erreurs LLM → **502**.
-- UI : bouton **« ✨ Remplir la fiche »** (`CharacterSheetFillAllButton`) — overlay avec **barre 0–100 %** + libellé de phase (`AiGenerationOverlay`) ; champs wizard/fiche mis à jour **en direct** via `onProgress` ; snapshot local avant appel ; `inFlightRef` + `disabled` pendant l’appel ; en **erreur** : brouillon inchangé + overlay `variant="error"` ; **429** : annuler verrou / réessayer ; en succès : fiche finale mergée.
+- UI : bouton **« ✨ Remplir la fiche »** (`CharacterSheetFillAllButton`) — overlay avec **barre 0–100 %** + **spinner** + libellé de phase (`AiGenerationOverlay`) ; **heartbeat** toutes les 4 s pendant chaque phase LLM (« MJ en réflexion… », +2 % jusqu'à la fin de phase — gemma ~30–90 s en phase histoire) ; bouton **Annuler la génération** sur l'overlay chargement ; annulation **AbortController** serveur + client ; champs wizard/fiche mis à jour **en direct** via `onProgress` ; snapshot local avant appel ; `inFlightRef` + `disabled` pendant l’appel ; en **erreur** : brouillon inchangé + overlay `variant="error"` ; **429** : annuler verrou / réessayer (`ensureLockClear` libère auto si propriétaire) ; **409** annulation silencieuse côté client ; en succès : fiche finale mergée.
 - **Overlay IA** (`AiGenerationOverlay.tsx`) : portail `document.body`, chargement **ou** erreur ; fill-all fiche PJ uniquement. En jeu (dont préambule/récap hôte), `mj_status` `thinking` → bordure animée + `.chat-mj-status` ; `background` → `ScribIndicator` uniquement.
 - Logs : API `req.log.error` + `console.error` `[character-all]` (LLM vide, JSON invalide) ; navigateur `[fetchJson] generate-all HTTP` sur 4xx/5xx **sauf 403/429** (réponses métier attendues — fiche scellée, verrou).
 - **Garde client fill-all** : `shouldShowFillAllButton` rechecké au clic ; wizard passe `playerState` (pas le prop initial) ; pas de `console.error` sur 403 « fiche scellée ».
@@ -461,8 +461,10 @@ API : `GET/PATCH /api/players/:id/character`, `POST …/finalize`, `POST …/int
 | « ✨ Remplir la fiche » grisé, champs inéditables | `room.llmConfig` null (bouton IA désactivé) **ou** wizard dans `chat-blocked` (`pointer-events: none`) | Saisie manuelle via champs + « Suite » ; hôte : god mode à droite pour LLM ; hint texte si pas de MJ |
 | Fill-all → fiche vide / tout effacé | Bug corrigé : API fusionnait sur `{}` ; succès avec JSON vide → champs normalisés vides | Rebuild ; erreur 502 + overlay si LLM échoue ; brouillon local conservé |
 | Fill-all ne finit jamais / timeout | LLM > 180 s → API **504** ; client abort 240 s ; message « gemma / READY / qwen 7b » (pas CORS si `/health` OK) | Vérifier LM Studio READY ; modèle plus léger ; logs API `[character-all]` |
+| **« Suite » inactif après fill-all** (wizard) | Phase histoire remplit `rank`+`background` → bouton fill masqué + overlay retiré alors que génération continue ; `char-sheet-generating` bloquait tout le panneau | Rebuild web ; attendre fin overlay 100 % ; correctif : overlay tant que `busy`, actions hors zone `pointer-events:none` |
 | Fill-all « CORS PATCH » alors que l’API répond | Ancien `formatFetchError` sur `Failed to fetch` (abort client = même symptôme) | Rebuild web ; erreur generate-all dédiée dans `api-errors.ts` |
-| **429** fill-all / « déjà en cours » | Verrou actif (autre onglet, double-clic, crash rare) | Attendre fin (~3 min) ; **Annuler la génération** (overlay) ; admin god peut libérer le verrou d’un PJ ; TTL 4 min auto |
+| **429** fill-all / « déjà en cours » | Verrou actif (autre onglet, double-clic, requête lente) | **Annuler la génération** puis réessayer ; relance auto-libère le verrou si propriétaire ; TTL 4 min ; admin god peut libérer le verrou d’un PJ |
+| Annuler génération → **400** | `DELETE` lock avec `Content-Type: application/json` mais corps vide (Fastify `FST_ERR_CTP_EMPTY_JSON_BODY`) | Rebuild web : `fetchJson` n’envoie le header JSON que si `body` présent |
 | Deux fill-all en parallèle (LAN, même PJ) | Deux appels LLM lourds sur le même personnage | **429** mutex par `playerId` ; deux PJ différents **sérialisés** via la file salon (plus de collision LM Studio) |
 
 **Test curl** (remplacer `{playerId}`, `{roomId}` ; API + `llmConfig` requis pour generate-all) :

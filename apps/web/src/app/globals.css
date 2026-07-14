@@ -1666,6 +1666,17 @@ label {
 .char-sheet-generating {
   opacity: 0.72;
   pointer-events: none;
+  animation: char-sheet-gen-pulse 2s ease-in-out infinite;
+}
+
+@keyframes char-sheet-gen-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 0.52;
+  }
 }
 
 /* Overlay IA plein viewport (portail body) — centré desktop + mobile */

@@ -12,6 +12,10 @@ interface Props {
   variant?: "loading" | "error";
   /** Fermeture de l'overlay erreur (bouton OK). */
   onDismiss?: () => void;
+  /** Annulation pendant le chargement (fill-all). */
+  onCancel?: () => void;
+  /** Afficher le bouton Annuler pendant le chargement. */
+  showCancel?: boolean;
   /** Actions secondaires (ex. annuler un verrou generate-all). */
   secondaryActions?: Array<{ label: string; onClick: () => void }>;
   /** Avancement 0–100 (génération fiche par phases). */
@@ -21,7 +25,7 @@ interface Props {
 
 const DEFAULT_MESSAGE = "Génération IA…";
 const DEFAULT_HINT =
-  "Le contenu affiché est produit par intelligence artificielle. Patientez quelques instants.";
+  "Le contenu affiché est produit par intelligence artificielle. La première phase peut prendre 30–90 s selon le modèle.";
 
 /**
  * Overlay plein écran (génération fiche PJ, erreurs fill-all) — pas le statut MJ du chat
@@ -33,6 +37,8 @@ export function AiGenerationOverlay({
   hint = DEFAULT_HINT,
   variant = "loading",
   onDismiss,
+  onCancel,
+  showCancel = false,
   secondaryActions,
   progress = null,
   progressLabel = null,
@@ -77,6 +83,18 @@ export function AiGenerationOverlay({
             </p>
           </div>
         ) : null}
+        {!isError ? <span className="ai-gen-overlay-spinner" aria-hidden /> : null}
+        {!isError && showCancel && onCancel ? (
+          <div className="ai-gen-overlay-actions">
+            <button
+              type="button"
+              className="ai-gen-overlay-secondary ai-gen-overlay-cancel"
+              onClick={() => onCancel()}
+            >
+              Annuler la génération
+            </button>
+          </div>
+        ) : null}
         {isError ? (
           <div className="ai-gen-overlay-actions">
             {secondaryActions?.map((action) => (
@@ -97,8 +115,6 @@ export function AiGenerationOverlay({
               OK
             </button>
           </div>
-        ) : progress === null ? (
-          <span className="ai-gen-overlay-spinner" aria-hidden />
         ) : null}
       </div>
     </div>,

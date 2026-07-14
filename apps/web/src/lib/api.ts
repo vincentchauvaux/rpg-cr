@@ -64,13 +64,18 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      const hasBody = init?.body != null && init.body !== "";
+      const headers: Record<string, string> = {
+        ...(init?.headers as Record<string, string> | undefined),
+      };
+      if (hasBody) {
+        headers["Content-Type"] = "application/json";
+      }
+
       const res = await fetch(`${apiUrl}${path}`, {
         ...init,
         signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...init?.headers,
-        },
+        headers,
       });
 
       if (path === "/health" || res.ok) {
@@ -518,11 +523,13 @@ export function generateCharacterAll(
   actorPlayerId: string,
   roomId: string,
   currentSheet: import("@rpg-cr/shared").CharacterSheet,
-  hints?: string
+  hints?: string,
+  signal?: AbortSignal
 ): Promise<{ sheet: import("@rpg-cr/shared").CharacterSheet }> {
   return fetchJson(`/api/players/${playerId}/character/generate-all`, {
     method: "POST",
     body: JSON.stringify({ actorPlayerId, roomId, currentSheet, hints }),
+    signal,
   });
 }
 
@@ -555,10 +562,10 @@ export function cancelCharacterAllGeneration(
   playerId: string,
   actorPlayerId: string
 ): Promise<{ released: boolean }> {
-  return fetchJson(`/api/players/${playerId}/character/generate-all-lock`, {
-    method: "DELETE",
-    body: JSON.stringify({ actorPlayerId }),
-  });
+  return fetchJson(
+    `/api/players/${playerId}/character/generate-all-lock?actorPlayerId=${encodeURIComponent(actorPlayerId)}`,
+    { method: "DELETE" }
+  );
 }
 
 export function fetchMentionSuggestions(

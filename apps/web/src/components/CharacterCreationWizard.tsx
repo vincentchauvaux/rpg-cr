@@ -126,7 +126,7 @@ export function CharacterCreationWizard({
 
   return (
     <div className={overlayClass} role="dialog" aria-modal="true">
-      <div className={`char-wizard panel${generatingAll ? " char-sheet-generating" : ""}`}>
+      <div className="char-wizard panel">
         {isHostAdmin && (
           <p className="host-setup-step muted">Étape 2 sur 2 — Personnage</p>
         )}
@@ -147,6 +147,7 @@ export function CharacterCreationWizard({
           </p>
         )}
 
+        <div className={generatingAll ? "char-sheet-generating" : undefined}>
         <PlayerAvatarUpload
           player={playerState}
           actorPlayerId={actorPlayerId}
@@ -225,6 +226,7 @@ export function CharacterCreationWizard({
             onError={onError}
           />
         </div>
+        </div>
 
         {step < identitySteps.length && (
           <HeroAssistantPanel
@@ -244,11 +246,21 @@ export function CharacterCreationWizard({
             </button>
           )}
           {step < totalSteps - 1 ? (
-            <button type="button" className="primary" disabled={busy} onClick={handleNext}>
+            <button
+              type="button"
+              className="primary"
+              disabled={busy || generatingAll}
+              onClick={handleNext}
+            >
               Suite
             </button>
           ) : (
-            <button type="button" className="primary" disabled={busy} onClick={handleFinalize}>
+            <button
+              type="button"
+              className="primary"
+              disabled={busy || generatingAll}
+              onClick={handleFinalize}
+            >
               Finaliser et entrer en jeu
             </button>
           )}
