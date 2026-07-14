@@ -2,10 +2,10 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { withBasePath } from "@/lib/config";
 
-/** Chemin Auth.js (aligné sur Next.js basePath en prod). */
-export const AUTH_BASE_PATH = withBasePath("/api/auth");
-/** Chemin public (navigateur + Google redirect URI). */
-export const AUTH_PUBLIC_BASE_PATH = AUTH_BASE_PATH;
+/** Montage Auth.js (relatif à Next.js ; basePath config ajoute /rpg-cr en prod). */
+export const AUTH_BASE_PATH = "/api/auth";
+/** Chemin public (navigateur + SessionProvider). */
+export const AUTH_PUBLIC_BASE_PATH = withBasePath("/api/auth");
 
 async function syncUserToApi(profile: {
   googleSub: string;

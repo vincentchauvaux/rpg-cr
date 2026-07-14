@@ -598,7 +598,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **UI accueil** : `GoogleAuthPanel` — connexion / déconnexion ; graines fusionnées local + `GET /api/users/:id/grains`.
 - **Création / join** : body optionnel `userId` sur `POST /api/rooms` et `POST …/join` ; reprise graine → `POST …/link-user`.
 - **Tunnel auto hôte** : `ensureHostTunnel()` — à la création salon, reprise graine (admin), entrée salon hôte et wizard MJ (mode VPS). Appelle l'assistant local `POST http://127.0.0.1:17434/start`, puis poll `GET /api/llm/tunnel-status` jusqu'à `reachable:true`. CLI : `npm run tunnel:ensure`.
-- **Auth.js** : `basePath` = `/rpg-cr/api/auth` en prod (aligné Next.js) ; Nginx proxy **conserve** le préfixe `/rpg-cr` vers le conteneur web. Repli `/api/auth/` → même backend. Callback Google : `https://…/rpg-cr/api/auth/callback/google` ou legacy `/api/auth/callback/google`.
+- **Auth.js** : `basePath` serveur `/api/auth` ; routes Next.js servies sous `/rpg-cr/api/auth` (basePath Next). Nginx proxy **conserve** `/rpg-cr` vers le conteneur web ; repli `/api/auth/` pour callback Google legacy.
 - **Nginx** : `location /rpg-cr/api/auth/` → conteneur **web** (3010) ; repli `location /api/auth/` pour le callback OAuth sans préfixe — voir `deploy/nginx-rpg-cr.conf.example`.
 - **Google Cloud Console** : URI de redirection autorisée :
   - `https://vps-e09ed6db.vps.ovh.net/api/auth/callback/google` (canonique — généré par Auth.js)
