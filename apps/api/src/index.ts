@@ -39,6 +39,7 @@ import {
   broadcastMessage,
   broadcastPlayers,
   markPlayerLeaving,
+  getMjStatusForRoom,
   mjThinkingBegin,
   mjThinkingEnd,
 } from "./ws-hub.js";
@@ -168,7 +169,13 @@ app.get<{ Params: { code: string } }>("/api/rooms/:code", async (req, reply) => 
   const players = enrichPlayersWithPresence(room.id, listPlayers(room.id));
   const messages = listMessages(room.id);
   const map = getMap(room.id);
-  return { room: attachSceneToRoom(room), players, messages, map };
+  return {
+    room: attachSceneToRoom(room),
+    players,
+    messages,
+    map,
+    mjStatus: getMjStatusForRoom(room.id),
+  };
 });
 
 app.post<{

@@ -62,6 +62,17 @@ export async function formatFetchError(
 
   const healthOk = wasHealthOkRecently() || (await pingHealth());
 
+  if (healthOk && path?.includes("/introduce")) {
+    const aborted =
+      error instanceof DOMException && error.name === "AbortError";
+    return (
+      (aborted
+        ? "Délai dépassé — la présentation automatique a été interrompue."
+        : "La présentation automatique a échoué alors que l'API répond.") +
+      " Le MJ peut mettre jusqu'à 2 min (LM Studio) — réessayez ou utilisez « Se présenter » à la main."
+    );
+  }
+
   if (healthOk && path?.includes("generate-all")) {
     const aborted =
       error instanceof DOMException && error.name === "AbortError";

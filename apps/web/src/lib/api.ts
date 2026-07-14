@@ -42,6 +42,7 @@ function timeoutForPath(path: string): number {
     path.includes("ask-mj") ||
     path.includes("hero-assistant") ||
     path.includes("generate-field") ||
+    path.includes("/introduce") ||
     path.includes("/translate")
   ) {
     return MJ_TIMEOUT_MS;
@@ -87,7 +88,7 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
             serverMessage = raw.slice(0, 200);
           }
         }
-        if (path.includes("generate-all")) {
+        if (path.includes("generate-all") && res.status !== 403 && res.status !== 429) {
           console.error("[fetchJson] generate-all HTTP", res.status, serverMessage ?? raw.slice(0, 200));
         }
         throw formatHttpError(res.status, serverMessage);
@@ -142,11 +143,18 @@ export function createRoom(name: string, adminName: string): Promise<{
   });
 }
 
+export type MjStatusSnapshot = {
+  thinking: boolean;
+  background: boolean;
+  phase: "opening" | "turn";
+};
+
 export function getRoom(code: string): Promise<{
   room: Room;
   players: Player[];
   messages: ChatMessage[];
   map: ProceduralMap;
+  mjStatus?: MjStatusSnapshot;
 }> {
   return fetchJson(`/api/rooms/${code}`);
 }

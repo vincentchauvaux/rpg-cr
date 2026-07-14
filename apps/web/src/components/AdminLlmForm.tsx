@@ -348,6 +348,7 @@ export function AdminLlmForm({
           <input
             id="llm-api-key"
             type="password"
+            autoComplete="new-password"
             className={fieldClass(apiKeyState, show("apiKey"))}
             value={apiKey}
             onBlur={() => touch("apiKey")}

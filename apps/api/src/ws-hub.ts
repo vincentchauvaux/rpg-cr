@@ -153,21 +153,27 @@ export function mjThinkingEnd(
   emitMjStatus(roomId);
 }
 
-function sendMjStatusSnapshot(ws: WebSocket, roomId: string): void {
+export type MjStatusSnapshot = {
+  thinking: boolean;
+  background: boolean;
+  phase: MjPhase;
+};
+
+export function getMjStatusForRoom(roomId: string): MjStatusSnapshot {
   const s = getMjRoomState(roomId);
-  const payload = s
-    ? {
-        type: "mj_status" as const,
-        thinking: s.narrativeRefs > 0 || s.openingRefs > 0,
-        background: s.backgroundRefs > 0,
-        phase: mjPhaseForState(s),
-      }
-    : {
-        type: "mj_status" as const,
-        thinking: false,
-        background: false,
-        phase: "turn" as const,
-      };
+  if (!s) {
+    return { thinking: false, background: false, phase: "turn" };
+  }
+  return {
+    thinking: s.narrativeRefs > 0 || s.openingRefs > 0,
+    background: s.backgroundRefs > 0,
+    phase: mjPhaseForState(s),
+  };
+}
+
+function sendMjStatusSnapshot(ws: WebSocket, roomId: string): void {
+  const snap = getMjStatusForRoom(roomId);
+  const payload = { type: "mj_status" as const, ...snap };
   if (ws.readyState === 1) {
     ws.send(JSON.stringify(payload));
   }

@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-07-14 (VPS LM Studio + tunnel Mac, pas OpenAI requis)
+> Dernière mise à jour : 2026-07-14 (MJ standby : resync mjStatus GET salon, ouverture campagne, introduce timeout)
 
 ## Vision
 
@@ -216,7 +216,7 @@ Chemin : `apps/api/data/campaigns/{CODE}/` (override : `CAMPAIGN_DATA_DIR`).
 | **API rejoin** | `POST …/join` body optionnel `{ playerId }` → reprend le joueur (pas de message système « a rejoint ») |
 | **Joueur fantôme** | Évité : ne pas refaire « Rejoindre » sans graine ; préférer **Mes graines → Reprendre** ou lien direct salon |
 | **Session invalide** | `RoomView` : si `playerId` absent de la liste après `GET` → message + `clearSession()` |
-| **MJ bloqué** | Snapshot `mj_status` à la reconnexion WS ; garde-fou client 3 min ; `syncRoomFromApi` ne force plus `thinking: false` |
+| **MJ bloqué** | Snapshot `mj_status` à la reconnexion WS + **`mjStatus` dans GET salon** ; garde-fou client 3 min ; heuristique ouverture campagne si prep sans récit ; `syncRoomFromApi` ne force plus `thinking: false` hors resync |
 | **Quitter vs déconnect** | Déconnect = WS coupé, campagne intacte, session conservée. **Sauvegarder et quitter** = snapshot `.md` + `presence: leaving` + `clearSession()` + accueil |
 
 ### Reprendre avec un autre LLM
@@ -312,7 +312,7 @@ Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**
 | Prérequis VPS | `sudo bash deploy/vps-setup.sh` |
 | Nginx | `deploy/nginx-rpg-cr.conf.example` → `include` dans server HTTPS `vps-e09ed6db.vps.ovh.net` |
 | MJ gratuit | [deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md) — LM Studio Mac + tunnel ; `npm run tunnel:helper` + bouton wizard **Démarrer le tunnel** |
-| Secrets | `.env` : `LM_STUDIO_BASE_URL=http://host.docker.internal:1234/v1`, `NEXT_PUBLIC_BASE_PATH=/rpg-cr` ; `OPENAI_API_KEY` optionnel |
+| Secrets | `.env` : `LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1`, `NEXT_PUBLIC_BASE_PATH=/rpg-cr` ; `OPENAI_API_KEY` optionnel |
 | Déploiement | `bash deploy/deploy.sh` — Docker `127.0.0.1:3010` / `4010`, `extra_hosts` host-gateway |
 | Compose | `docker-compose.prod.yml` — build `NEXT_PUBLIC_BASE_PATH`, volume `rpg-data` |
 | Première graine | [deploy/HOST-SETUP.md](deploy/HOST-SETUP.md) |
@@ -336,7 +336,7 @@ sudo cp deploy/nginx-rpg-cr.conf.example /etc/nginx/snippets/rpg-cr.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-**Sur le Mac (avant partie)** : `npm run tunnel:helper` (une fois) puis bouton **Démarrer le tunnel** dans le wizard ; ou `npm run tunnel:open` / `bash deploy/lmstudio-tunnel.sh`. UI : `LmStudioTunnelBanner` + `GET /api/llm/tunnel-status`.
+**Sur le Mac** : `npm run tunnel:helper:install` (auto au login, une fois) ; avant partie `npm run host` ou bouton wizard. Scripts : `install-tunnel-helper-service.sh`, `host-session.sh`.
 
 **Dev local** : sans `NEXT_PUBLIC_BASE_PATH` → ports `:3000` / `:4000` inchangés.
 
@@ -435,8 +435,9 @@ API : `GET/PATCH /api/players/:id/character`, `POST …/finalize`, `POST …/int
 - **HTTP** : timeout LM Studio → **504** `{ error }` (message « Délai dépassé… ») ; autres erreurs LLM → **502**.
 - UI : bouton **« ✨ Remplir la fiche »** (`CharacterSheetFillAllButton`) — snapshot local avant appel ; `inFlightRef` + `disabled` pendant l’appel (anti double-clic) ; en **erreur** : brouillon inchangé + overlay centré `variant="error"` avec message serveur (502/504/429) ou hint LM Studio ; **429** : message autre appareil + boutons « Annuler la génération en cours » / « Réessayer quand c'est libre » (polling lock) ; en succès : `mergeCharacterSheet` côté client aussi.
 - **Overlay IA** (`AiGenerationOverlay.tsx`) : portail `document.body`, chargement **ou** erreur ; fill-all fiche PJ uniquement. En jeu (dont préambule/récap hôte), `mj_status` `thinking` → bordure animée + `.chat-mj-status` ; `background` → `ScribIndicator` uniquement.
-- Logs : API `req.log.error` + `console.error` `[character-all]` (LLM vide, JSON invalide) ; navigateur `[fetchJson] generate-all HTTP` sur 4xx/5xx.
-- **Extension navigateur** : message Chrome `A listener indicated an asynchronous response…` = souvent extension (traducteur, adblock) — **non bloquant app** ; promesses fill-all terminées en `try/catch` + `.catch` sur le clic.
+- Logs : API `req.log.error` + `console.error` `[character-all]` (LLM vide, JSON invalide) ; navigateur `[fetchJson] generate-all HTTP` sur 4xx/5xx **sauf 403/429** (réponses métier attendues — fiche scellée, verrou).
+- **Garde client fill-all** : `shouldShowFillAllButton` rechecké au clic ; wizard passe `playerState` (pas le prop initial) ; pas de `console.error` sur 403 « fiche scellée ».
+- **Extension navigateur** : `chrome-extension://invalid/` (ERR_FAILED) et `A listener indicated an asynchronous response…` = extensions (traducteur, adblock, gestionnaire mots de passe) — **hors app** ; promesses fill-all terminées en `try/catch` + `.catch` sur le clic.
 - Prompt : `packages/shared/src/mj/character-field-prompt.ts` — injecte champs déjà remplis + lore monde.
 - **Locale** : `actorPlayerId` → `players.preferred_locale` passé aux builders (`buildGenerationLocaleRules` dans `locale.ts`) ; génération **en français** si `fr` (consigne stricte, pas de titres anglais type « Wanderer of the Crossroads ») ; libellés UI via `getCharacterFieldLabels` (`background` → **Historique**). Contenu déjà enregistré **non migré** — seules les nouvelles générations suivent la locale.
 - Cohérence : ex. historique « riche marchand » → inventaire/argent/monture déduits logiquement.
@@ -496,6 +497,9 @@ curl -X POST "http://127.0.0.1:4000/api/players/{playerId}/character/generate-al
 - **Déclenchement unique** quand l'**hôte** (admin humain) finalise sa fiche (`POST …/character/finalize`) ou passe `ready` + `story_locked` : `scheduleCampaignOpening` → `bootstrapCampaignOpening` (`apps/api/src/campaign-opening.ts`).
 - Deux appels LLM : plan JSON (`packages/shared/src/mj/campaign-opening-prompt.ts`) puis récit MJ long (Acte I, hook, enjeu) intégrant la fiche hôte — **pas** de second message d'intégration pour l'hôte. Le prompt d'ouverture injecte les pays / territoires / POI de la carte et interdit les noms legacy sauf s'ils sont déjà dans `map_json` (anciennes parties).
 - WS `mj_status` phase `opening` → placeholder barre de chat « Le MJ prépare le monde… » ; message système discret au démarrage.
+- **Resync client** : `GET /api/rooms/:code` expose `mjStatus` (refcount serveur) ; `RoomView.refresh` réapplique l'état MJ si WS manqué ; heuristique messages (« Le MJ prépare le monde… » sans récit MJ ni échec) → statut occupé même sans WS.
+- **Échec ouverture visible joueurs** : message `L'ouverture de campagne a échoué…` n'est plus filtré comme message technique admin ; pendant l'ouverture, panneau « Se présenter » remplacé par attente.
+- **`POST …/introduce` (auto)** : timeout client **270 s** (comme MJ) — évite l'erreur générique « requête échouée alors que le serveur répond » à 30 s.
 - `lore.md` / journal export : injectés dans le prompt MJ **seulement** si `campaign_opening_done` et export existant (évite le biais des anciennes intros sur une nouvelle partie).
 - Prompt système + heuristiques scène : interdiction des clichés ruines/forteresse par défaut ; « Commencer » après ouverture = reprise sans re-intro complète.
 
@@ -616,6 +620,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
   - **Avatars** : `cacheBust` portrait initialisé dans `useEffect`, pas `Date.now()` dans `useState`.
   - **God mode UI** : `useSyncExternalStore` + snapshot serveur `false` (`god-mode-ui.ts`).
   - **Utilisateur** : en prod sans extension, pas d’erreur ; si overlay persiste → désactiver extensions (Password Manager, Cursor, Google) ou ignorer en dev ; rafraîchissement forcé iPhone après déploiement ; `npm run dev:clean` si bundle périmé.
+  - **Console salon** : `chrome-extension://invalid/` et `listener … asynchronous response` = extensions Chrome — pas d’action côté RPG-CR ; avertissement `[DOM] autocomplete` sur `#llm-api-key` corrigé (`new-password`).
 
 ## Config LM Studio (utilisateur)
 
@@ -722,6 +727,7 @@ Deux canaux distincts, opt-in séparés, déclenchés uniquement sur événement
 - Bordures **vertes** / **rouges** (`--valid` / `--invalid`) au blur ou à la soumission.
 - Section **Connexion MJ (LLM)** : repliée avec titre vert + ✓ après enregistrement réussi ; clic pour rouvrir.
 - **Test LLM** : endpoint `POST /api/rooms/:roomId/llm/test` (god mode) — mini completion `max_tokens: 5` ; rejet HTTP **400** si modèle embedding ou **VL** ; liste modèles chat : `GET /api/llm/lmstudio/models?baseUrl=…` (VL filtrés) → appelle **`GET {baseUrl}/models`** avec base normalisée **`/v1`** obligatoire (`http://127.0.0.1:1234/v1/models`, pas `/models` seul).
+- **Clé API (god mode)** : champ `#llm-api-key` — `autoComplete="new-password"` (évite l’avertissement Chrome DOM sur les champs `type=password` hors formulaire de connexion).
 
 ## LLM local — timeouts, contexte, préflight
 

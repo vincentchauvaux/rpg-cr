@@ -3,6 +3,7 @@ import type { ChatMessage } from "@rpg-cr/shared";
 /** Messages système réservés à l'admin (erreurs LLM, config, etc.) */
 export function isTechnicalSystemMessage(content: string): boolean {
   if (content.startsWith("Le MJ n'a pas pu répondre")) return false;
+  if (content.startsWith("L'ouverture de campagne a échoué")) return false;
   return /LLM|LM Studio|config|embeddings|modelId|Vérifiez la/i.test(content);
 }
 

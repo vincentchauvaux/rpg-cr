@@ -178,7 +178,7 @@ export async function bootstrapCampaignOpening(
       roomId,
       "system",
       "Système",
-      `L'ouverture de campagne a échoué (${err}). Utilisez « Commencer » ou configurez le LLM.`,
+      `L'ouverture de campagne a échoué (${err}). L'hôte peut réessayer via Réclamer ; vérifiez aussi la config MJ.`,
       "system"
     );
     broadcastMessage(roomId, failMsg);

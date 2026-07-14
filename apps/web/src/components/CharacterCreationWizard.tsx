@@ -211,7 +211,7 @@ export function CharacterCreationWizard({
 
         <div className="char-sheet-fill-row">
           <CharacterSheetFillAllButton
-            player={player}
+            player={playerState}
             actorPlayerId={actorPlayerId}
             canForceReleaseLock
             currentSheet={sheet}

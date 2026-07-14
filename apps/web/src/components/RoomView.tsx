@@ -38,6 +38,7 @@ import {
   promptMj,
   fetchMentionSuggestions,
   type MjPromptType,
+  type MjStatusSnapshot,
 } from "@/lib/api";
 import { appendChatMessage } from "@/lib/chat-messages";
 import { vibrateForWsMessage } from "@/lib/message-vibrate";
@@ -157,6 +158,50 @@ function mjThinkingStatusLabel(
   const lead =
     phase === "opening" ? "Le MJ prépare le monde…" : "Le MJ réfléchit…";
   return `${lead} — ${MJ_THINKING_IA_HINT}`;
+}
+
+const CAMPAIGN_OPENING_PREP_TEXT = "Le MJ prépare le monde…";
+
+function isCampaignOpeningUnsettled(
+  messages: ChatMessage[],
+  campaignOpeningDone?: boolean
+): boolean {
+  if (campaignOpeningDone) return false;
+  const prepIdx = messages.findIndex(
+    (m) => m.kind === "system" && m.content === CAMPAIGN_OPENING_PREP_TEXT
+  );
+  if (prepIdx === -1) return false;
+  const after = messages.slice(prepIdx + 1);
+  return !after.some(
+    (m) =>
+      m.kind === "mj" ||
+      (m.kind === "system" &&
+        (m.content.startsWith("L'ouverture de campagne a échoué") ||
+          m.content.startsWith(MJ_FAILURE_CHAT_PREFIX)))
+  );
+}
+
+function applyMjStatusSnapshot(
+  snap: MjStatusSnapshot | undefined,
+  opts: {
+    mjPromptPending: boolean;
+    setMjThinking: (v: boolean) => void;
+    setMjBackgroundScrib: (v: boolean) => void;
+    setMjPhase: (v: "opening" | "turn") => void;
+    mjThinkingSinceRef: { current: number | null };
+  }
+): void {
+  if (!snap || opts.mjPromptPending) return;
+  opts.setMjBackgroundScrib(Boolean(snap.background));
+  if (snap.thinking) {
+    opts.setMjThinking(true);
+    opts.setMjPhase(snap.phase === "opening" ? "opening" : "turn");
+    opts.mjThinkingSinceRef.current = Date.now();
+  } else {
+    opts.setMjThinking(false);
+    opts.setMjPhase("turn");
+    opts.mjThinkingSinceRef.current = null;
+  }
 }
 
 export function RoomView({ code }: Props) {
@@ -298,6 +343,24 @@ export function RoomView({ code }: Props) {
       )
     );
     replaceMessagesFromServer(data.messages);
+    applyMjStatusSnapshot(data.mjStatus, {
+      mjPromptPending: mjPromptPendingRef.current,
+      setMjThinking,
+      setMjBackgroundScrib,
+      setMjPhase,
+      mjThinkingSinceRef,
+    });
+    if (!data.mjStatus?.thinking && !mjPromptPendingRef.current) {
+      const openingUnsettled = isCampaignOpeningUnsettled(
+        data.messages,
+        data.room.campaignOpeningDone
+      );
+      if (openingUnsettled) {
+        setMjThinking(true);
+        setMjPhase("opening");
+        mjThinkingSinceRef.current = Date.now();
+      }
+    }
     if (mjPromptPendingRef.current) {
       const tail = data.messages.slice(mjPromptStartMsgCountRef.current);
       if (
@@ -907,6 +970,12 @@ export function RoomView({ code }: Props) {
     me?.kind === "human" &&
     me.characterStatus === "ready" &&
     !me.introducedInStory;
+  const campaignOpeningInProgress = useMemo(
+    () =>
+      (mjThinking && mjPhase === "opening") ||
+      isCampaignOpeningUnsettled(messages, room?.campaignOpeningDone),
+    [mjThinking, mjPhase, messages, room?.campaignOpeningDone]
+  );
   const chatReady = me != null && canHumanParticipateInChat(me);
   const hostReclaimEligible =
     isAdmin && chatReady && !input.trim() && hasLlmConfig;
@@ -1215,6 +1284,13 @@ export function RoomView({ code }: Props) {
 
           {awaitingIntroduction ? (
             <div className="player-intro-panel" role="region" aria-label="Entrée en scène">
+              {campaignOpeningInProgress ? (
+                <p className="muted" style={{ margin: 0 }}>
+                  Le MJ prépare l&apos;ouverture de la campagne — patientez le temps du
+                  premier récit (peut prendre 1 à 2 min avec LM Studio).
+                </p>
+              ) : (
+                <>
               <p className="muted" style={{ margin: 0 }}>
                 Votre fiche est prête — présentez votre personnage pour rejoindre la
                 conversation.
@@ -1272,6 +1348,8 @@ export function RoomView({ code }: Props) {
                     {introBusy ? "Génération…" : "Présentation automatique"}
                   </button>
                 </div>
+              )}
+                </>
               )}
             </div>
           ) : (

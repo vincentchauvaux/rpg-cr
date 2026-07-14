@@ -110,7 +110,12 @@ export function CharacterSheetFillAllButton({
     return false;
   }
 
-  async function runGeneration() {
+  function isFillAllAllowed(): boolean {
+    return shouldShowFillAllButton(player, currentSheet);
+  }
+
+  async function runGeneration(): Promise<void> {
+    if (!isFillAllAllowed()) return;
     const snapshot = normalizeCharacterSheet(currentSheet);
     const { sheet } = await generateCharacterAll(
       player.id,
@@ -123,8 +128,18 @@ export function CharacterSheetFillAllButton({
     onGenerated(merged);
   }
 
+  function logFillAllError(e: unknown): void {
+    if (isHttpError(e) && (e.status === 403 || e.status === 429)) return;
+    if (isHttpError(e)) {
+      console.error("[generate-all] HTTP error", e.status, e.message);
+      return;
+    }
+    console.error("[generate-all] failed", e);
+  }
+
   async function handleFillAll() {
     if (!llmEnabled || busy || disabled || inFlightRef.current) return;
+    if (!isFillAllAllowed()) return;
 
     const ok = window.confirm(
       "Remplir toute la fiche d'un coup via l'IA ? Vous pourrez encore ajuster avant de sceller."
@@ -139,11 +154,7 @@ export function CharacterSheetFillAllButton({
       await runGeneration();
     } catch (e) {
       const msg = formatFillAllError(e);
-      if (isHttpError(e)) {
-        console.error("[generate-all] HTTP error", e.status, e.message);
-      } else {
-        console.error("[generate-all] failed", e);
-      }
+      logFillAllError(e);
       if (isHttpError(e) && e.status === 429) {
         setOverlay({ error: msg, locked: true });
       } else {
@@ -171,7 +182,7 @@ export function CharacterSheetFillAllButton({
   }
 
   async function handleRetryAfterLock() {
-    if (inFlightRef.current) return;
+    if (inFlightRef.current || !isFillAllAllowed()) return;
     inFlightRef.current = true;
     setBusy(true);
     setOverlay("loading");
@@ -255,9 +266,7 @@ export function CharacterSheetFillAllButton({
         title={title}
         aria-busy={busy}
         onClick={() => {
-          void handleFillAll().catch((e) => {
-            console.error("[generate-all] unhandled", e);
-          });
+          void handleFillAll().catch(logFillAllError);
         }}
       >
         {busy ? "Génération…" : "✨ Remplir la fiche"}
