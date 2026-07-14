@@ -96,7 +96,7 @@ async function probeModelResponsive(
     if (error instanceof DOMException && error.name === "TimeoutError") {
       const waitHint =
         backend === "ollama"
-          ? "Le modèle charge peut-être encore — réessayez **Réclamer**."
+          ? "Ollama sur CPU peut mettre 30 s–2 min — réessayez **Réclamer** et patientez."
           : "Attendez **READY** dans LM Studio (30–90 s), puis réessayez **Réclamer**.";
       throw new LmStudioNotReadyError(
         `Le modèle « ${modelId} » est encore en chargement. ${waitHint}`
@@ -179,5 +179,8 @@ export async function preflightLmStudioForMj(
     );
   }
 
-  await probeModelResponsive(baseUrl, modelId, backend);
+  // Ollama sur CPU VPS : la sonde chat <14s échoue alors que le tour MJ (jusqu'à 240s) réussit.
+  if (backend !== "ollama") {
+    await probeModelResponsive(baseUrl, modelId, backend);
+  }
 }

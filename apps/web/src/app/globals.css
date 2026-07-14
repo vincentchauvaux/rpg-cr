@@ -516,6 +516,70 @@ label {
   animation: mj-pulse 1.5s ease-in-out infinite;
 }
 
+.mj-llm-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  border: 1px solid color-mix(in srgb, var(--text-muted) 25%, transparent);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  max-width: min(100%, 11rem);
+  flex-shrink: 0;
+}
+
+.mj-llm-status__dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+
+.mj-llm-status__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-llm-status--checking .mj-llm-status__dot {
+  animation: mj-pulse 1.2s ease-in-out infinite;
+}
+
+.mj-llm-status--ready .mj-llm-status__dot,
+.mj-llm-status--cloud .mj-llm-status__dot {
+  background: var(--valid);
+}
+
+.mj-llm-status--thinking .mj-llm-status__dot,
+.mj-llm-status--background .mj-llm-status__dot {
+  background: var(--accent);
+  animation: mj-pulse 1.2s ease-in-out infinite;
+}
+
+.mj-llm-status--error .mj-llm-status__dot,
+.mj-llm-status--unreachable .mj-llm-status__dot,
+.mj-llm-status--unconfigured .mj-llm-status__dot {
+  background: var(--invalid);
+}
+
+.mj-llm-status--thinking,
+.mj-llm-status--background {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.mj-llm-status--error,
+.mj-llm-status--unreachable {
+  border-color: color-mix(in srgb, var(--invalid) 40%, transparent);
+}
+
+.mj-llm-status--ready,
+.mj-llm-status--cloud {
+  border-color: color-mix(in srgb, var(--valid) 35%, transparent);
+}
+
 @keyframes mj-border-spin {
   to {
     transform: rotate(360deg);

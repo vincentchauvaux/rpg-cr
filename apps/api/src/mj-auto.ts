@@ -632,7 +632,7 @@ function formatMjFailureDetail(err: unknown): string {
     if (/instruct 7B|READY.*Tester/i.test(msg) && msg.length < 420) return msg;
     return formatLlmModelCrashRecoveryHint(modelId || "modèle LM Studio");
   }
-  if (/en chargement \(JIT\)|pas listé sur LM Studio|LM Studio injoignable/i.test(msg)) {
+  if (/en chargement|pas listé sur|injoignable|Ollama sur CPU/i.test(msg)) {
     return msg;
   }
   if (/Délai dépassé/i.test(msg)) {

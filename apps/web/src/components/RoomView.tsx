@@ -100,6 +100,7 @@ import { CharacterSheetPanel } from "@/components/CharacterSheetPanel";
 import { NarrativeCanonPanel } from "@/components/NarrativeCanonPanel";
 import { SceneIndicator } from "@/components/SceneIndicator";
 import { ScribIndicator } from "@/components/ScribIndicator";
+import { MjLlmStatusIndicator } from "@/components/MjLlmStatusIndicator";
 
 interface Props {
   code: string;
@@ -1211,6 +1212,14 @@ export function RoomView({ code }: Props) {
                 }}
               />
             )}
+            <MjLlmStatusIndicator
+              hasLlmConfig={hasLlmConfig}
+              llmConfig={room?.llmConfig}
+              mjThinking={mjThinking || mjPromptBusy}
+              mjBackground={mjBackgroundScrib}
+              messages={messages}
+              refreshKey={room?.llmConfig?.modelId?.length ?? 0}
+            />
             <ScribIndicator active={mjBackgroundScrib} />
           </div>
           {showHostLlmSetup && (
