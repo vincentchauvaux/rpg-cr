@@ -45,7 +45,6 @@ async function syncUserToApi(profile: {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
-  /** Relatif à AUTH_URL (ex. https://host/rpg-cr) → URLs publiques /rpg-cr/api/auth/… */
   basePath: getBasePath() ? "api/auth" : "/api/auth",
   providers: [
     Google({
