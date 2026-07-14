@@ -71,6 +71,7 @@ import {
 } from "@/lib/locale-prefs";
 import {
   DEFAULT_LOCALE,
+  buildQuickUseOptions,
   canHumanParticipateInChat,
   type MentionCandidate,
 } from "@rpg-cr/shared";
@@ -255,36 +256,13 @@ export function RoomView({ code }: Props) {
   /** Restaure la position après resync API (évite le saut en haut du fil). */
   const scrollRestoreRef = useRef<{ top: number; height: number } | null>(null);
   const sessionPlayer = players.find((p) => p.id === session?.playerId);
-  const quickUseOptions = (() => {
-    if (!sessionPlayer?.characterSheet) return [];
-    const s = sessionPlayer.characterSheet;
-    const opts: { id: string; label: string; insert: string }[] = [];
-    for (const sp of s.spells ?? []) {
-      if (!sp.name.trim()) continue;
-      opts.push({
-        id: `spell-${sp.name}`,
-        label: `✦ ${sp.name}`,
-        insert: `J'utilise le sort « ${sp.name} »${sp.description ? ` — ${sp.description}` : ""}`,
-      });
-    }
-    for (const u of s.usableItems ?? []) {
-      if (!u.name.trim()) continue;
-      opts.push({
-        id: `item-${u.name}`,
-        label: `🎒 ${u.name}`,
-        insert: `J'utilise « ${u.name} »${u.description ? ` — ${u.description}` : ""}`,
-      });
-    }
-    for (const a of s.actions ?? []) {
-      if (!a.name.trim()) continue;
-      opts.push({
-        id: `action-${a.name}`,
-        label: `⚔ ${a.name}`,
-        insert: a.description?.trim() || a.name,
-      });
-    }
-    return opts;
-  })();
+  const quickUseOptions = useMemo(
+    () =>
+      sessionPlayer?.characterSheet
+        ? buildQuickUseOptions(sessionPlayer.characterSheet, messages)
+        : [],
+    [sessionPlayer?.characterSheet, messages]
+  );
 
   function insertQuickUse(text: string) {
     setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
@@ -1399,7 +1377,7 @@ export function RoomView({ code }: Props) {
               </div>
 
               {speechMode === "action" && quickUseOptions.length > 0 && chatReady && (
-                <div className="quick-use-row" role="group" aria-label="Utiliser depuis la fiche">
+                <div className="quick-use-row" role="group" aria-label="Actions rapides">
                   <span className="muted quick-use-label">Utiliser…</span>
                   {quickUseOptions.map((opt) => (
                     <button

@@ -151,7 +151,7 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 | Post-contrôle dev | `warnCanonContinuityDrift` | Log `[canon-drift]` si titre médiéval dans la réponse sans occurrence dans les sources (hors `NODE_ENV=production`) |
 
 **Exemple** : « ils attendent ta réponse » ✓ — « la princesse attend ta réponse » ✗ si aucune princesse établie.
-- Mode Action : menu « Utiliser… » (sorts/objets/actions de la fiche).
+- Mode Action : menu « Utiliser… » (sorts/objets/actions de la fiche + **jet de dé** auto si le dernier message MJ demande un lancer — ex. bouton `🎲 d20 dex` ; `action-quick-suggestions.ts`).
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.
 
    - **Ollama (VPS)** : provider dédié, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` — install `deploy/ollama-setup.sh`, pas de tunnel Mac

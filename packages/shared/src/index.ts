@@ -8,6 +8,7 @@ export * from "./locale.js";
 export * from "./player-colors.js";
 export * from "./character-sheet.js";
 export * from "./character-progression.js";
+export * from "./action-quick-suggestions.js";
 export * from "./llm/catalog.js";
 export * from "./llm/model-kind.js";
 export * from "./llm/local-llm.js";
