@@ -7,13 +7,25 @@ import {
 import { stripMjMetadataComments } from "./mj/mj-response-prep.js";
 import type { CharacterSheet, ChatMessage } from "./types.js";
 
-export type QuickUseOption = { id: string; label: string; insert: string };
+import type { PlayerRollMeta } from "./dice-roll.js";
+import { ROLL_QUICK_ACTION_HINT, playerMessageDeclaresRoll } from "./dice-roll.js";
+
+export type QuickUseOption = {
+  id: string;
+  label: string;
+  insert: string;
+  rollMeta?: PlayerRollMeta;
+  hint?: string;
+};
 
 const ROLL_REQUEST_RE =
   /\b(jet(?:ez|er|e)?|lance(?:z|r|e)?|roule(?:z|r|e)?|tente(?:z)?|épreuve|test(?:ez)?)\b[^\n]{0,100}\b(d20|d12|d10|d8|d6|d4|d[eé]s?\s*(?:de\s+)?(?:20|12|10|8|6|4|vingt))\b|\bjet(?:ez|er|e)?\s+un\s+d[eé]\s*(20|12|10|8|6|4)\b|\b(d20|d12|d10|d8|d6|d4)\b[^\n]{0,60}\b(jet|lance|roule)\b|\bjet\s+(?:de\s+)?(?:d')?(?:dext[eé]rit[eé]|force|constitution|intelligence|sagesse|charisme)\b/iu;
 
-const PLAYER_ROLL_RESPONSE_RE =
-  /\b(je lance|j'ai lancé|jet (de |d')|d20|d12|d10|d8|d6|d4|\bd[eé]s?\b|résultat|obtenu|total)\b/iu;
+const PLAYER_ROLL_RESPONSE_RE = /(?::\s*\d{1,2}\s*[+-]?\d*\s*=\s*\d{1,2}|\*\*\d+\*\*)/;
+
+function playerMessageHasRollResult(content: string): boolean {
+  return playerMessageDeclaresRoll(content) || PLAYER_ROLL_RESPONSE_RE.test(content);
+}
 
 const DICE_IN_TEXT_RE = /\b(d20|d12|d10|d8|d6|d4)\b|d[eé]\s*(20|12|10|8|6|4)\b/iu;
 
@@ -148,7 +160,7 @@ export function buildMjRollSuggestions(
     afterMj.some(
       (m) =>
         (m.kind === "action" || m.kind === "say" || m.kind === "chat") &&
-        PLAYER_ROLL_RESPONSE_RE.test(m.content)
+        playerMessageHasRollResult(m.content)
     )
   ) {
     return [];
@@ -167,7 +179,6 @@ export function buildMjRollSuggestions(
   const stats = normalizeStats(sheet.stats);
   const score = stats[statKey] ?? 10;
   const mod = statModifier(score);
-  const modLabel = formatStatModifier(mod);
   const dice = inferDiceFromText(mjText);
   const statShort =
     statKey === "dexterite"
@@ -187,7 +198,13 @@ export function buildMjRollSuggestions(
     {
       id: `roll-${dice}-${statKey}`,
       label: `🎲 ${dice} ${statShort}`,
-      insert: `Je lance un ${dice} sur ma ${statLabel} (${modLabel}).`,
+      insert: "",
+      rollMeta: {
+        dice,
+        statLabel,
+        statMod: mod,
+      },
+      hint: ROLL_QUICK_ACTION_HINT,
     },
   ];
 }

@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-07-14 (fix Google OAuth — Nginx auth + basePath Auth.js)
+> Dernière mise à jour : 2026-07-14 (jets de dés — résultat chiffré + résolution MJ)
 
 ## Vision
 
@@ -151,7 +151,7 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 | Post-contrôle dev | `warnCanonContinuityDrift` | Log `[canon-drift]` si titre médiéval dans la réponse sans occurrence dans les sources (hors `NODE_ENV=production`) |
 
 **Exemple** : « ils attendent ta réponse » ✓ — « la princesse attend ta réponse » ✗ si aucune princesse établie.
-- Mode Action : menu « Utiliser… » (sorts/objets/actions de la fiche + **jet de dé** auto si le dernier message MJ demande un lancer — ex. bouton `🎲 d20 dex` ; détection `jet de DEXTERITÉ` / `(CHAIR)` avec normalisation Unicode (`action-quick-suggestions.ts`).
+- Mode Action : menu « Utiliser… » (sorts/objets/actions de la fiche + **jet de dé** auto si le dernier message MJ demande un lancer — ex. bouton `🎲 d20 dex` ; détection `jet de DEXTERITÉ` / `(CHAIR)` avec normalisation Unicode (`action-quick-suggestions.ts`). Au clic, tirage aléatoire + message `Je lance un d20 sur ma dextérité : 14 +2 = 16.` (`dice-roll.ts`). Hint UI : les **+2/0/−2** du MJ = trois **issues** narratives ; le **(+X)** sur le jet = bonus de caractéristique (DEX 15 → +2). Si le message action contient un résultat chiffré, `mj-auto.ts` passe `pendingRollRequest` au prompt MJ (`builders/player-action.ts`) pour **résolution obligatoire** de l'issue annoncée.
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.
 
    - **Ollama (VPS)** : provider dédié, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` — install `deploy/ollama-setup.sh`, pas de tunnel Mac
@@ -573,7 +573,7 @@ Module réutilisable : `NarrationKind` + `NarrationContext` + `buildNarrationPro
 
 Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRecapPrompt` / `buildPlayerIntroFollowUpPrompt` délèguent à ce module.
 
-**Action** : le MJ interprète l'action, l'intègre à la scène et aux compagnons présents, calibre la longueur (court vs dramatique), propose un jet si besoin — voir `builders/player-action.ts`.
+**Action** : le MJ interprète l'action, l'intègre à la scène et aux compagnons présents, calibre la longueur (court vs dramatique), propose un jet si besoin — voir `builders/player-action.ts`. Si le joueur annonce un jet chiffré après une demande MJ, le prompt inclut la demande précédente et impose de narrer l'issue (+2 critique / 0 simple / −2 échec) correspondante.
 
 ## MJ automatique
 

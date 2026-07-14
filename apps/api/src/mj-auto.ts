@@ -18,6 +18,9 @@ import {
   type NarrationContext,
   isCompanionNarrativelyActive,
   formatLlmModelCrashRecoveryHint,
+  playerMessageDeclaresRoll,
+  mjMessageRequestsRoll,
+  stripMjMetadataComments,
 } from "@rpg-cr/shared";
 import {
   getRoomById,
@@ -102,6 +105,18 @@ function buildAbilitiesHintForPlayer(playerId: string): string | undefined {
   );
 }
 
+function findPendingRollRequest(roomId: string): string | undefined {
+  const messages = listMessages(roomId, 30);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.kind !== "mj") continue;
+    const text = stripMjMetadataComments(m.content);
+    if (mjMessageRequestsRoll(text)) return text.slice(0, 800);
+    return undefined;
+  }
+  return undefined;
+}
+
 function buildPlayerActionNarrationContext(
   roomId: string,
   playerId: string,
@@ -122,6 +137,9 @@ function buildPlayerActionNarrationContext(
     sceneSummary: formatSceneForMj(scene),
     trameSummary: formatNarrativeArcForMj(arc),
     companionsPresent: companionsPresent.length > 0 ? companionsPresent : undefined,
+    pendingRollRequest: playerMessageDeclaresRoll(content)
+      ? findPendingRollRequest(roomId)
+      : undefined,
   };
 }
 

@@ -40,6 +40,8 @@ export interface NarrationContext {
   journalSummary?: string;
   recentChatSummary?: string;
   loreSnippet?: string;
+  /** Demande de jet du MJ juste avant (résolution obligatoire) */
+  pendingRollRequest?: string;
   /** Noms des compagnons actifs à la table */
   companionsPresent?: string[];
 

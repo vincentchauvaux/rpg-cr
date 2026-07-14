@@ -73,7 +73,9 @@ import {
   DEFAULT_LOCALE,
   buildQuickUseOptions,
   canHumanParticipateInChat,
+  formatPlayerRollMessage,
   type MentionCandidate,
+  type QuickUseOption,
 } from "@rpg-cr/shared";
 import { ChatMentionInput } from "@/components/ChatMentionInput";
 import {
@@ -264,8 +266,15 @@ export function RoomView({ code }: Props) {
         : [],
     [sessionPlayer?.characterSheet, messages]
   );
+  const rollQuickHint = useMemo(
+    () => quickUseOptions.find((o) => o.hint)?.hint,
+    [quickUseOptions]
+  );
 
-  function insertQuickUse(text: string) {
+  function insertQuickUse(opt: QuickUseOption) {
+    const text = opt.rollMeta
+      ? formatPlayerRollMessage(opt.rollMeta)
+      : opt.insert;
     setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
     setSpeechMode("action");
   }
@@ -1386,6 +1395,7 @@ export function RoomView({ code }: Props) {
               </div>
 
               {speechMode === "action" && quickUseOptions.length > 0 && chatReady && (
+                <div className="quick-use-block">
                 <div className="quick-use-row" role="group" aria-label="Actions rapides">
                   <span className="muted quick-use-label">Utiliser…</span>
                   {quickUseOptions.map((opt) => (
@@ -1393,11 +1403,15 @@ export function RoomView({ code }: Props) {
                       key={opt.id}
                       type="button"
                       className="quick-use-btn"
-                      onClick={() => insertQuickUse(opt.insert)}
+                      onClick={() => insertQuickUse(opt)}
                     >
                       {opt.label}
                     </button>
                   ))}
+                </div>
+                {rollQuickHint && (
+                  <p className="llm-hint muted quick-use-roll-hint">{rollQuickHint}</p>
+                )}
                 </div>
               )}
 

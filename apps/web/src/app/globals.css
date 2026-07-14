@@ -415,6 +415,7 @@ label {
 }
 
 .chat-panel--log-expanded .speech-mode-row,
+.chat-panel--log-expanded .quick-use-block,
 .chat-panel--log-expanded .quick-use-row,
 .chat-panel--log-expanded .player-intro-panel {
   flex-shrink: 0;
@@ -423,6 +424,7 @@ label {
 }
 
 .chat-panel--log-expanded .speech-mode-row,
+.chat-panel--log-expanded .quick-use-block,
 .chat-panel--log-expanded .quick-use-row {
   padding: 0.35rem 0.75rem;
   background: var(--bg-panel);
@@ -2703,6 +2705,17 @@ textarea.field-invalid {
 .char-sheet-compact {
   font-size: 0.75rem;
   font-weight: normal;
+}
+
+.quick-use-block {
+  margin-bottom: 0.5rem;
+}
+
+.quick-use-roll-hint {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  max-width: 42rem;
 }
 
 .quick-use-row {
