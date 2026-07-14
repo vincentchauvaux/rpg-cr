@@ -7,7 +7,14 @@
   ],
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @rpg-cr/api\" \"npm run dev -w @rpg-cr/web\"",
-    "dev:clean": "npm run dev:kill && npm run clean -w @rpg-cr/web && npm run dev",
+    "dev:clean": "npm run dev:kill && npm run clean:cache && npm run dev",
+    "clean:cache": "npm run clean -w @rpg-cr/web && rm -rf node_modules/.cache apps/web/node_modules/.cache",
+    "docker:prod": "docker compose -f docker-compose.prod.yml up -d --build",
+    "docker:prod:down": "docker compose -f docker-compose.prod.yml down",
+    "docker:backup": "bash deploy/backup.sh",
+    "tunnel": "bash deploy/lmstudio-tunnel.sh",
+    "tunnel:open": "bash deploy/lmstudio-tunnel-open-terminal.sh",
+    "tunnel:helper": "node deploy/tunnel-helper.mjs",
     "build": "npm run build -w @rpg-cr/shared && npm run build -w @rpg-cr/api && npm run build -w @rpg-cr/web",
     "start": "concurrently -n api,web \"npm run start -w @rpg-cr/api\" \"npm run start -w @rpg-cr/web\"",
     "dev:kill": "lsof -ti:3000 | xargs kill -9 2>/dev/null; lsof -ti:4000 | xargs kill -9 2>/dev/null; true"

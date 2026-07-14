@@ -29,6 +29,36 @@ export function localeLabel(code: string): string {
   return SUPPORTED_LOCALES.find((l) => l.code === code)?.label ?? code.toUpperCase();
 }
 
+/** Initiales affichées sur le bouton de traduction (ex. FR, EN). */
+export function localeInitials(
+  locale?: string,
+  fallbackWhenUnknown?: string
+): string {
+  const raw = locale?.trim();
+  if (raw && raw !== UND_LOCALE && isSupportedLocale(raw)) {
+    return raw.toUpperCase();
+  }
+  return normalizeLocale(fallbackWhenUnknown).toUpperCase();
+}
+
+/** Langue source effective d'un message pour l'UI de traduction. */
+export function resolveMessageSourceLocale(
+  sourceLocale: string | undefined,
+  hostLocale: string
+): SupportedLocale {
+  const raw = sourceLocale?.trim();
+  if (raw && raw !== UND_LOCALE && isSupportedLocale(raw)) return raw;
+  return normalizeLocale(hostLocale);
+}
+
+/** Langue du salon (hôte) ≠ langue du lecteur → proposer la traduction passive. */
+export function shouldOfferChatTranslation(
+  viewerLocale: string,
+  hostLocale: string
+): boolean {
+  return normalizeLocale(viewerLocale) !== normalizeLocale(hostLocale);
+}
+
 /** Faut-il traduire ce message pour le lecteur ? */
 export function shouldTranslateMessage(
   sourceLocale: string | undefined,

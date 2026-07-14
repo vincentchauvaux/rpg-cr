@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-05-27 (rejet modèles VL LM Studio + messages crash MJ)
+> Dernière mise à jour : 2026-07-14 (VPS LM Studio + tunnel Mac, pas OpenAI requis)
 
 ## Vision
 
@@ -15,7 +15,7 @@ Application SaaS de salons JDR rejoinables, avec MJ IA (LLM marché + fallback L
 | API | Fastify 5, WebSocket, better-sqlite3 |
 | Web | Next.js **15.5.18** (pin), React **19.2.6** (pin) |
 | Données | SQLite (`apps/api/data/rpg-cr.db`) |
-| Déploiement | Docker multi-stage + docker-compose |
+| Déploiement | Docker multi-stage + `docker-compose.yml` (dev) + `docker-compose.prod.yml` (VPS) ; scripts `deploy/` |
 
 ## MVP livré (v0.1)
 
@@ -24,9 +24,9 @@ Application SaaS de salons JDR rejoinables, avec MJ IA (LLM marché + fallback L
 3. **WebSocket** — `/ws?roomId&playerId&playerName`, broadcast messages et joueurs ; ping/pong ; reconnexion client + resync API
 4. **Interface** — accueil créer/rejoindre, page `/salon/[code]`, QR + lien, switch god mode (admin)
    - **Création salon** : noms salon/hôte proposés aléatoirement (utilisables sans saisie) ; clic efface pour taper ; bouton 🎲 par champ + « Tout relancer » ; `markHostLlmSetupPending(roomId)` à la création
-   - **Onboarding hôte (graine)** : après création/reprise salon, tant que la fiche n'est pas `ready` — `HostSetupWizard` (**étape 1/2**) bloque le chat et le wizard PJ : `AdminLlmForm` (LM Studio ou cloud), enregistrement `PUT /api/rooms/:id/llm` (+ `playerId` hôte), **test** `POST …/llm/test` — autorisé pour **`role === admin`** (hôte) sans activer le god mode UI ; puis « Continuer — créer mon personnage » → `localStorage` `rpg-cr-host-llm-setup:{roomId}=done` + `CharacterCreationWizard` (**étape 2/2**). Flag `done` resync au chargement ; sans config MJ : pas de wizard PJ, ✨ « Générer fiche IA » désactivé (libellé FR). Joueurs non-hôte : inchangés (rejoindre → leur fiche ; MJ = config hôte). Pendant l'étape 1, le formulaire LLM du god mode est masqué (évite doublon).
+   - **Onboarding hôte (graine)** : après création/reprise salon, tant que la fiche n'est pas `ready` — `HostSetupWizard` (**étape 1/2**) bloque le chat et le wizard PJ : `AdminLlmForm` (`collapseOnSave={false}`, `configPersisted={hasLlmConfig}`) + bouton **Tester la connexion** visible sous le formulaire ; enregistrement `PUT /api/rooms/:id/llm` puis **test** `POST …/llm/test` obligatoire avant « Continuer » ; `localStorage` `rpg-cr-host-llm-setup:{roomId}=done` + `CharacterCreationWizard` (**étape 2/2**). Joueurs non-hôte : inchangés. Pendant l'étape 1, le formulaire LLM du god mode est masqué (évite doublon).
    - **God mode** : panneau admin = `localStorage` `rpg-cr-admin-panel:{playerId}` via `useSyncExternalStore` — **jamais** resync depuis refresh/WS/DB ; PATCH serveur fire-and-forget au toggle
-   - **Layout salon** (`room-shell` + `room-layout`) : **une colonne** centrée ; **dock** (`RoomDockNav`) — sticky **haut** (bureau), fixe **bas** (mobile ≤640px) : **Fiche** + **Cercle** | **Accueil** (vue principale) | **Aide** + **Réglages** ; pas d’onglet « Scène / récit » (le chat reste sur Accueil). Masqué en plein écran récit / onboarding LLM. `sessionStorage` `rpg-cr-room-tab:{roomId}` (ancien `scene` → `main`). **Mentions @** : `ChatMentionInput` dans le **chat** et l’**aide personnelle** (`HeroAssistantPanel`) — joueurs à la table + PNJ du canon ; sous-titre **Lieu · …** (rencontre déduite des messages / scène, pas « Récit »). API `GET …/mention-suggestions`. **Compagnons** : `.companions-block` — `margin-top` 1rem (bureau) / 0,75rem (≤640px).
+   - **Layout salon** (`room-shell` + `room-layout`) : **une colonne** centrée ; **dock** (`RoomDockNav`) — sticky **haut** (bureau), fixe **bas** (mobile ≤640px) : **Fiche** + **Cercle** | **Accueil** (chat + scène + aide inline) | **Aide** + **Réglages** ; chaque onglet n’affiche **que** son panneau (plus de fiche/compagnons/réglages empilés sous Accueil). Masqué en plein écran récit / onboarding LLM. `sessionStorage` `rpg-cr-room-tab:{roomId}` (ancien `scene` → `main`). **Mentions @** : `ChatMentionInput` dans le **chat** et l’**aide personnelle** (`HeroAssistantPanel`) — joueurs à la table + PNJ du canon ; sous-titre **Lieu · …** (rencontre déduite des messages / scène, pas « Récit »). API `GET …/mention-suggestions`. **Compagnons** : `.companions-block` — `margin-top` 1rem (bureau) / 0,75rem (≤640px).
    - **En-tête salon** (`RoomView`) : titre + **code seul** (sans préfixe « Code : ») — clic copie le code (`navigator.clipboard`) + retour visuel « Copié ! » + `aria-live` ; bouton **Sauvegarder et quitter** : libellé complet au bureau, **icône seule** (sortie) en `position: fixed` haut droite mobile (`≤640px`, `title` / `aria-label`).
    - **Carte + chroniques .md** : visibles **uniquement** en god mode (UI + API `GET /graine`)
 ### Fiche personnage — stats, canon narratif & verrou histoire
@@ -274,9 +274,71 @@ npm run dev:clean   # dev:kill + clean .next + dev
 
 Versions épinglées dans `package.json` : `next@15.5.18`, `react@19.2.6`.
 
+### Dépannage — disque plein (`ENOSPC: no space left on device`)
+
+**Symptômes** : `localhost:3000` en **500**, API qui ne démarre pas, erreurs `Cannot find module './997.js'`, Next qui n’écrit plus dans `.next`.
+
+**Cause** : disque Mac quasi saturé (souvent &lt; 500 Mo libres) — les compilations Next/tsx échouent à mi-chemin.
+
+```bash
+df -h /
+# Libérer de l’espace (Corbeille, Xcode DerivedData, gros téléchargements…)
+cd /Users/hakou/rpg-cr
+npm run dev:kill
+npm run clean:cache
+npm run dev
+```
+
+Vérifier **≥ 2–3 Go libres** avant de développer confortablement.
+
+### Dépannage Next.js (`Cannot find module './997.js'`)
+
+**Cause** : chunk Webpack manquant dans `.next` (cache partiel après hot reload, build interrompu, `next dev` + `next build` en parallèle, `next start` sur un build périmé, ou **disque plein**).
+
+```bash
+cd /Users/hakou/rpg-cr
+# 1. Arrêter tous les serveurs (Ctrl+C), puis :
+npm run dev:clean
+```
+
+Ne pas lancer `npm run build` pendant que `npm run dev` tourne. Si le disque est plein, corriger **ENOSPC** avant de chercher un bug de chunks.
+
 ### VPS OVH (prod)
 
-Définir `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_APP_URL` vers le domaine public, ou placer un reverse proxy (Nginx) qui expose web + `/api` + `/ws` sur le même host (ports dynamiques alors inutiles).
+Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**, **streamTv** (`/app`), **RPG-CR** (`/rpg-cr`).
+
+| Étape | Commande / fichier |
+|-------|-------------------|
+| Prérequis VPS | `sudo bash deploy/vps-setup.sh` |
+| Nginx | `deploy/nginx-rpg-cr.conf.example` → `include` dans server HTTPS `vps-e09ed6db.vps.ovh.net` |
+| MJ gratuit | [deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md) — LM Studio Mac + tunnel ; `npm run tunnel:helper` + bouton wizard **Démarrer le tunnel** |
+| Secrets | `.env` : `LM_STUDIO_BASE_URL=http://host.docker.internal:1234/v1`, `NEXT_PUBLIC_BASE_PATH=/rpg-cr` ; `OPENAI_API_KEY` optionnel |
+| Déploiement | `bash deploy/deploy.sh` — Docker `127.0.0.1:3010` / `4010`, `extra_hosts` host-gateway |
+| Compose | `docker-compose.prod.yml` — build `NEXT_PUBLIC_BASE_PATH`, volume `rpg-data` |
+| Première graine | [deploy/HOST-SETUP.md](deploy/HOST-SETUP.md) |
+| Sauvegarde | `bash deploy/backup.sh` |
+
+**URL publique** : `https://vps-e09ed6db.vps.ovh.net/rpg-cr` — same-origin API/WS via [config.ts](apps/web/src/lib/config.ts) + `basePath` Next.js.
+
+**MJ VPS (gratuit)** : l'API Docker appelle LM Studio via `LM_STUDIO_BASE_URL` ; tunnel SSH `-R 1234:127.0.0.1:1234` depuis le Mac. `resolveLmStudioServerBaseUrl` ([lmstudio-url.ts](packages/shared/src/llm/lmstudio-url.ts)) prime sur l'URL affichée dans l'UI (`127.0.0.1:1234`).
+
+**État VPS (2026-07-14)** : Docker installé, conteneurs `rpg-cr-api` / `rpg-cr-web` actifs (`:4010` / `:3010`). Nginx snippet `rpg-cr` activé dans `streamtv`. Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/` → **200**. MJ : tunnel Mac requis (`deploy/lmstudio-tunnel.sh` + LM Studio Running).
+
+**Suite sur le VPS** :
+```bash
+ssh root@vps-e09ed6db.vps.ovh.net
+cd /root/rpg-cr
+sudo bash deploy/vps-setup.sh
+cp deploy/.env.production.example .env
+bash deploy/deploy.sh
+sudo cp deploy/nginx-rpg-cr.conf.example /etc/nginx/snippets/rpg-cr.conf
+# include snippets/rpg-cr.conf; dans streamtv (443)
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**Sur le Mac (avant partie)** : `npm run tunnel:helper` (une fois) puis bouton **Démarrer le tunnel** dans le wizard ; ou `npm run tunnel:open` / `bash deploy/lmstudio-tunnel.sh`. UI : `LmStudioTunnelBanner` + `GET /api/llm/tunnel-status`.
+
+**Dev local** : sans `NEXT_PUBLIC_BASE_PATH` → ports `:3000` / `:4000` inchangés.
 
 ## Fichiers clés
 
@@ -682,7 +744,7 @@ En **mode joueur** (`adminOpen === false` ou rôle `player`) :
 
 | Visible | Masqué |
 |---------|--------|
-| Chat (traduit selon `preferredLocale`) | Panneau LLM, carte, `GraineReader`, `NarrativeCanonPanel` |
+| Chat (original ; traduction **sur clic** 🌐 si langue joueur ≠ hôte) | Panneau LLM, carte, `GraineReader`, `NarrativeCanonPanel` |
 | Sa fiche personnage | Fiches détaillées des autres PJ |
 | Compagnons (colonne droite, sous Préférences/Admin) | Badges hôte/god, contrôles IA admin |
 | Messages système narratifs (entrée taverne) | Messages système techniques (erreurs LLM/config) |
@@ -698,7 +760,7 @@ La carte n'est chargée en state client **que** si god mode actif.
 - **Resync** : `resolveViewerLocale` — si backup local ≠ serveur (PATCH en vol), le backup gagne jusqu’à resync ; re-PATCH automatique au `refresh()` si besoin.
 - **API** : `PATCH /api/players/:id/locale` ; `POST /api/rooms/:roomId/translate` `{ text, targetLocale, sourceLocale?, messageId? }`.
 - **Cache** : table `message_translations` (`message_id`, `target_locale`, `translated_text`).
-- **Messages** : stockés en langue source (`content` + `source_locale` optionnel) ; traduction **lazy** côté client à l'affichage (`ChatMessageRow`).
+- **Messages** : stockés en langue source (`content` + `source_locale` optionnel) ; traduction **passive** (`ChatMessageRow`) — bouton **initiales langue source** (ex. `FR`) dans l'en-tête si `shouldOfferChatTranslation(viewer, host)` ; clic → `POST …/translate` (animation légère badge + texte `.msg--translating`) ; après succès → icône **🌐** pour basculer original / traduction (`localeInitials`, `resolveMessageSourceLocale`).
 - **MJ** : répond dans la langue du joueur qui a déclenché le tour (`preferredLocale` du dernier locuteur debounce).
 - **Fiche PJ (IA)** : `generate-field` / `generate-section` / `generate-all` / `ask-mj` utilisent la locale de l'**acteur** (`actorPlayerId`), pas celle de la cible.
-- Pas de traduction de ses propres messages ; sans LLM configuré → original + notice.
+- Pas de traduction de ses propres messages ; sans LLM : clic 🌐 → tooltip « MJ non configuré » (pas d'appel auto au chargement).

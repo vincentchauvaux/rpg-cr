@@ -26,13 +26,21 @@ Variables optionnelles (voir `.env.example`) :
 
 **Réseau local** : ouvrir `http://<IP-LAN>:3000` (ex. `192.168.0.210`). L’API est appelée sur le même host, port 4000 — pas besoin de configurer localhost dans `.env`.
 
-## Docker (VPS OVH)
+## Docker / VPS OVH
 
-```bash
-docker compose up -d --build
+Guide complet : **[deploy/README.md](./deploy/README.md)**
+
+**Multi-sites Nginx** (canopee.be + streamTv `/app` + RPG-CR) :
+
+```
+https://vps-e09ed6db.vps.ovh.net/rpg-cr
 ```
 
-Adapter `NEXT_PUBLIC_*` dans `docker-compose.yml` à l’IP ou au domaine du VPS.
+```bash
+cp deploy/.env.production.example .env
+bash deploy/deploy.sh
+# + snippet deploy/nginx-rpg-cr.conf.example dans Nginx
+```
 
 ## Structure
 
@@ -40,6 +48,7 @@ Adapter `NEXT_PUBLIC_*` dans `docker-compose.yml` à l’IP ou au domaine du VPS
 apps/api      — REST + WebSocket + SQLite
 apps/web      — Next.js (admin, chat, QR)
 packages/shared — types, carte, LLM, prompt MJ
+deploy/       — Nginx, scripts VPS
 ```
 
 Voir [agent.md](./agent.md) pour l’état du projet et la roadmap.

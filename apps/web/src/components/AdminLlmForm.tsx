@@ -27,6 +27,10 @@ interface Props {
   onSave: (config: LlmRoomConfig) => Promise<void>;
   onTest: () => Promise<void>;
   initialCollapsed?: boolean;
+  /** Déjà en base (ex. reprise salon) — active le test sans ré-enregistrer */
+  configPersisted?: boolean;
+  /** Replier après enregistrement (désactivé pendant l'onboarding hôte) */
+  collapseOnSave?: boolean;
 }
 
 function modelValid(form: LlmRoomConfig): boolean {
@@ -49,11 +53,13 @@ export function AdminLlmForm({
   onSave,
   onTest,
   initialCollapsed = false,
+  configPersisted = false,
+  collapseOnSave = true,
 }: Props) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
-  const [collapsed, setCollapsed] = useState(initialCollapsed);
-  const [saved, setSaved] = useState(initialCollapsed);
+  const [collapsed, setCollapsed] = useState(initialCollapsed && configPersisted);
+  const [saved, setSaved] = useState(initialCollapsed || configPersisted);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<
@@ -119,7 +125,7 @@ export function AdminLlmForm({
       await onSave(config);
       setLlmForm((f) => ({ ...f, baseUrl: normalizedBase }));
       setSaved(true);
-      setCollapsed(true);
+      if (collapseOnSave) setCollapsed(true);
       setSubmitted(false);
       setTouched({});
       setTestStatus({ state: "idle" });

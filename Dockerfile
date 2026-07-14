@@ -9,6 +9,8 @@ COPY apps/web/package.json ./apps/web/
 RUN npm install
 
 FROM deps AS build
+ARG NEXT_PUBLIC_BASE_PATH=
+ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
 COPY . .
 RUN npm run build -w @rpg-cr/shared
 RUN npm run build -w @rpg-cr/api
@@ -21,7 +23,7 @@ ENV DATABASE_PATH=/data/rpg-cr.db
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages/shared ./packages/shared
 COPY --from=build /app/apps/api ./apps/api
-RUN mkdir -p /data
+RUN mkdir -p /data/avatars
 EXPOSE 4000
 CMD ["node", "apps/api/dist/index.js"]
 

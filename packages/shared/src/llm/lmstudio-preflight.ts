@@ -1,5 +1,5 @@
 import { assertMjSuitableModelId, filterChatModelIds } from "./model-kind.js";
-import { lmStudioModelsEndpoint, normalizeLmStudioV1BaseUrl } from "./lmstudio-url.js";
+import { lmStudioModelsEndpoint, normalizeLmStudioV1BaseUrl, resolveLmStudioServerBaseUrl } from "./lmstudio-url.js";
 import {
   formatSmallContextModelHint,
   inferModelContextTier,
@@ -131,9 +131,7 @@ export async function preflightLmStudioForMj(
     );
   }
 
-  const baseUrl = normalizeLmStudioV1BaseUrl(
-    options?.lmStudioBaseUrl ?? config.baseUrl
-  );
+  const baseUrl = resolveLmStudioServerBaseUrl(config, options?.lmStudioBaseUrl);
 
   const ids = await fetchModelIds(baseUrl);
   const chatIds = filterChatModelIds(ids);

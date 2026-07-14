@@ -1,0 +1,48 @@
+# RPG-CR — snippet Nginx (HTTPS, hostname OVH)
+# À inclure dans le server {} de vps-e09ed6db.vps.ovh.net (à côté de streamTv /app).
+#
+# Installation :
+#   sudo cp deploy/nginx-rpg-cr.conf.example /etc/nginx/snippets/rpg-cr.conf
+#   # Dans le bloc server HTTPS :
+#   include snippets/rpg-cr.conf;
+#   sudo nginx -t && sudo systemctl reload nginx
+
+# Redirection /rpg-cr → /rpg-cr/ (obligatoire pour Next.js basePath)
+location = /rpg-cr {
+    return 301 $scheme://$host/rpg-cr/;
+}
+
+# Front Next.js (basePath /rpg-cr — le conteneur sert à /, Nginx retire le préfixe)
+location /rpg-cr/ {
+    proxy_pass http://127.0.0.1:3010/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+
+# API Fastify (conteneur 127.0.0.1:4010)
+location /rpg-cr/api/ {
+    proxy_pass http://127.0.0.1:4010/api/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_read_timeout 300s;
+    client_max_body_size 4m;
+}
+
+# WebSocket
+location /rpg-cr/ws {
+    proxy_pass http://127.0.0.1:4010/ws;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 86400;
+}
+
+# Healthcheck (hors préfixe /api)
+location = /rpg-cr/health {
+    proxy_pass http://127.0.0.1:4010/health;
+    proxy_set_header Host $host;
+}

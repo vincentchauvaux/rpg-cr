@@ -1173,7 +1173,15 @@ label {
 }
 
 .host-setup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
   margin-top: 1.25rem;
+}
+
+.host-setup-test-btn {
+  width: 100%;
+  font-size: 0.95rem;
 }
 
 .host-setup-hint {
@@ -1181,6 +1189,44 @@ label {
   padding: 0.45rem 0.6rem;
   font-size: 0.82rem;
   border-left: 3px solid var(--accent-dim);
+}
+
+.lm-tunnel-banner {
+  margin: 0.75rem 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  background: var(--surface-elevated, rgba(0, 0, 0, 0.15));
+}
+
+.lm-tunnel-banner__title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.lm-tunnel-banner__lead {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+}
+
+.lm-tunnel-banner__status {
+  margin: 0 0 0.65rem;
+  font-size: 0.88rem;
+}
+
+.lm-tunnel-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.lm-tunnel-banner__hint {
+  margin-top: 0.65rem;
+}
+
+.lm-tunnel-banner__footnote {
+  margin: 0.65rem 0 0;
+  font-size: 0.78rem;
 }
 
 .char-wizard {
@@ -1412,6 +1458,177 @@ label {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.msg-translate-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.65rem;
+  min-height: 1.35rem;
+  padding: 0.1rem 0.3rem;
+  border: 1px solid transparent;
+  background: none;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+  border-radius: 4px;
+}
+
+.msg-translate-btn--source {
+  opacity: 0.85;
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-elevated) 65%, transparent);
+}
+
+.msg-translate-btn--translated {
+  opacity: 0.9;
+}
+
+.msg-translate-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.msg-translate-btn:disabled:not(.msg-translate-btn--loading) {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.msg-translate-btn--loading {
+  cursor: wait;
+  opacity: 1;
+  pointer-events: none;
+  gap: 0.2rem;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
+  animation: msg-translate-btn-glow 1.25s ease-in-out infinite;
+}
+
+.msg-translate-btn--loading .msg-translate-initials {
+  color: var(--accent);
+  animation: msg-translate-initials-pulse 0.95s ease-in-out infinite;
+}
+
+.msg-translate-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+  margin-left: 0.05rem;
+}
+
+.msg-translate-dots span {
+  width: 0.18rem;
+  height: 0.18rem;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.35;
+  animation: msg-translate-dot 0.9s ease-in-out infinite;
+}
+
+.msg-translate-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.msg-translate-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes msg-translate-initials-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes msg-translate-btn-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+}
+
+@keyframes msg-translate-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+}
+
+.msg.msg--translating .action-body,
+.msg.msg--translating .chat-msg-mj,
+.msg.msg--translating.msg.say > span:not(.author):not(.msg-author-row):not(.action-tag) {
+  animation: msg-body-translating 1.3s ease-in-out infinite;
+}
+
+@keyframes msg-body-translating {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-translate-btn--loading,
+  .msg-translate-btn--loading .msg-translate-initials,
+  .msg-translate-dots span,
+  .msg.msg--translating .action-body,
+  .msg.msg--translating .chat-msg-mj,
+  .msg.msg--translating.msg.say > span:not(.author):not(.msg-author-row):not(.action-tag) {
+    animation: none;
+  }
+
+  .msg-translate-btn--loading .msg-translate-initials {
+    opacity: 1;
+  }
+}
+
+.msg-translate-btn--error {
+  opacity: 0.85;
+  outline: 1px solid rgba(220, 80, 80, 0.45);
+}
+
+.msg-translate-icon {
+  display: block;
+}
+
+.msg-translate-initials {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.15;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+}
+
+.msg-translate-btn--source:hover:not(:disabled) .msg-translate-initials {
+  color: var(--accent);
+}
+
+.msg-translate-btn--translated .msg-translate-icon {
+  font-size: 0.88rem;
 }
 
 .char-sheet-fill-row {
@@ -2579,7 +2796,7 @@ textarea.field-invalid {
   }
 
   .layout--room-dock {
-    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(3.85rem + env(safe-area-inset-bottom, 0px));
   }
 
   .room-dock-nav {

@@ -60,7 +60,7 @@ export async function formatFetchError(
     return "Erreur réseau inconnue";
   }
 
-  const healthOk = wasHealthOkRecently() || (await pingHealth(apiUrl));
+  const healthOk = wasHealthOkRecently() || (await pingHealth());
 
   if (healthOk && path?.includes("generate-all")) {
     const aborted =

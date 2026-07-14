@@ -2,7 +2,7 @@ import { getCatalogEntry } from "./catalog.js";
 import { estimatePromptChars, resolveLlmTimeoutMs } from "./context-budget.js";
 import { assertChatModelId, isUnsuitableMjModelId } from "./model-kind.js";
 import { formatLlmModelCrashRecoveryHint } from "./model-context-tier.js";
-import { normalizeLmStudioV1BaseUrl } from "./lmstudio-url.js";
+import { normalizeLmStudioV1BaseUrl, resolveLmStudioServerBaseUrl } from "./lmstudio-url.js";
 import type { LlmRoomConfig } from "../types.js";
 
 export interface ChatCompletionMessage {
@@ -362,7 +362,9 @@ export async function completeAsMj(
 
   const rawBase = config.baseUrl ?? entry.defaultBaseUrl ?? "https://api.openai.com/v1";
   const primaryBase =
-    config.providerId === "lmstudio" ? normalizeLmStudioV1BaseUrl(rawBase) : rawBase;
+    config.providerId === "lmstudio"
+      ? resolveLmStudioServerBaseUrl(config, options.lmStudioBaseUrl)
+      : rawBase;
   const apiKey = options.apiKey;
   const estimatedChars = estimatePromptChars(messages);
   const timeoutMs =

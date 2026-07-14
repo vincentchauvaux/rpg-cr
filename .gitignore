@@ -3,6 +3,7 @@ dist/
 .next/
 .env
 .env.local
+backups/
 *.db
 *.sqlite
 .DS_Store

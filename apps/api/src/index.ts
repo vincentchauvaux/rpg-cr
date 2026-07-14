@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
-import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat } from "@rpg-cr/shared";
+import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl } from "@rpg-cr/shared";
 import { initDb } from "./db.js";
 import {
   createRoom,
@@ -120,7 +120,10 @@ app.get("/api/llm/catalog", async () => LLM_CATALOG);
 app.get<{ Querystring: { baseUrl?: string } }>(
   "/api/llm/lmstudio/models",
   async (req, reply) => {
-    const baseUrl = req.query.baseUrl?.trim() || "http://127.0.0.1:1234/v1";
+    const baseUrl = resolveLmStudioServerBaseUrl(
+      { baseUrl: req.query.baseUrl },
+      process.env.LM_STUDIO_BASE_URL
+    );
     try {
       const result = await fetchLmStudioModels(baseUrl);
       return result;
@@ -130,6 +133,21 @@ app.get<{ Querystring: { baseUrl?: string } }>(
     }
   }
 );
+
+/** VPS + tunnel Mac : le serveur teste si LM Studio est joignable via LM_STUDIO_BASE_URL. */
+app.get("/api/llm/tunnel-status", async (_req, reply) => {
+  const baseUrl = resolveLmStudioServerBaseUrl({}, process.env.LM_STUDIO_BASE_URL);
+  if (!process.env.LM_STUDIO_BASE_URL?.trim()) {
+    return { reachable: true, mode: "local" };
+  }
+  try {
+    const url = `${baseUrl.replace(/\/$/, "")}/models`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    return { reachable: res.ok, mode: "vps_tunnel" };
+  } catch {
+    return reply.status(200).send({ reachable: false, mode: "vps_tunnel" });
+  }
+});
 
 app.post<{ Body: { name: string; adminName: string } }>(
   "/api/rooms",

@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ChatMessage, Player } from "@rpg-cr/shared";
 import {
   shouldTranslateMessage,
+  shouldOfferChatTranslation,
   MJ_DISPLAY_COLOR,
   formatMjMessageForDisplay,
+  localeInitials,
+  localeLabel,
+  resolveMessageSourceLocale,
 } from "@rpg-cr/shared";
 import { translateMessage } from "@/lib/api";
 import { PlayerToken } from "@/components/PlayerToken";
@@ -17,6 +21,7 @@ interface Props {
   players: Player[];
   viewerPlayerId: string;
   viewerLocale: string;
+  hostLocale: string;
   roomId: string;
   llmEnabled: boolean;
 }
@@ -26,6 +31,7 @@ export function ChatMessageRow({
   players,
   viewerPlayerId,
   viewerLocale,
+  hostLocale,
   roomId,
   llmEnabled,
 }: Props) {
@@ -41,38 +47,30 @@ export function ChatMessageRow({
   const narrativeContent =
     m.kind === "mj" ? formatMjMessageForDisplay(m.content) : m.content;
 
+  const passiveTranslationEnabled = shouldOfferChatTranslation(
+    viewerLocale,
+    hostLocale
+  );
+
+  const canRequestTranslation =
+    passiveTranslationEnabled &&
+    !isOwn &&
+    m.kind !== "system" &&
+    shouldTranslateMessage(m.sourceLocale, viewerLocale);
+
   useEffect(() => {
     setShowOriginal(false);
+    setDisplayText(narrativeContent);
+    setIsTranslated(false);
+    setNotice(null);
+    setLoading(false);
+  }, [m.id, narrativeContent]);
 
-    if (m.kind === "system") {
-      setDisplayText(m.content);
-      setIsTranslated(false);
-      setNotice(null);
-      setLoading(false);
-      return;
-    }
-
-    if (isOwn) {
-      setDisplayText(narrativeContent);
-      setIsTranslated(false);
-      setNotice(null);
-      setLoading(false);
-      return;
-    }
-
-    if (!shouldTranslateMessage(m.sourceLocale, viewerLocale)) {
-      setDisplayText(narrativeContent);
-      setIsTranslated(false);
-      setNotice(null);
-      setLoading(false);
-      return;
-    }
+  const requestTranslation = useCallback(() => {
+    if (!canRequestTranslation || loading) return;
 
     if (!llmEnabled) {
-      setDisplayText(narrativeContent);
-      setIsTranslated(false);
-      setNotice("Traduction indisponible (MJ non configuré)");
-      setLoading(false);
+      setNotice("MJ non configuré");
       return;
     }
 
@@ -89,36 +87,57 @@ export function ChatMessageRow({
     })
       .then((res) => {
         if (cancelled) return;
-        setDisplayText(res.text);
-        setIsTranslated(res.translated);
+        if (res.translated) {
+          setDisplayText(res.text);
+          setIsTranslated(true);
+          setShowOriginal(false);
+        } else {
+          setDisplayText(narrativeContent);
+          setIsTranslated(false);
+        }
       })
       .catch(() => {
         if (cancelled) return;
         setDisplayText(narrativeContent);
         setIsTranslated(false);
-        setNotice("Traduction indisponible");
+        setNotice("Échec de la traduction");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-
-    return () => {
-      cancelled = true;
-    };
   }, [
-    m.id,
-    m.content,
-    m.kind,
-    m.sourceLocale,
-    viewerLocale,
-    viewerPlayerId,
-    roomId,
+    canRequestTranslation,
+    loading,
     llmEnabled,
-    isOwn,
     narrativeContent,
+    roomId,
+    viewerPlayerId,
+    viewerLocale,
+    m.sourceLocale,
+    m.id,
   ]);
 
   const body = showOriginal ? narrativeContent : displayText;
+
+  const messageSourceLocale = resolveMessageSourceLocale(m.sourceLocale, hostLocale);
+  const sourceInitials = localeInitials(m.sourceLocale, hostLocale);
+  const sourceLanguageLabel = localeLabel(messageSourceLocale);
+
+  const isTranslating = loading && canRequestTranslation;
+
+  const translationControls = (
+    <TranslationControls
+      visible={canRequestTranslation}
+      loading={loading}
+      sourceInitials={sourceInitials}
+      sourceLanguageLabel={sourceLanguageLabel}
+      notice={notice}
+      hasToggle={isTranslated && displayText !== narrativeContent}
+      showOriginal={showOriginal}
+      onTranslate={requestTranslation}
+      onToggleOriginal={() => setShowOriginal((v) => !v)}
+    />
+  );
 
   if (m.kind === "system") {
     return (
@@ -131,19 +150,14 @@ export function ChatMessageRow({
   if (m.kind === "mj") {
     return (
       <div
-        className="msg mj"
+        className={`msg mj${isTranslating ? " msg--translating" : ""}`}
         style={{ "--speaker-color": MJ_DISPLAY_COLOR } as React.CSSProperties}
       >
-        <span className="author">MJ :</span>
+        <span className="author msg-author-row">
+          MJ :
+          {translationControls}
+        </span>
         <MjMessageMarkdown content={body} />
-        <TranslationMeta
-          loading={loading}
-          isTranslated={isTranslated && !showOriginal}
-          notice={notice}
-          hasOriginal={isTranslated && m.content !== displayText}
-          showOriginal={showOriginal}
-          onToggleOriginal={() => setShowOriginal((v) => !v)}
-        />
       </div>
     );
   }
@@ -154,7 +168,7 @@ export function ChatMessageRow({
   if (m.kind === "action") {
     return (
       <div
-        className="msg action"
+        className={`msg action${isTranslating ? " msg--translating" : ""}`}
         style={{ "--speaker-color": speakerColor } as React.CSSProperties}
       >
         <span className="action-tag" aria-hidden>
@@ -171,23 +185,16 @@ export function ChatMessageRow({
             />
           )}
           {m.playerName}
+          {translationControls}
         </span>
         <span className="action-body">{body}</span>
-        <TranslationMeta
-          loading={loading}
-          isTranslated={isTranslated && !showOriginal}
-          notice={notice}
-          hasOriginal={isTranslated && m.content !== displayText}
-          showOriginal={showOriginal}
-          onToggleOriginal={() => setShowOriginal((v) => !v)}
-        />
       </div>
     );
   }
 
   return (
     <div
-      className="msg say"
+      className={`msg say${isTranslating ? " msg--translating" : ""}`}
       style={{ "--speaker-color": speakerColor } as React.CSSProperties}
     >
       <span className="author msg-author-row">
@@ -201,59 +208,86 @@ export function ChatMessageRow({
           />
         )}
         {m.playerName} :
+        {translationControls}
       </span>
       <span>{body}</span>
-      <TranslationMeta
-        loading={loading}
-        isTranslated={isTranslated && !showOriginal}
-        notice={notice}
-        hasOriginal={isTranslated && m.content !== displayText}
-        showOriginal={showOriginal}
-        onToggleOriginal={() => setShowOriginal((v) => !v)}
-      />
     </div>
   );
 }
 
-function TranslationMeta({
+function TranslationControls({
+  visible,
   loading,
-  isTranslated,
+  sourceInitials,
+  sourceLanguageLabel,
   notice,
-  hasOriginal,
+  hasToggle,
   showOriginal,
+  onTranslate,
   onToggleOriginal,
 }: {
+  visible: boolean;
   loading: boolean;
-  isTranslated: boolean;
+  sourceInitials: string;
+  sourceLanguageLabel: string;
   notice: string | null;
-  hasOriginal: boolean;
+  hasToggle: boolean;
   showOriginal: boolean;
+  onTranslate: () => void;
   onToggleOriginal: () => void;
 }) {
-  if (loading) {
-    return (
-      <span className="msg-translation-hint muted" aria-live="polite">
-        Traduction…
-      </span>
-    );
-  }
-  if (notice) {
-    return <span className="msg-translation-hint muted">{notice}</span>;
-  }
-  if (hasOriginal) {
+  if (!visible && !notice) return null;
+
+  if (hasToggle) {
     return (
       <button
         type="button"
-        className="msg-translation-original"
-        title={showOriginal ? "Voir la traduction" : "Voir l'original"}
+        className="msg-translate-btn msg-translate-btn--translated"
+        title={showOriginal ? "Voir la traduction" : `Voir l'original (${sourceLanguageLabel})`}
+        aria-label={showOriginal ? "Voir la traduction" : `Voir l'original en ${sourceLanguageLabel}`}
         onClick={onToggleOriginal}
       >
-        {showOriginal ? "🌐 traduction" : "🌐 original"}
+        <span className="msg-translate-icon" aria-hidden>
+          🌐
+        </span>
       </button>
     );
   }
-  if (isTranslated) {
-    return <span className="msg-translation-hint muted">🌐 traduit</span>;
-  }
-  return null;
+
+  const translateTitle = loading
+    ? "Traduction…"
+    : notice
+      ? notice
+      : `Traduire depuis le ${sourceLanguageLabel}`;
+
+  const btnClass = [
+    "msg-translate-btn",
+    notice ? "msg-translate-btn--error" : "msg-translate-btn--source",
+    loading ? "msg-translate-btn--loading" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <button
+      type="button"
+      className={btnClass}
+      disabled={loading}
+      aria-busy={loading}
+      title={translateTitle}
+      aria-label={translateTitle}
+      onClick={onTranslate}
+    >
+      <span className="msg-translate-initials" aria-hidden>
+        {sourceInitials}
+      </span>
+      {loading ? (
+        <span className="msg-translate-dots" aria-hidden>
+          <span />
+          <span />
+          <span />
+        </span>
+      ) : null}
+    </button>
+  );
 }

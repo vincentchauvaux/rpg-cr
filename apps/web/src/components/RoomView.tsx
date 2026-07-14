@@ -10,6 +10,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { InviteQrPanel } from "@/components/InviteQrPanel";
 import type {
   ChatMessage,
@@ -890,6 +891,8 @@ export function RoomView({ code }: Props) {
   const isAdmin = session?.role === "admin";
   const hasLlmConfig = Boolean(room?.llmConfig);
   const me = players.find((p) => p.id === session?.playerId);
+  const hostPlayer = players.find((p) => p.role === "admin");
+  const hostLocale = hostPlayer?.preferredLocale ?? "fr";
   const needsCharacter =
     me?.kind === "human" && me.characterStatus !== "ready";
   const showHostLlmSetup =
@@ -930,10 +933,9 @@ export function RoomView({ code }: Props) {
       .then((data) => setMentionCandidates(data.candidates))
       .catch(() => setMentionCandidates([]));
   }, [room?.id, session?.playerId, chatReady, players, messages.length]);
-  const showCompanionsSection = isMainView || roomSideTab === "companions";
-  const showSheetSection =
-    (isMainView || roomSideTab === "sheet") && showCharacterSheet;
-  const showSettingsSection = isMainView || roomSideTab === "settings";
+  const showCompanionsSection = roomSideTab === "companions";
+  const showSheetSection = roomSideTab === "sheet" && showCharacterSheet;
+  const showSettingsSection = roomSideTab === "settings";
   const showAssistantFocused = roomSideTab === "assistant";
   const showAssistantInline =
     isMainView &&
@@ -978,7 +980,7 @@ export function RoomView({ code }: Props) {
     return (
       <main className="layout">
         <p style={{ color: "var(--danger)" }}>{error}</p>
-        <a href="/">Retour</a>
+        <Link href="/">Retour</Link>
       </main>
     );
   }
@@ -1192,6 +1194,7 @@ export function RoomView({ code }: Props) {
                     players={players}
                     viewerPlayerId={session?.playerId ?? ""}
                     viewerLocale={viewerLocale}
+                    hostLocale={hostLocale}
                     roomId={room?.id ?? ""}
                     llmEnabled={hasLlmConfig}
                   />

@@ -10,7 +10,7 @@ const STORAGE_PREFIX = "rpg-cr-room-tab:";
 export const ROOM_HOME_TAB = {
   id: "main" as const,
   label: "Accueil",
-  title: "Vue principale (table, récit, fiche…)",
+  title: "Table, récit et conversation",
 };
 
 /** Onglets à gauche du bouton Accueil (barre dock). */

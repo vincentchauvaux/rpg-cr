@@ -8,6 +8,20 @@ export function normalizeLmStudioV1BaseUrl(baseUrl?: string): string {
   return `${raw}/v1`;
 }
 
+/**
+ * URL LM Studio utilisée par l'API serveur (Docker VPS, tunnel Mac, etc.).
+ * Si `LM_STUDIO_BASE_URL` est défini côté serveur, il prime sur `config.baseUrl`
+ * (l'UI peut continuer d'afficher 127.0.0.1:1234 pour l'hôte local).
+ */
+export function resolveLmStudioServerBaseUrl(
+  config?: { baseUrl?: string | null },
+  serverEnv?: string | null
+): string {
+  const override = serverEnv?.trim();
+  if (override) return normalizeLmStudioV1BaseUrl(override);
+  return normalizeLmStudioV1BaseUrl(config?.baseUrl ?? undefined);
+}
+
 export function lmStudioModelsEndpoint(baseUrl?: string): string {
   return `${normalizeLmStudioV1BaseUrl(baseUrl)}/models`;
 }

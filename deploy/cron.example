@@ -1,0 +1,3 @@
+# Exemple cron — sauvegarde quotidienne à 3h (sur le VPS, crontab -e)
+# Adapter le chemin du dépôt :
+# 0 3 * * * cd /home/debian/rpg-cr && bash deploy/backup.sh >> /var/log/rpg-cr-backup.log 2>&1
