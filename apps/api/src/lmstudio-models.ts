@@ -22,8 +22,12 @@ export async function fetchLmStudioModels(
   try {
     res = await fetch(modelsUrl, { signal: AbortSignal.timeout(15_000) });
   } catch (error) {
+    const hint =
+      modelsUrl.includes("host.docker.internal") || modelsUrl.includes("172.17.")
+        ? " Sur VPS : l'API doit utiliser http://127.0.0.1:1234/v1 (network_mode: host). "
+        : " Sur VPS : tunnel Mac actif ? (npm run host) LM Studio Running ? ";
     throw new Error(
-      `Impossible de joindre LM Studio (${modelsUrl}). Serveur Running ? Détail : ${
+      `Impossible de joindre LM Studio (${modelsUrl}).${hint}Détail : ${
         error instanceof Error ? error.message : "réseau"
       }`
     );
