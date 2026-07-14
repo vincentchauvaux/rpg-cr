@@ -17,27 +17,57 @@ const PLAYER_ROLL_RESPONSE_RE =
 
 const DICE_IN_TEXT_RE = /\b(d20|d12|d10|d8|d6|d4)\b|d[eé]\s*(20|12|10|8|6|4)\b/iu;
 
+/** Normalise accents/combinaisons Unicode pour matcher DEXTERITÉ, dextérité, etc. */
+function normalizeForStatMatch(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+}
+
+const EXPLICIT_ROLL_STAT_RE =
+  /jet\s+de\s+(dext[eé]rit[eé]|dexterite|force|constitution|intelligence|sagesse|charisme)\b/iu;
+
+const EXPLICIT_ROLL_STAT_MAP: Record<string, StatKey> = {
+  dexterite: "dexterite",
+  dextérité: "dexterite",
+  dex: "dexterite",
+  force: "force",
+  constitution: "constitution",
+  con: "constitution",
+  intelligence: "intelligence",
+  int: "intelligence",
+  sagesse: "sagesse",
+  sag: "sagesse",
+  charisme: "charisme",
+  cha: "charisme",
+};
+
+const CATEGORY_STAT_HINTS: { key: StatKey; re: RegExp }[] = [
+  { key: "dexterite", re: /\bchair\b/iu },
+];
+
 const STAT_ALIASES: { key: StatKey; re: RegExp }[] = [
   {
     key: "dexterite",
-    re: /\b(dex|dext[eé]rit[eé]|agilit[eé]|acrobatie|discr[eé]tion|r[eé]flexes?)\b/iu,
+    re: /\b(dexterite|dext[eé]rit[eé]|agilit[eé]|acrobatie|discr[eé]tion|r[eé]flexes?)\b/iu,
   },
-  { key: "force", re: /\b(for(?:ce)?|athl[eé]tisme|puissance)\b/iu },
+  { key: "force", re: /\b(force|athl[eé]tisme|puissance)\b/iu },
   {
     key: "constitution",
-    re: /\b(con(?:stitution)?|endurance|r[eé]sistance)\b/iu,
+    re: /\b(constitution|endurance|r[eé]sistance)\b/iu,
   },
   {
     key: "intelligence",
-    re: /\b(int(?:elligence)?|investigation|arcane|histoire)\b/iu,
+    re: /\b(intelligence|investigation|arcane|histoire)\b/iu,
   },
   {
     key: "sagesse",
-    re: /\b(sag(?:esse)?|perception|intuition|survie|m[eé]decine)\b/iu,
+    re: /\b(sagesse|perception|intuition|survie|m[eé]decine)\b/iu,
   },
   {
     key: "charisme",
-    re: /\b(cha(?:risme)?|persuasion|intimidation|représentation|diplomatie)\b/iu,
+    re: /\b(charisme|persuasion|intimidation|représentation|diplomatie)\b/iu,
   },
 ];
 
@@ -58,8 +88,21 @@ function inferDiceFromText(text: string): string {
 }
 
 function inferStatFromText(text: string): StatKey | undefined {
+  const normalized = normalizeForStatMatch(text);
+
+  const explicit = normalized.match(EXPLICIT_ROLL_STAT_RE);
+  if (explicit?.[1]) {
+    const token = explicit[1].normalize("NFD").replace(/\p{M}/gu, "");
+    const mapped = EXPLICIT_ROLL_STAT_MAP[token] ?? EXPLICIT_ROLL_STAT_MAP[explicit[1].toLowerCase()];
+    if (mapped) return mapped;
+  }
+
+  for (const { key, re } of CATEGORY_STAT_HINTS) {
+    if (re.test(normalized)) return key;
+  }
+
   for (const { key, re } of STAT_ALIASES) {
-    if (re.test(text)) return key;
+    if (re.test(normalized)) return key;
   }
   return undefined;
 }
