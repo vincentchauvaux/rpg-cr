@@ -213,9 +213,10 @@ Chemin : `apps/api/data/campaigns/{CODE}/` (override : `CAMPAIGN_DATA_DIR`).
 | **Doublon WS** | `registerClient` ferme l’ancien socket du même `playerId` ; `unregisterClient` ne marque offline que s’il n’y a plus d’autre socket ouvert |
 | **Tab close / veille / réseau** | WS `close` → offline côté liste compagnons ; reprise : même URL `/salon/:code` + session intacte → reconnect + `GET /api/rooms/:code` |
 | **Rejoindre (accueil)** | Si graine ou session locale pour ce code → **reprise** (`playerId` existant), pas de `INSERT` joueur ; sinon `POST …/join` crée un humain `draft` |
+| **Rejoindre (lien / QR)** | `/salon/:code` → `SalonRoomClient` : session ou graine locale → `RoomView` ; sinon formulaire **Entrer dans le salon** (nom + `POST …/join`) — indispensable pour invités externes sans session |
 | **API rejoin** | `POST …/join` body optionnel `{ playerId }` → reprend le joueur (pas de message système « a rejoint ») |
 | **Joueur fantôme** | Évité : ne pas refaire « Rejoindre » sans graine ; préférer **Mes graines → Reprendre** ou lien direct salon |
-| **Session invalide** | `RoomView` : si `playerId` absent de la liste après `GET` → message + `clearSession()` |
+| **Session invalide** | `RoomView` : si `playerId` absent de la liste après `GET` → message + `clearSession()` ; sans session/graine, `SalonRoomClient` affiche le formulaire d’entrée (pas d’erreur « rejoignez depuis l’accueil ») |
 | **MJ bloqué** | Snapshot `mj_status` à la reconnexion WS + **`mjStatus` dans GET salon** ; garde-fou client 3 min ; heuristique ouverture campagne si prep sans récit ; `syncRoomFromApi` ne force plus `thinking: false` hors resync |
 | **Quitter vs déconnect** | Déconnect = WS coupé, campagne intacte, session conservée. **Sauvegarder et quitter** = snapshot `.md` + `presence: leaving` + `clearSession()` + accueil |
 
@@ -628,7 +629,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
     - `__gcrremoteframetoken` sur `<html>` (remote preview Cursor)
     - `__gcruniqueid` sur `<input>` (Chrome mobile, assistant Google, ou outils Cursor) — typiquement formulaire **Créer un salon** à l’accueil
   - `suppressHydrationWarning` sur `<html>` et `<body>` : `apps/web/src/app/layout.tsx`.
-  - **Salon** `/salon/[code]` : `SalonRoomClient.tsx` → `RoomView` en `dynamic(..., { ssr: false })`.
+  - **Salon** `/salon/[code]` : `SalonRoomClient.tsx` — porte d’entrée (session/graine → `RoomView` ; sinon formulaire invité) ; `RoomView` en `dynamic(..., { ssr: false })`.
   - **Accueil** `/` : `page.tsx` (RSC) → `HomePageClient.tsx` → `HomePageContent` en `dynamic` `ssr: false` ; formulaires créer/rejoindre aussi `suppressHydrationWarning` ; `PlaceholderInput` ne rend le vrai `<input>` qu’après `mounted` (`useEffect`).
   - Noms aléatoires : `use-random-suggestions.ts` (`useEffect`), jamais `Math.random` au premier rendu SSR.
   - **QR** : `InviteQrPanel` + `qrcode.react` en `dynamic` `ssr: false` ; URL via `roomJoinLink` dans `useEffect` uniquement.

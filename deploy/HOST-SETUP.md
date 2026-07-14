@@ -39,6 +39,7 @@ Guide complet : [LMSTUDIO-VPS.md](./LMSTUDIO-VPS.md)
 
 - Lien : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/salon/CODE`
 - QR code : god mode → panneau admin → invitation.
+- L’invité ouvre le lien → formulaire **Entrer dans le salon** (nom du personnage) — pas besoin de passer par l’accueil.
 
 ## Dépannage rapide
 
