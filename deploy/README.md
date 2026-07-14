@@ -97,7 +97,8 @@ Sans Nginx : ouvrir 3000/4000, utiliser `docker-compose.yml` et laisser `NEXT_PU
 
 ```
 HTTPS :443 (Nginx)
-  /rpg-cr/      → 127.0.0.1:3010/  (Next.js — Nginx retire le préfixe, basePath dans les assets)
+  /rpg-cr/      → 127.0.0.1:3010/rpg-cr/  (Next.js — conserver le préfixe pour SSR salon)
+  /salon/…      → 301 vers /rpg-cr/salon/…  (liens d'invitation sans préfixe)
   /rpg-cr/api/  → 127.0.0.1:4010  (Fastify)
   /rpg-cr/ws    → 127.0.0.1:4010  (WebSocket)
   /rpg-cr/health → 127.0.0.1:4010/health

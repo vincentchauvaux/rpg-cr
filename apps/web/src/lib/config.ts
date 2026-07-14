@@ -112,12 +112,13 @@ export function wsUrl(
 }
 
 export function roomJoinLink(code: string): string {
+  const path = withBasePath(`/salon/${code}/`);
   if (typeof window !== "undefined") {
-    return `${window.location.origin}${withBasePath(`/salon/${code}`)}`;
+    return `${window.location.origin}${path}`;
   }
   const app =
     process.env.NEXT_PUBLIC_APP_URL ??
     `http://localhost:${process.env.NEXT_PUBLIC_WEB_PORT ?? "3000"}`;
   const base = app.replace(/\/$/, "");
-  return `${base}${withBasePath(`/salon/${code}`)}`;
+  return `${base}${path}`;
 }

@@ -1,4 +1,4 @@
-import { SalonRoomClient } from "./SalonRoomClient";
+import { SalonPageShell } from "./SalonPageShell";
 
 export default async function SalonPage({
   params,
@@ -6,5 +6,5 @@ export default async function SalonPage({
   params: Promise<{ code: string }>;
 }) {
   const { code } = await params;
-  return <SalonRoomClient code={code} />;
+  return <SalonPageShell code={code} />;
 }

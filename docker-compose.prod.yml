@@ -41,6 +41,7 @@ services:
       - "127.0.0.1:${WEB_PORT:-3010}:3000"
     environment:
       - NODE_ENV=production
+      - NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH:-/rpg-cr}
       - AUTH_SECRET=${AUTH_SECRET:-}
       - AUTH_URL=${AUTH_URL:-https://vps-e09ed6db.vps.ovh.net/rpg-cr}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
@@ -54,7 +55,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+          "node -e \"const bp=(process.env.NEXT_PUBLIC_BASE_PATH||'').replace(/\\/$/,'');fetch('http://127.0.0.1:3000'+bp+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
         ]
       interval: 30s
       timeout: 10s

@@ -45,6 +45,7 @@ Guide complet : [LMSTUDIO-VPS.md](./LMSTUDIO-VPS.md)
 
 | Problème | Action |
 |----------|--------|
+| **404 `_next/*.js` / `.css` sur lien salon** | Nginx : `proxy_pass http://127.0.0.1:3010/rpg-cr/` (ne pas retirer le préfixe) ; `sudo cp deploy/nginx-rpg-cr.conf.example /etc/nginx/snippets/rpg-cr.conf && sudo nginx -t && sudo systemctl reload nginx` ; `bash deploy/deploy.sh` |
 | **404 Next.js** | `bash deploy/check-vps.sh` — Docker + Nginx + `.env` manquants ; URL avec `/` final |
 | 502 / page blanche | `docker compose -f docker-compose.prod.yml logs web api` ; `df -h` |
 | API injoignable | `curl http://127.0.0.1:4010/health` puis Nginx `nginx -t` |

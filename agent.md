@@ -629,7 +629,8 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
     - `__gcrremoteframetoken` sur `<html>` (remote preview Cursor)
     - `__gcruniqueid` sur `<input>` (Chrome mobile, assistant Google, ou outils Cursor) — typiquement formulaire **Créer un salon** à l’accueil
   - `suppressHydrationWarning` sur `<html>` et `<body>` : `apps/web/src/app/layout.tsx`.
-  - **Salon** `/salon/[code]` : `SalonRoomClient.tsx` — porte d’entrée (session/graine → `RoomView` ; sinon formulaire invité) ; `RoomView` en `dynamic(..., { ssr: false })`.
+  - **Salon** `/salon/[code]` : `SalonPageShell` (AuthProvider) → `SalonRoomClient` — porte d’entrée invité ; `RoomView` en `dynamic(..., { ssr: false })`.
+  - **Prod Nginx** : `proxy_pass …/rpg-cr/` (conserver le préfixe) — sinon routes dynamiques salon émettent `/_next/…` au lieu de `/rpg-cr/_next/…` → 404 assets pour les invités.
   - **Accueil** `/` : `page.tsx` (RSC) → `HomePageClient.tsx` → `HomePageContent` en `dynamic` `ssr: false` ; formulaires créer/rejoindre aussi `suppressHydrationWarning` ; `PlaceholderInput` ne rend le vrai `<input>` qu’après `mounted` (`useEffect`).
   - Noms aléatoires : `use-random-suggestions.ts` (`useEffect`), jamais `Math.random` au premier rendu SSR.
   - **QR** : `InviteQrPanel` + `qrcode.react` en `dynamic` `ssr: false` ; URL via `roomJoinLink` dans `useEffect` uniquement.

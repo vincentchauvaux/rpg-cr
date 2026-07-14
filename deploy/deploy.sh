@@ -57,7 +57,7 @@ done
 echo "==> Vérifications locales"
 curl -sf "http://127.0.0.1:${API_PORT}/health" | head -c 80
 echo ""
-WEB_PATH="/"
+WEB_PATH="${BASE_PATH}/"
 HTTP_WEB="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${WEB_PORT}${WEB_PATH}" 2>/dev/null || echo "000")"
 echo "Web HTTP ${HTTP_WEB} (http://127.0.0.1:${WEB_PORT}${WEB_PATH})"
 
