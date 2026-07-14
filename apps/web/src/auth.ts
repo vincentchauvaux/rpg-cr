@@ -2,10 +2,10 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { withBasePath } from "@/lib/config";
 
-/** Montage interne (Nginx retire /rpg-cr avant le conteneur web). */
-export const AUTH_BASE_PATH = "/api/auth";
+/** Chemin Auth.js (aligné sur Next.js basePath en prod). */
+export const AUTH_BASE_PATH = withBasePath("/api/auth");
 /** Chemin public (navigateur + Google redirect URI). */
-export const AUTH_PUBLIC_BASE_PATH = withBasePath("/api/auth");
+export const AUTH_PUBLIC_BASE_PATH = AUTH_BASE_PATH;
 
 async function syncUserToApi(profile: {
   googleSub: string;
@@ -45,7 +45,6 @@ async function syncUserToApi(profile: {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
-  /** Montage interne (Nginx retire /rpg-cr) — URLs OAuth publiques via repli Nginx /api/auth/ */
   basePath: AUTH_BASE_PATH,
   providers: [
     Google({
