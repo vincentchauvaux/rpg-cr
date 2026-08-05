@@ -1,9 +1,16 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
 import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel } from "@rpg-cr/shared";
 import { initDb } from "./db.js";
+import {
+  API_SECURITY_HEADERS,
+  assertSafeLocalLlmFetchUrl,
+  requireRoomMember,
+  resolveCorsOrigins,
+} from "./security.js";
 import {
   getUserById,
   linkPlayerToUser,
@@ -121,12 +128,25 @@ const PORT = Number(process.env.PORT ?? 4000);
 const HOST = process.env.HOST ?? "0.0.0.0";
 
 await app.register(cors, {
-  origin: true,
+  origin: resolveCorsOrigins(),
   methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+});
+await app.register(rateLimit, {
+  global: true,
+  max: Number(process.env.RATE_LIMIT_MAX ?? 240),
+  timeWindow: "1 minute",
+  allowList: (req) => req.url === "/health" || req.url.startsWith("/health?"),
 });
 await app.register(websocket);
 await app.register(multipart, {
   limits: { fileSize: AVATAR_MAX_BYTES, files: 1 },
+});
+
+app.addHook("onSend", async (_req, reply, payload) => {
+  for (const [key, value] of Object.entries(API_SECURITY_HEADERS)) {
+    if (!reply.hasHeader(key)) reply.header(key, value);
+  }
+  return payload;
 });
 
 initDb();
@@ -145,7 +165,9 @@ app.post<{
     displayName: string;
     avatarUrl?: string | null;
   };
-}>("/api/auth/sync", async (req, reply) => {
+}>("/api/auth/sync", {
+  config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+}, async (req, reply) => {
   if (!requireAuthInternal(req)) {
     return reply.status(401).send({ error: "Non autorisé" });
   }
@@ -165,11 +187,24 @@ app.post<{
 app.get<{ Params: { userId: string } }>("/api/users/:userId", async (req, reply) => {
   const user = getUserById(req.params.userId);
   if (!user) return reply.status(404).send({ error: "Utilisateur introuvable" });
-  return { user };
+  // Pas d'e-mail en clair sur l'API publique (RGPD — minimisation)
+  return {
+    user: {
+      id: user.id,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      createdAt: user.createdAt,
+    },
+  };
 });
 
 app.get<{ Params: { userId: string } }>(
   "/api/users/:userId/grains",
+  {
+    config: {
+      rateLimit: { max: 60, timeWindow: "1 minute" },
+    },
+  },
   async (req, reply) => {
     const user = getUserById(req.params.userId);
     if (!user) return reply.status(404).send({ error: "Utilisateur introuvable" });
@@ -180,11 +215,17 @@ app.get<{ Params: { userId: string } }>(
 app.post<{
   Params: { playerId: string };
   Body: { userId: string };
-}>("/api/players/:playerId/link-user", async (req, reply) => {
+}>("/api/players/:playerId/link-user", {
+  config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+}, async (req, reply) => {
   const user = getUserById(req.body?.userId ?? "");
   const player = getPlayerById(req.params.playerId);
   if (!user || !player) {
     return reply.status(404).send({ error: "Joueur ou utilisateur introuvable" });
+  }
+  // Empêche de réassigner un joueur déjà lié à un autre compte
+  if (player.userId && player.userId !== user.id) {
+    return reply.status(403).send({ error: "Ce personnage est déjà lié à un autre compte" });
   }
   linkPlayerToUser(player.id, user.id);
   const updated = getPlayerById(player.id);
@@ -197,17 +238,22 @@ app.get("/api/llm/catalog", async () => LLM_CATALOG);
 
 app.get<{ Querystring: { baseUrl?: string } }>(
   "/api/llm/lmstudio/models",
+  {
+    config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+  },
   async (req, reply) => {
     const baseUrl = resolveLmStudioServerBaseUrl(
       { baseUrl: req.query.baseUrl },
       process.env.LM_STUDIO_BASE_URL
     );
     try {
+      assertSafeLocalLlmFetchUrl(baseUrl);
       const result = await fetchLmStudioModels(baseUrl);
       return result;
     } catch (e) {
       const err = e instanceof Error ? e.message : "Erreur LM Studio";
-      return reply.status(502).send({ error: err });
+      const status = /SSRF|non autorisé|invalide/i.test(err) ? 400 : 502;
+      return reply.status(status).send({ error: err });
     }
   }
 );
@@ -241,6 +287,9 @@ app.get("/api/llm/tunnel-status", async (_req, reply) => {
 
 app.post<{ Body: { name: string; adminName: string; userId?: string } }>(
   "/api/rooms",
+  {
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+  },
   async (req, reply) => {
     const { name, adminName, userId } = req.body ?? {};
     if (!name?.trim() || !adminName?.trim()) {
@@ -277,7 +326,9 @@ app.get<{ Params: { code: string } }>("/api/rooms/:code", async (req, reply) => 
 app.post<{
   Params: { id: string };
   Body: { playerName: string; playerId?: string; userId?: string };
-}>("/api/rooms/:id/join", async (req, reply) => {
+}>("/api/rooms/:id/join", {
+  config: { rateLimit: { max: 40, timeWindow: "1 minute" } },
+}, async (req, reply) => {
   const { playerName, playerId: existingPlayerId, userId } = req.body ?? {};
   if (!playerName?.trim()) {
     return reply.status(400).send({ error: "playerName requis" });
@@ -391,11 +442,12 @@ app.put<{
   const room = getRoomById(req.params.roomId);
   if (!room) return reply.status(404).send({ error: "Salon introuvable" });
   const actorId = req.body.playerId?.trim();
-  if (actorId) {
-    const actor = listPlayers(room.id).find((p) => p.id === actorId);
-    if (!canConfigureRoomLlm(actor)) {
-      return reply.status(403).send({ error: "Réservé à l'hôte du salon" });
-    }
+  if (!actorId) {
+    return reply.status(400).send({ error: "playerId requis" });
+  }
+  const actor = listPlayers(room.id).find((p) => p.id === actorId);
+  if (!canConfigureRoomLlm(actor)) {
+    return reply.status(403).send({ error: "Réservé à l'hôte du salon" });
   }
   const config = req.body.llmConfig;
   if (config?.modelId?.trim()) {
@@ -586,11 +638,21 @@ app.get<{ Querystring: { codes?: string } }>(
   }
 );
 
-app.get<{ Params: { roomId: string } }>(
+app.get<{
+  Params: { roomId: string };
+  Querystring: { actorPlayerId?: string };
+}>(
   "/api/rooms/:roomId/export",
+  {
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+  },
   async (req, reply) => {
     const room = getRoomById(req.params.roomId);
     if (!room) return reply.status(404).send({ error: "Salon introuvable" });
+    const actor = requireRoomMember(room.id, req.query.actorPlayerId);
+    if (!actor) {
+      return reply.status(403).send({ error: "Membre du salon requis (actorPlayerId)" });
+    }
     try {
       const result = exportCampaign(room.id);
       return result;
@@ -601,11 +663,21 @@ app.get<{ Params: { roomId: string } }>(
   }
 );
 
-app.post<{ Params: { roomId: string } }>(
+app.post<{
+  Params: { roomId: string };
+  Body: { actorPlayerId?: string };
+}>(
   "/api/rooms/:roomId/snapshot",
+  {
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+  },
   async (req, reply) => {
     const room = getRoomById(req.params.roomId);
     if (!room) return reply.status(404).send({ error: "Salon introuvable" });
+    const actor = requireRoomMember(room.id, req.body?.actorPlayerId);
+    if (!actor) {
+      return reply.status(403).send({ error: "Membre du salon requis (actorPlayerId)" });
+    }
     try {
       const result = exportCampaign(room.id);
       return { ok: true, ...result };
@@ -1525,7 +1597,6 @@ app.register(async function wsRoutes(f) {
     const url = new URL(req.url ?? "", `http://${req.headers.host}`);
     const roomId = url.searchParams.get("roomId");
     const playerId = url.searchParams.get("playerId");
-    const playerName = url.searchParams.get("playerName") ?? "Voyageur";
 
     if (!roomId || !playerId) {
       socket.close(4000, "roomId et playerId requis");
@@ -1537,6 +1608,14 @@ app.register(async function wsRoutes(f) {
       socket.close(4004, "Salon introuvable");
       return;
     }
+
+    const player = getPlayerById(playerId);
+    if (!player || player.roomId !== roomId) {
+      socket.close(4003, "Joueur non membre de ce salon");
+      return;
+    }
+    // Nom depuis la DB — pas de spoofing via query string
+    const playerName = player.name || "Voyageur";
 
     registerClient(socket, roomId, playerId, playerName);
     broadcastPlayers(roomId, listPlayers(roomId));

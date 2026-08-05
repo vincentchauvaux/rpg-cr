@@ -934,7 +934,7 @@ export function RoomView({ code }: Props) {
     setLeaving(true);
     setError(null);
     try {
-      await snapshotCampaign(room.id);
+      await snapshotCampaign(room.id, session.playerId);
       rememberGrain({
         roomId: session.roomId,
         roomCode: session.roomCode,

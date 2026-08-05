@@ -7,6 +7,14 @@
 #   include snippets/rpg-cr.conf;
 #   sudo nginx -t && sudo systemctl reload nginx
 
+# En-têtes de sécurité (always = aussi sur réponses proxifiées)
+# HSTS : uniquement si tout le site est en HTTPS
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
 # Redirection /rpg-cr → /rpg-cr/ (obligatoire pour Next.js basePath)
 location = /rpg-cr {
     return 301 $scheme://$host/rpg-cr/;

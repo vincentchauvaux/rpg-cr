@@ -311,23 +311,33 @@ export function listCampaigns(codes: string[]): Promise<{ campaigns: CampaignSum
   return fetchJson(`/api/campaigns?codes=${q}`);
 }
 
-export function snapshotCampaign(roomId: string): Promise<{
+export function snapshotCampaign(
+  roomId: string,
+  actorPlayerId: string
+): Promise<{
   ok: boolean;
   dir: string;
   roomCode: string;
   files: string[];
   exportedAt: string;
 }> {
-  return fetchJson(`/api/rooms/${roomId}/snapshot`, { method: "POST" });
+  return fetchJson(`/api/rooms/${roomId}/snapshot`, {
+    method: "POST",
+    body: JSON.stringify({ actorPlayerId }),
+  });
 }
 
-export function exportCampaign(roomId: string): Promise<{
+export function exportCampaign(
+  roomId: string,
+  actorPlayerId: string
+): Promise<{
   dir: string;
   roomCode: string;
   files: string[];
   exportedAt: string;
 }> {
-  return fetchJson(`/api/rooms/${roomId}/export`);
+  const q = encodeURIComponent(actorPlayerId);
+  return fetchJson(`/api/rooms/${roomId}/export?actorPlayerId=${q}`);
 }
 
 export function patchPlayerMeta(

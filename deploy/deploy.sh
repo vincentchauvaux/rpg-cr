@@ -42,6 +42,17 @@ fi
 echo "==> Build et démarrage (web ${WEB_PORT}, api ${API_PORT}, basePath ${BASE_PATH})"
 docker compose -f "${COMPOSE_FILE}" up -d --build
 
+# Rafraîchir le snippet Nginx si déjà installé (en-têtes sécurité, etc.)
+if [[ -f /etc/nginx/snippets/rpg-cr.conf ]] && [[ -f deploy/nginx-rpg-cr.conf.example ]]; then
+  echo "==> Mise à jour snippet Nginx /etc/nginx/snippets/rpg-cr.conf"
+  cp deploy/nginx-rpg-cr.conf.example /etc/nginx/snippets/rpg-cr.conf
+  if nginx -t 2>/dev/null; then
+    systemctl reload nginx || true
+  else
+    echo "Attention : nginx -t a échoué — snippet copié mais Nginx non rechargé."
+  fi
+fi
+
 echo "==> Attente santé API (127.0.0.1:${API_PORT})"
 for i in $(seq 1 30); do
   if curl -sf "http://127.0.0.1:${API_PORT}/health" >/dev/null 2>&1; then

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { CookieNotice } from "@/components/CookieNotice";
 
 export const metadata: Metadata = {
   title: "RPG-CR — Salon JDR",
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr" suppressHydrationWarning>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        {children}
+        <CookieNotice />
+      </body>
     </html>
   );
 }

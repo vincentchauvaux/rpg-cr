@@ -29,6 +29,7 @@ import {
   PlaceholderInput,
   resolvePlaceholderValue,
 } from "@/components/PlaceholderInput";
+import { SiteLegalFooter } from "@/components/SiteLegalFooter";
 
 function formatActivity(iso: string | null): string {
   if (!iso) return "—";
@@ -436,6 +437,7 @@ export function HomePageContent() {
           </div>
         )}
       </div>
+      <SiteLegalFooter />
     </main>
   );
 }

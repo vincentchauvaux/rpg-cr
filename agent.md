@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-07-14 (jets de dés — résultat chiffré + résolution MJ)
+> Dernière mise à jour : 2026-08-05 (sécurité API + pages légales RGPD/LCEN)
 
 ## Vision
 
@@ -608,6 +608,23 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Variables** (`.env` VPS, **jamais commitées**) : `AUTH_SECRET`, `AUTH_URL=https://…/rpg-cr` (racine app, pas `/api/auth`), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_INTERNAL_SECRET`, `API_INTERNAL_URL=http://127.0.0.1:4010`.
 - **Anonyme** : créer/rejoindre sans compte reste possible.
 
+## Sécurité & légal (MVP)
+
+### Sécurité API / front
+- **CORS** : `resolveCorsOrigins()` (`apps/api/src/security.ts`) — en prod, allowlist `CORS_ORIGINS` ou `AUTH_URL` / `NEXT_PUBLIC_APP_URL` ; en dev, reflet d'origine.
+- **Rate limit** : `@fastify/rate-limit` global (défaut 240/min, `RATE_LIMIT_MAX`) + plafonds plus bas sur create/join/LLM models/export/auth sync.
+- **Headers** : API (`X-Content-Type-Options`, `X-Frame-Options DENY`, `Referrer-Policy`, `Permissions-Policy`) ; Next.js `headers()` + CSP basique ; Nginx snippet HSTS + mêmes garde-fous (`deploy/nginx-rpg-cr.conf.example`, recopié au `deploy.sh`).
+- **SSRF** : `assertSafeLocalLlmFetchUrl` — liste modèles LLM limitée au loopback / Docker.
+- **PUT `/llm`** : `playerId` **obligatoire** + `canConfigureRoomLlm`.
+- **Export / snapshot** : `actorPlayerId` membre du salon requis.
+- **Users** : GET profil sans e-mail ; `link-user` refuse de réassigner un PJ déjà lié ailleurs.
+- **WebSocket** : le `playerId` doit appartenir au `roomId` ; nom pris en base (pas de spoofing query).
+
+### Pages légales
+- Routes : `/mentions-legales/`, `/confidentialite/`, `/cgu/` (+ footer accueil, bandeau cookies informatif).
+- Identité éditeur via env : `LEGAL_PUBLISHER_NAME`, `LEGAL_PUBLISHER_ADDRESS`, `LEGAL_CONTACT_EMAIL`, etc. (`apps/web/src/lib/legal.ts`) — **à renseigner** avant ouverture publique.
+- Cookies Auth.js documentés comme strictement nécessaires (pas d'analytics tiers).
+
 ## Roadmap v2
 
 - Auth persistante / comptes SaaS et facturation LLM *(MVP Google OAuth livré — voir section Comptes joueurs)*
@@ -616,7 +633,8 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - Édition carte + journal côté MJ dans l’UI
 - Postgres, Redis pour scale multi-instances
 - HTTPS / reverse proxy Nginx (Traefik) documenté pour OVH
-- Tests e2e, rate limiting, chiffrement clés API côté serveur
+- Token salon signé (API/WS), chiffrement clés API cloud, suppression compte self-service, codes salon plus longs / anti brute-force
+- Tests e2e
 
 ## Conventions
 
