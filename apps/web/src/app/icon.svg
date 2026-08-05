@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#0f1419"/>
+  <path
+    fill="#c9a227"
+    stroke="#8b6914"
+    stroke-width="0.55"
+    stroke-linejoin="round"
+    d="M16 3.2 26.8 10.4 23.2 24.2 8.8 24.2 5.2 10.4 Z"
+  />
+  <path
+    fill="none"
+    stroke="#1a1510"
+    stroke-width="0.8"
+    stroke-linejoin="round"
+    d="M16 3.2 16 12.2 5.2 10.4M16 3.2 16 12.2 26.8 10.4M5.2 10.4 16 12.2 8.8 24.2M26.8 10.4 16 12.2 23.2 24.2M16 12.2 16 28.4M8.8 24.2 16 28.4 23.2 24.2"
+  />
+  <text
+    x="16"
+    y="20.3"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="7.8"
+    font-weight="700"
+    fill="#1a1510"
+  >20</text>
+</svg>
