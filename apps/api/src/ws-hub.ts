@@ -1,5 +1,10 @@
 import type { WebSocket } from "ws";
-import type { ChatMessage, Player, SceneState } from "@rpg-cr/shared";
+import type {
+  ChatMessage,
+  Player,
+  SceneCheckPublic,
+  SceneState,
+} from "@rpg-cr/shared";
 import {
   enrichPlayersWithPresence,
   markPlayerConnected,
@@ -272,6 +277,13 @@ export function broadcastMjStatus(
 
 export function broadcastScene(roomId: string, scene: SceneState): void {
   broadcastToRoom(roomId, { type: "scene", scene });
+}
+
+export function broadcastSceneCheck(
+  roomId: string,
+  sceneCheck: SceneCheckPublic | null
+): void {
+  broadcastToRoom(roomId, { type: "scene_check", sceneCheck });
 }
 
 export function broadcastCharacterGenProgress(

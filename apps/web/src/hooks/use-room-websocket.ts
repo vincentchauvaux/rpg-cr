@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, type RefObject } from "react";
-import type { ChatMessage, Player, SceneState } from "@rpg-cr/shared";
+import type { ChatMessage, Player, SceneCheckPublic, SceneState } from "@rpg-cr/shared";
 import { wsUrl } from "@/lib/config";
 
 const PING_INTERVAL_MS = 25_000;
@@ -18,7 +18,8 @@ export type RoomWsEvent =
       background?: boolean;
       phase?: "opening" | "turn";
     }
-  | { type: "scene"; scene: SceneState };
+  | { type: "scene"; scene: SceneState }
+  | { type: "scene_check"; sceneCheck: SceneCheckPublic | null };
 
 interface Options {
   roomId: string | null;
@@ -123,7 +124,8 @@ export function useRoomWebSocket({
             data.type === "message" ||
             data.type === "players" ||
             data.type === "mj_status" ||
-            data.type === "scene"
+            data.type === "scene" ||
+            data.type === "scene_check"
           ) {
             onEventRef.current(data);
           }

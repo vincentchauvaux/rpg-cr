@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-08 (Groq + Gemini cloud)
+> Dernière mise à jour : 2026-09-08 (choix de scène cliquables, jets D&D 5e)
 
 ## Vision
 
@@ -21,7 +21,7 @@ Application SaaS de salons JDR rejoinables, avec MJ IA (LLM marché + fallback L
 
 1. **Structure** — racine : `package.json`, `package-lock.json`, `tsconfig.base.json`, `.gitignore`, `.env.example`, `Dockerfile`, `docker-compose.yml`, README ; workspaces `apps/*`, `packages/*` ; ce fichier
 2. **API salons** — `POST /api/rooms`, `GET /api/rooms/:code`, `POST /api/rooms/:id/join`, liste joueurs
-3. **WebSocket** — `/ws?roomId&playerId&playerName`, broadcast messages et joueurs ; ping/pong ; reconnexion client + resync API
+3. **WebSocket** — `/ws?roomId&playerId&playerName`, broadcast messages, joueurs, scène, **épreuves de table** (`scene_check`) ; ping/pong ; reconnexion client + resync API
 4. **Interface** — accueil créer/rejoindre, page `/salon/[code]`, QR + lien, switch god mode (admin) ; **favicon** dé D20 or (`apps/web/src/app/icon.svg` + `apple-icon.tsx`)
    - **Création salon** : noms salon/hôte proposés aléatoirement (utilisables sans saisie) ; clic efface pour taper ; bouton 🎲 par champ + « Tout relancer » ; `markHostLlmSetupPending(roomId)` à la création
    - **Onboarding hôte (graine)** : après création/reprise salon, tant que la fiche n'est pas `ready` — `HostSetupWizard` (**étape 1/2**) bloque le chat et le wizard PJ : `AdminLlmForm` (`collapseOnSave={false}`, `configPersisted={hasLlmConfig}`) + bouton **Tester la connexion** visible sous le formulaire ; enregistrement `PUT /api/rooms/:id/llm` puis **test** `POST …/llm/test` obligatoire avant « Continuer » ; `localStorage` `rpg-cr-host-llm-setup:{roomId}=done` + `CharacterCreationWizard` (**étape 2/2**). Joueurs non-hôte : inchangés. Pendant l'étape 1, le formulaire LLM du god mode est masqué (évite doublon).
@@ -152,6 +152,24 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 
 **Exemple** : « ils attendent ta réponse » ✓ — « la princesse attend ta réponse » ✗ si aucune princesse établie.
 - Mode Action : menu « Utiliser… » (sorts/objets/actions de la fiche + **jet de dé** auto si le dernier message MJ demande un lancer — ex. bouton `🎲 d20 dex` ; détection `jet de DEXTERITÉ` / `(CHAIR)` avec normalisation Unicode (`action-quick-suggestions.ts`). Au clic, tirage aléatoire + message `Je lance un d20 sur ma dextérité : 14 +2 = 16.` (`dice-roll.ts`). Hint UI : les **+2/0/−2** du MJ = trois **issues** narratives ; le **(+X)** sur le jet = bonus de caractéristique (DEX 15 → +2). Si le message action contient un résultat chiffré, `mj-auto.ts` passe `pendingRollRequest` au prompt MJ (`builders/player-action.ts`) pour **résolution obligatoire** de l'issue annoncée.
+
+### Choix de scène cliquables (épreuves D&D 5e)
+
+Les listes markdown (`- …`) du **dernier** récit MJ (2–8 items) sont des **boutons**. Un clic n'envoie pas un Dire : le serveur lance une **épreuve de table** (dés côté API, équité).
+
+| Élément | Détail |
+|---------|--------|
+| Parse + inférence | `packages/shared/src/scene-choice.ts` — dernière liste ; carac/compétence selon le libellé (chercher → INT Investigation, explorer → SAG Perception, convaincre → CHA Persuasion contesté, etc.) ; DD 10–15 selon la tension de scène |
+| Jets | `packages/shared/src/scene-check.ts` — d20 + modificateur de fiche `(score-10)/2` ; 20/1 = saveur, pas d'auto-réussite RAW |
+| Aide | Autres PJ : **Aider** (jet, souvent Perception) ; total ≥ 10 → **avantage** à l'acteur (2d20, le plus haut) — l'avantage ne se cumule pas |
+| Opposition | **S'opposer** = jet contesté (Persuasion vs Perspicacité, Discrétion vs Perception, sinon même carac). Mode « opposed » (social/combat) : le **monde** jette aussi `d20 + worldMod` |
+| Fenêtre | 1 humain à la table → résolution **immédiate** ; sinon **18 s** pour aider/opposer ; l'acteur peut **Lancer maintenant** |
+| API | `POST /api/rooms/:roomId/scene-checks` `{ actorPlayerId, sourceMessageId, choice }` ; `…/:checkId/join` `{ stance: help\|oppose }` ; `…/:checkId/resolve` ; `GET /api/rooms/:code` + WS `{ type: "scene_check", sceneCheck }` |
+| Mémoire | In-memory par salon (comme le verrou fill-all) — pas de SQLite |
+| MJ | Un seul message **Action** agrégé (`Je lance un d20…` + totaux + `Résultat`) puis **un** `scheduleActionMj` — la file LLM ne voit pas N tours d'aide |
+| UI | `MjMessageMarkdown` (li cliquables, désactivés si traduction) ; `SceneCheckBanner` (Aider / S'opposer / Lancer maintenant) |
+| Prompt | `system-prompt.ts` : proposer 2–3 options en liste `-` ; ne pas inventer les dés. `player-action.ts` : si `Jet D&D 5e`, narrer uniquement selon les totaux |
+
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.
 
    - **Ollama (VPS)** : provider dédié, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` (RAM-safe) — optionnel `qwen3:8b` / `qwen3:14b` si 16 Go+ ; install `deploy/ollama-setup.sh`, pas de tunnel Mac

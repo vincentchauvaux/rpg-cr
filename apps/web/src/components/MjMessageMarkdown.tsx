@@ -1,9 +1,26 @@
 "use client";
 
 import type { Components } from "react-markdown";
+import { useMemo, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
+import { matchChoice } from "@rpg-cr/shared";
 
-const MJ_MARKDOWN_COMPONENTS: Components = {
+function markdownChildrenToText(children: ReactNode): string {
+  if (children == null || typeof children === "boolean") return "";
+  if (typeof children === "string" || typeof children === "number") {
+    return String(children);
+  }
+  if (Array.isArray(children)) {
+    return children.map(markdownChildrenToText).join("");
+  }
+  if (typeof children === "object" && children !== null && "props" in children) {
+    const el = children as { props?: { children?: ReactNode } };
+    return markdownChildrenToText(el.props?.children);
+  }
+  return "";
+}
+
+const BASE_COMPONENTS: Components = {
   h2: ({ children }) => <h2 className="chat-msg-mj-h2">{children}</h2>,
   h3: ({ children }) => <h3 className="chat-msg-mj-h3">{children}</h3>,
   p: ({ children }) => <p>{children}</p>,
@@ -20,12 +37,57 @@ const MJ_MARKDOWN_COMPONENTS: Components = {
 
 interface Props {
   content: string;
+  choices?: string[];
+  choicesClickable?: boolean;
+  choicesDisabled?: boolean;
+  activeChoice?: string;
+  onChoiceClick?: (choice: string) => void;
 }
 
 /** Récit MJ en markdown sûr (pas de HTML brut). */
-export function MjMessageMarkdown({ content }: Props) {
+export function MjMessageMarkdown({
+  content,
+  choices = [],
+  choicesClickable = false,
+  choicesDisabled = false,
+  activeChoice,
+  onChoiceClick,
+}: Props) {
+  const interactive = choicesClickable && choices.length > 0 && Boolean(onChoiceClick);
+
+  const components = useMemo<Components>(() => {
+    if (!interactive) return BASE_COMPONENTS;
+
+    return {
+      ...BASE_COMPONENTS,
+      ul: ({ children }) => <ul className="mj-choice-list">{children}</ul>,
+      ol: ({ children }) => <ol className="mj-choice-list">{children}</ol>,
+      li: ({ children }) => {
+        const text = markdownChildrenToText(children).trim();
+        const choice = matchChoice(choices, text);
+        if (!choice) return <li>{children}</li>;
+
+        const isActive =
+          Boolean(activeChoice) &&
+          Boolean(matchChoice([activeChoice ?? ""], choice));
+        return (
+          <li className={isActive ? "mj-choice mj-choice--active" : "mj-choice"}>
+            <button
+              type="button"
+              className="mj-choice-btn"
+              disabled={choicesDisabled}
+              onClick={() => onChoiceClick?.(choice)}
+            >
+              {children}
+            </button>
+          </li>
+        );
+      },
+    };
+  }, [interactive, choices, choicesDisabled, activeChoice, onChoiceClick]);
+
   return (
-    <div className="chat-msg-mj">
+    <div className={interactive ? "chat-msg-mj chat-msg-mj--choices" : "chat-msg-mj"}>
       <ReactMarkdown
         disallowedElements={[
           "script",
@@ -38,7 +100,7 @@ export function MjMessageMarkdown({ content }: Props) {
           "button",
         ]}
         unwrapDisallowed
-        components={MJ_MARKDOWN_COMPONENTS}
+        components={components}
       >
         {content}
       </ReactMarkdown>

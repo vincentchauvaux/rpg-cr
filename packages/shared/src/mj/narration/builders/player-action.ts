@@ -6,8 +6,17 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
   const action = ctx.actionText?.trim() ?? "";
   const abilities = ctx.abilitiesHint?.trim() ? `\n${ctx.abilitiesHint.trim()}` : "";
   const declaresRoll = playerMessageDeclaresRoll(action);
+  const isTableCheck = /Jet D&D 5e|Résultat\s*:/i.test(action);
   const rollBlock =
-    declaresRoll && ctx.pendingRollRequest?.trim()
+    isTableCheck
+      ? `\n### Jet de dés — épreuve de table (D&D 5e)\n` +
+        `Les dés ont **déjà été lancés à la table** (test de caractéristique, éventuellement avantage si un compagnon aide, jet contesté si opposition).\n\n` +
+        `**Tu DOIS** :\n` +
+        `1. Partir des totaux et du « Résultat » annoncés (ne relance rien, n'invente pas d'autre d20).\n` +
+        `2. Narrer **immédiatement** les conséquences concrètes : réussite = le choix aboutit (avec le degré du jet) ; échec ou opposition victorieuse = complication, refus, ou coût ; égalité = la situation ne bascule pas.\n` +
+        `3. Si d'autres PJ ont aidé ou se sont opposés, fais-les exister dans la scène (un geste, une réplique, une interférence).\n` +
+        `4. Ne redemande pas de jet ; pas de tutoriel mécanique.\n`
+      : declaresRoll && ctx.pendingRollRequest?.trim()
       ? `\n### Jet de dés — résolution obligatoire\n` +
         `Le joueur annonce un **résultat chiffré**. Ta demande précédente :\n` +
         `« ${ctx.pendingRollRequest.trim().slice(0, 600)} »\n\n` +
@@ -39,7 +48,7 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
     `- **Interprète** l'action demandée et intègre-la au fil narratif en cours (conséquences, réactions du monde, PNJ).\n` +
     `- Calibre la longueur et le ton : **1–2 paragraphes sobres** si l'action est simple ou la scène calme ; **2–4 paragraphes** seulement si l'action est dramatique, risquée ou change vraiment la situation — pas de lyrisme gratuit.\n` +
     `- Ne rédige **pas** un chapitre entier sauf si l'action le justifie clairement.\n` +
-    `- Résous partiellement ou totalement selon le contexte ; propose un **jet de dés** si l'issue est incertaine (combat, persuasion, discrétion, etc.).\n` +
+    `- Résous partiellement ou totalement selon le contexte ; propose un **jet de dés** si l'issue est incertaine et qu'aucun total n'a déjà été annoncé ; si les dés de table ont parlé, **ne redemande pas** de jet.\n` +
     `- Tiens compte des compagnons présents et de la scène archivée ; ce que tu établis devient **canon**.\n` +
     `- Pas de tutoriel ni de mécanique hors jeu ; ton immersif en français.` +
     rollBlock +

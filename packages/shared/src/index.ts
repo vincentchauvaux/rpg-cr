@@ -10,6 +10,8 @@ export * from "./character-sheet.js";
 export * from "./character-progression.js";
 export * from "./action-quick-suggestions.js";
 export * from "./dice-roll.js";
+export * from "./scene-choice.js";
+export * from "./scene-check.js";
 export * from "./llm/catalog.js";
 export * from "./llm/env-ai.js";
 export * from "./llm/character-json.js";

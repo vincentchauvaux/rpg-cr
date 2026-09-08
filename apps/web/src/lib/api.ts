@@ -8,6 +8,7 @@ import type {
   ProceduralMap,
   Quest,
   Room,
+  SceneCheckPublic,
 } from "@rpg-cr/shared";
 import { getApiUrl } from "./config";
 import { formatFetchError, formatHttpError, isHttpError } from "./api-errors";
@@ -168,6 +169,7 @@ export function getRoom(code: string): Promise<{
   messages: ChatMessage[];
   map: ProceduralMap;
   mjStatus?: MjStatusSnapshot;
+  sceneCheck?: SceneCheckPublic | null;
 }> {
   return fetchJson(`/api/rooms/${code}`);
 }
@@ -662,6 +664,38 @@ export function deletePlayerAvatar(
 ): Promise<{ player: Player }> {
   return fetchJson(`/api/players/${playerId}/avatar`, {
     method: "DELETE",
+    body: JSON.stringify({ actorPlayerId }),
+  });
+}
+
+export function startSceneCheck(
+  roomId: string,
+  body: { actorPlayerId: string; sourceMessageId: string; choice: string }
+): Promise<{ sceneCheck: SceneCheckPublic | null }> {
+  return fetchJson(`/api/rooms/${roomId}/scene-checks`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function joinSceneCheck(
+  roomId: string,
+  checkId: string,
+  body: { actorPlayerId: string; stance: "help" | "oppose" }
+): Promise<{ sceneCheck: SceneCheckPublic }> {
+  return fetchJson(`/api/rooms/${roomId}/scene-checks/${checkId}/join`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function resolveSceneCheck(
+  roomId: string,
+  checkId: string,
+  actorPlayerId: string
+): Promise<{ ok: boolean }> {
+  return fetchJson(`/api/rooms/${roomId}/scene-checks/${checkId}/resolve`, {
+    method: "POST",
     body: JSON.stringify({ actorPlayerId }),
   });
 }

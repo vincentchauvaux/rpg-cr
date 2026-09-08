@@ -662,6 +662,113 @@ label {
   margin-bottom: 0.25rem;
 }
 
+.chat-msg-mj--choices .mj-choice-list {
+  list-style: none;
+  margin: 0.5rem 0 0.35rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.mj-choice {
+  margin: 0;
+}
+
+.mj-choice-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  line-height: 1.45;
+  padding: 0.55rem 0.7rem;
+  min-height: 2.75rem;
+  background: color-mix(in srgb, var(--mj-color) 10%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--mj-color) 40%, var(--border));
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.mj-choice-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mj-color) 18%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--mj-color) 70%, var(--border));
+}
+
+.mj-choice-btn:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.mj-choice--active .mj-choice-btn {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-elevated));
+}
+
+.scene-check-banner {
+  margin: 0.5rem 0 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
+}
+
+.scene-check-banner-lead {
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.scene-check-banner-lead em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.scene-check-banner-meta {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.scene-check-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.scene-check-btn {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.7rem;
+  min-height: 2.4rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.scene-check-btn--help {
+  background: color-mix(in srgb, var(--valid, #3d9a5f) 16%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--valid, #3d9a5f) 50%, var(--border));
+  color: var(--text);
+}
+
+.scene-check-btn--oppose {
+  background: color-mix(in srgb, var(--invalid, #c45c5c) 14%, var(--bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--invalid, #c45c5c) 45%, var(--border));
+  color: var(--text);
+}
+
+.scene-check-btn--resolve {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-elevated));
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+}
+
+.scene-check-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .chat-msg-mj strong {
   color: color-mix(in srgb, var(--text) 95%, var(--accent));
   font-weight: 600;

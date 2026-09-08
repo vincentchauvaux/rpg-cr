@@ -24,6 +24,11 @@ interface Props {
   hostLocale: string;
   roomId: string;
   llmEnabled: boolean;
+  choices?: string[];
+  choicesClickable?: boolean;
+  choicesDisabled?: boolean;
+  activeChoice?: string;
+  onChoiceClick?: (choice: string) => void;
 }
 
 export function ChatMessageRow({
@@ -34,6 +39,11 @@ export function ChatMessageRow({
   hostLocale,
   roomId,
   llmEnabled,
+  choices,
+  choicesClickable,
+  choicesDisabled,
+  activeChoice,
+  onChoiceClick,
 }: Props) {
   const [displayText, setDisplayText] = useState(m.content);
   const [loading, setLoading] = useState(false);
@@ -157,7 +167,14 @@ export function ChatMessageRow({
           MJ :
           {translationControls}
         </span>
-        <MjMessageMarkdown content={body} />
+        <MjMessageMarkdown
+          content={body}
+          choices={choices}
+          choicesClickable={Boolean(choicesClickable && !isTranslated)}
+          choicesDisabled={choicesDisabled}
+          activeChoice={activeChoice}
+          onChoiceClick={onChoiceClick}
+        />
       </div>
     );
   }

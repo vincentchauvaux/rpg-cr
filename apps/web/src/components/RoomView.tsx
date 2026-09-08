@@ -20,6 +20,7 @@ import type {
   Player,
   ProceduralMap,
   Room,
+  SceneCheckPublic,
   SceneState,
 } from "@rpg-cr/shared";
 import {
@@ -40,6 +41,9 @@ import {
   testLlmConfig,
   promptMj,
   fetchMentionSuggestions,
+  joinSceneCheck,
+  resolveSceneCheck,
+  startSceneCheck,
   type MjPromptType,
   type MjStatusSnapshot,
 } from "@/lib/api";
@@ -63,6 +67,7 @@ import { GodModeSwitch } from "@/components/GodModeSwitch";
 import { AdminLlmForm } from "@/components/AdminLlmForm";
 import { LocaleSelector } from "@/components/LocaleSelector";
 import { ChatMessageRow } from "@/components/ChatMessageRow";
+import { SceneCheckBanner } from "@/components/SceneCheckBanner";
 import {
   filterMessagesForViewer,
   shouldShowErrorToPlayer,
@@ -76,6 +81,7 @@ import {
   DEFAULT_LOCALE,
   buildQuickUseOptions,
   canHumanParticipateInChat,
+  extractMjChoices,
   formatPlayerRollMessage,
   type MentionCandidate,
   type QuickUseOption,
@@ -222,6 +228,8 @@ export function RoomView({ code }: Props) {
   const [scene, setScene] = useState<SceneState | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [sceneCheck, setSceneCheck] = useState<SceneCheckPublic | null>(null);
+  const [sceneCheckBusy, setSceneCheckBusy] = useState(false);
   const [map, setMap] = useState<ProceduralMap | null>(null);
   const [catalog, setCatalog] = useState<LlmCatalogEntry[]>([]);
   const [input, setInput] = useState("");
@@ -352,6 +360,7 @@ export function RoomView({ code }: Props) {
       )
     );
     replaceMessagesFromServer(data.messages);
+    setSceneCheck(data.sceneCheck ?? null);
     if (!mjPromptPendingRef.current) {
       const openingUnsettled = isCampaignOpeningUnsettled(
         data.messages,
@@ -541,6 +550,9 @@ export function RoomView({ code }: Props) {
         setScene(data.scene);
         setRoom((prev) => (prev ? { ...prev, scene: data.scene } : prev));
       }
+      if (data.type === "scene_check") {
+        setSceneCheck(data.sceneCheck);
+      }
     },
     [clearMjThinking]
   );
@@ -697,6 +709,63 @@ export function RoomView({ code }: Props) {
       JSON.stringify({ type: "chat", content: input.trim(), kind: speechMode })
     );
     setInput("");
+  }
+
+  async function handleSceneChoice(sourceMessageId: string, choice: string) {
+    if (!session || !room || sceneCheckBusy || sceneCheck) return;
+    setSceneCheckBusy(true);
+    setError(null);
+    try {
+      const { sceneCheck: next } = await startSceneCheck(room.id, {
+        actorPlayerId: session.playerId,
+        sourceMessageId,
+        choice,
+      });
+      setSceneCheck(next);
+      if (!next && hasLlmConfig) {
+        setMjThinking(true);
+        mjThinkingSinceRef.current = Date.now();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Impossible de lancer ce choix");
+    } finally {
+      setSceneCheckBusy(false);
+    }
+  }
+
+  async function handleSceneCheckJoin(stance: "help" | "oppose") {
+    if (!session || !room || !sceneCheck || sceneCheckBusy) return;
+    setSceneCheckBusy(true);
+    setError(null);
+    try {
+      const { sceneCheck: next } = await joinSceneCheck(room.id, sceneCheck.id, {
+        actorPlayerId: session.playerId,
+        stance,
+      });
+      setSceneCheck(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Impossible de rejoindre l'épreuve");
+    } finally {
+      setSceneCheckBusy(false);
+    }
+  }
+
+  async function handleSceneCheckResolveNow() {
+    if (!session || !room || !sceneCheck || sceneCheckBusy) return;
+    setSceneCheckBusy(true);
+    setError(null);
+    try {
+      if (hasLlmConfig) {
+        setMjThinking(true);
+        mjThinkingSinceRef.current = Date.now();
+      }
+      await resolveSceneCheck(room.id, sceneCheck.id, session.playerId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Impossible de résoudre l'épreuve");
+      setMjThinking(false);
+    } finally {
+      setSceneCheckBusy(false);
+    }
   }
 
   async function submitIntroduction(mode: "manual" | "auto", text?: string) {
@@ -1032,6 +1101,17 @@ export function RoomView({ code }: Props) {
     Boolean(session && hasLlmConfig && me && chatReady && !chatLogExpanded);
   const isAdminGod = isAdmin && adminOpen;
   const visibleMessages = filterMessagesForViewer(messages, isAdminGod);
+  const lastMjMessage = useMemo(() => {
+    for (let i = visibleMessages.length - 1; i >= 0; i--) {
+      const m = visibleMessages[i];
+      if (m?.kind === "mj") return m;
+    }
+    return null;
+  }, [visibleMessages]);
+  const lastMjChoices = useMemo(
+    () => (lastMjMessage ? extractMjChoices(lastMjMessage.content) : []),
+    [lastMjMessage]
+  );
   const recentSceneTexts = useMemo(
     () =>
       messages
@@ -1294,6 +1374,25 @@ export function RoomView({ code }: Props) {
                     hostLocale={hostLocale}
                     roomId={room?.id ?? ""}
                     llmEnabled={hasLlmConfig}
+                    choices={m.id === lastMjMessage?.id ? lastMjChoices : undefined}
+                    choicesClickable={
+                      m.id === lastMjMessage?.id &&
+                      lastMjChoices.length >= 2 &&
+                      chatReady &&
+                      !awaitingIntroduction
+                    }
+                    choicesDisabled={
+                      Boolean(sceneCheck) ||
+                      sceneCheckBusy ||
+                      mjThinking ||
+                      mjPromptBusy
+                    }
+                    activeChoice={
+                      sceneCheck && sceneCheck.sourceMessageId === m.id
+                        ? sceneCheck.choice
+                        : undefined
+                    }
+                    onChoiceClick={(choice) => void handleSceneChoice(m.id, choice)}
                   />
                 ))}
               </div>
@@ -1309,6 +1408,17 @@ export function RoomView({ code }: Props) {
                 </p>
               ) : null}
             </div>
+
+            {sceneCheck && chatReady && !awaitingIntroduction ? (
+              <SceneCheckBanner
+                check={sceneCheck}
+                viewerPlayerId={session?.playerId ?? ""}
+                busy={sceneCheckBusy}
+                onHelp={() => void handleSceneCheckJoin("help")}
+                onOppose={() => void handleSceneCheckJoin("oppose")}
+                onResolveNow={() => void handleSceneCheckResolveNow()}
+              />
+            ) : null}
 
           {awaitingIntroduction ? (
             <div className="player-intro-panel" role="region" aria-label="Entrée en scène">
