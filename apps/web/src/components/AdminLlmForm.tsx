@@ -9,6 +9,9 @@ import {
   isUnsuitableMjModelId,
   normalizeLmStudioV1BaseUrl,
   defaultModelForLocalProvider,
+  catalogModelsForRole,
+  defaultNarrationModelId,
+  defaultToolModelId,
 } from "@rpg-cr/shared";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SettingsToggle } from "@/components/SettingsToggle";
@@ -79,6 +82,18 @@ export function AdminLlmForm({
 
   const selectedProvider = catalog.find((c) => c.id === llmForm.providerId);
   const isLocalProvider = isLocalLlmProvider(llmForm.providerId);
+  const narrationCatalogModels = catalogModelsForRole(selectedProvider, "narration");
+  const toolCatalogModels = catalogModelsForRole(selectedProvider, "tool");
+  const currentNarrationModel = selectedProvider?.models.find(
+    (m) => m.id && m.id === llmForm.modelId.trim()
+  );
+  const mjSelectModels =
+    currentNarrationModel &&
+    !narrationCatalogModels.some((m) => m.id === currentNarrationModel.id)
+      ? [...narrationCatalogModels, currentNarrationModel]
+      : narrationCatalogModels.length
+        ? narrationCatalogModels
+        : (selectedProvider?.models ?? []).filter((m) => m.id);
   const localBackendLabel =
     llmForm.providerId === "ollama" ? "Ollama" : "LM Studio";
   const modelIsEmbedding =
@@ -132,9 +147,13 @@ export function AdminLlmForm({
       const normalizedBase = isLocalProvider
           ? resolvedLmBaseUrl()
           : llmForm.baseUrl?.trim() || selectedProvider?.defaultBaseUrl || undefined;
+      const toolId = isLocalProvider
+        ? undefined
+        : (llmForm.toolModelId?.trim() || defaultToolModelId(selectedProvider) || undefined);
       const config: LlmRoomConfig = {
         ...llmForm,
         modelId: llmForm.modelId.trim(),
+        toolModelId: toolId,
         baseUrl: normalizedBase,
       };
       await onSave(config);
@@ -224,15 +243,19 @@ export function AdminLlmForm({
               const isLocal = isLocalLlmProvider(id);
               const wasLocal = isLocalLlmProvider(llmForm.providerId);
               let nextModelId = llmForm.modelId;
+              let nextToolId: string | undefined = llmForm.toolModelId;
               if (isLocal && (!wasLocal || llmForm.providerId !== id)) {
                 nextModelId = defaultModelForLocalProvider(id);
+                nextToolId = undefined;
               } else if (!isLocal) {
-                nextModelId = entry?.models[0]?.id ?? llmForm.modelId;
+                nextModelId = defaultNarrationModelId(entry) || llmForm.modelId;
+                nextToolId = defaultToolModelId(entry) || undefined;
               }
               setLlmForm((f) => ({
                 ...f,
                 providerId: id,
                 modelId: nextModelId,
+                toolModelId: nextToolId,
                 baseUrl: entry?.defaultBaseUrl ?? f.baseUrl,
               }));
               touch("provider");
@@ -377,7 +400,7 @@ export function AdminLlmForm({
                 touch("model");
               }}
             >
-              {selectedProvider?.models.map((m) => (
+              {mjSelectModels.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.label}
                 </option>
@@ -385,6 +408,49 @@ export function AdminLlmForm({
             </select>
           )}
         </div>
+
+        {!isLocalProvider && toolCatalogModels.length > 0 && (
+          <div className="field-block">
+            <label htmlFor="llm-tool-model">Modèle outils (extraction, traduction)</label>
+            <select
+              id="llm-tool-model"
+              className={fieldClass("valid", show("toolModel"))}
+              value={
+                llmForm.toolModelId?.trim() ||
+                defaultToolModelId(selectedProvider)
+              }
+              onBlur={() => touch("toolModel")}
+              onChange={(e) => {
+                setLlmForm((f) => ({ ...f, toolModelId: e.target.value || undefined }));
+                touch("toolModel");
+              }}
+            >
+              {toolCatalogModels.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            <p className="llm-hint muted" style={{ marginTop: "0.35rem" }}>
+              Température basse, JSON pour les extraits. Le récit MJ utilise le modèle ci-dessus.
+            </p>
+          </div>
+        )}
+
+        {isLocalProvider && (
+          <p className="llm-hint muted">
+            Outils (extraction, traduction) : <strong>même modèle</strong>, profil déterministe
+            (température basse). Un second modèle n&apos;est pas chargé — RAM VPS préservée.
+            {llmForm.providerId === "ollama" ? (
+              <>
+                {" "}
+                Si la machine a 16&nbsp;Go+ : <code>qwen3:8b</code> ou{" "}
+                <code>qwen3:14b</code> suivent mieux les consignes que{" "}
+                <code>qwen2.5:7b-instruct</code>.
+              </>
+            ) : null}
+          </p>
+        )}
 
         <div className="field-block">
           <label htmlFor="llm-base-url">URL API (optionnel)</label>
@@ -473,7 +539,11 @@ export function AdminLlmForm({
             <code>{resolvedLmBaseUrl()}</code>
             ), modèle chargé = identifiant ci-dessus
             {llmForm.providerId === "ollama" ? (
-              <> (ex. <code>qwen2.5:7b-instruct</code> — <code>ollama pull</code> si absent).</>
+              <>
+                {" "}
+                (ex. <code>qwen2.5:7b-instruct</code> — <code>ollama pull</code> si absent.
+                Optionnel : <code>qwen3:8b</code> / <code>qwen3:14b</code> si RAM suffisante).
+              </>
             ) : (
               <>
                 {" "}

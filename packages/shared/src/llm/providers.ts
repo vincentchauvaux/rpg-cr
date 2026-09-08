@@ -2,8 +2,16 @@ import { getCatalogEntry } from "./catalog.js";
 import { estimatePromptChars, resolveLlmTimeoutMs } from "./context-budget.js";
 import { assertChatModelId, isUnsuitableMjModelId } from "./model-kind.js";
 import { formatLlmModelCrashRecoveryHint } from "./model-context-tier.js";
-import { isLocalLlmProvider, formatLocalLlmChecklist, formatLocalLlmModelNotFoundError, inferLocalLlmBackend, localLlmBackendLabel } from "./local-llm.js";
+import {
+  isLocalLlmProvider,
+  formatLocalLlmChecklist,
+  formatLocalLlmModelNotFoundError,
+  inferLocalLlmBackend,
+  localLlmBackendLabel,
+  isLikelyCloudMarketModelId,
+} from "./local-llm.js";
 import { normalizeLmStudioV1BaseUrl, resolveLmStudioServerBaseUrl } from "./lmstudio-url.js";
+import { LLM_TASK_PROFILES, resolveTaskModelId, type LlmTaskKind } from "./task-profile.js";
 import type { LlmRoomConfig } from "../types.js";
 
 export interface ChatCompletionMessage {
@@ -25,10 +33,16 @@ export interface LlmProviderOptions {
   timeoutMs?: number;
   /** Nouvelle tentative si réponse vide (chargement JIT LM Studio) */
   retryOnEmpty?: boolean;
-  /** Limite tokens completion — défaut 2048 ; test connexion : 5 */
+  /** Limite tokens completion — défaut selon le profil de tâche */
   maxTokens?: number;
   /** Annulation externe (ex. fill-all annulé par le joueur) */
   abortSignal?: AbortSignal;
+  /** Kind d'appel — défaut narration */
+  taskKind?: LlmTaskKind;
+  /** Surcharge température (sinon profil du kind) */
+  temperature?: number;
+  /** `response_format: json_object` — retry sans le champ si 400 */
+  jsonMode?: boolean;
 }
 
 type AssistantMessage = {
@@ -192,7 +206,9 @@ async function openAiCompatibleChatOnce(
   messages: ChatCompletionMessage[],
   timeoutMs: number,
   maxTokens: number,
-  abortSignal?: AbortSignal
+  abortSignal: AbortSignal | undefined,
+  sampling: { temperature: number; jsonMode: boolean },
+  allowJsonModeRetry = true
 ): Promise<ChatAttemptResult> {
   assertChatModelId(modelId);
 
@@ -206,17 +222,22 @@ async function openAiCompatibleChatOnce(
       ? AbortSignal.any([timeoutSignal, abortSignal])
       : timeoutSignal;
 
+  const body: Record<string, unknown> = {
+    model: modelId,
+    messages,
+    temperature: sampling.temperature,
+    max_tokens: maxTokens,
+  };
+  if (sampling.jsonMode) {
+    body.response_format = { type: "json_object" };
+  }
+
   let res: Response;
   try {
     res = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        model: modelId,
-        messages,
-        temperature: 0.85,
-        max_tokens: maxTokens,
-      }),
+      body: JSON.stringify(body),
       signal,
     });
   } catch (error) {
@@ -265,6 +286,23 @@ async function openAiCompatibleChatOnce(
   const bodyText = await res.text();
 
   if (!res.ok) {
+    if (sampling.jsonMode && allowJsonModeRetry && res.status === 400) {
+      devLogLlm(
+        "retry",
+        `json_object rejected (${res.status}) — retry without response_format`
+      );
+      return openAiCompatibleChatOnce(
+        baseUrl,
+        apiKey,
+        modelId,
+        messages,
+        timeoutMs,
+        maxTokens,
+        abortSignal,
+        { temperature: sampling.temperature, jsonMode: false },
+        false
+      );
+    }
     return {
       ok: false,
       empty: false,
@@ -323,12 +361,15 @@ async function openAiCompatibleChat(
     maxTokens: number;
     retryOnTimeout?: boolean;
     abortSignal?: AbortSignal;
+    temperature: number;
+    jsonMode: boolean;
   }
 ): Promise<string> {
   let lastEmptyData: ChatCompletionResponse = {};
   const emptyAttempts = options.retryOnEmpty ? JIT_MAX_ATTEMPTS : 1;
   const timeoutAttempts = options.retryOnTimeout ? 2 : 1;
   const maxAttempts = Math.max(emptyAttempts, timeoutAttempts);
+  const sampling = { temperature: options.temperature, jsonMode: options.jsonMode };
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (options.abortSignal?.aborted) {
@@ -347,7 +388,8 @@ async function openAiCompatibleChat(
       messages,
       attemptTimeout,
       options.maxTokens,
-      options.abortSignal
+      options.abortSignal,
+      sampling
     );
 
     if (result.ok) return result.content;
@@ -381,13 +423,25 @@ async function openAiCompatibleChat(
   throw new Error(formatEmptyLlmResponseError(modelId, lastEmptyData, baseUrl));
 }
 
-export async function completeAsMj(
+function resolveLmStudioFallbackModelId(modelId: string): string | null {
+  const id = modelId.trim();
+  if (!id || isLikelyCloudMarketModelId(id)) return null;
+  return id;
+}
+
+export async function completeChat(
   config: LlmRoomConfig,
   messages: ChatCompletionMessage[],
   options: LlmProviderOptions = {}
 ): Promise<LlmCompletionResult> {
   const entry = getCatalogEntry(config.providerId);
   if (!entry) throw new Error(`Provider inconnu: ${config.providerId}`);
+
+  const taskKind = options.taskKind ?? "narration";
+  const profile = LLM_TASK_PROFILES[taskKind];
+  const modelId = resolveTaskModelId(config, taskKind);
+  const temperature = options.temperature ?? profile.temperature;
+  const jsonMode = options.jsonMode ?? profile.jsonMode;
 
   const rawBase = config.baseUrl ?? entry.defaultBaseUrl ?? "https://api.openai.com/v1";
   const primaryBase = isLocalLlmProvider(config.providerId)
@@ -397,29 +451,44 @@ export async function completeAsMj(
   const estimatedChars = estimatePromptChars(messages);
   const timeoutMs =
     options.timeoutMs ?? resolveLlmTimeoutMs(config.providerId, estimatedChars);
-  const maxTokens = options.maxTokens ?? 2048;
+  const maxTokens = options.maxTokens ?? profile.maxTokens;
   const retryOnEmpty =
     options.retryOnEmpty ?? isLocalLlmProvider(config.providerId);
   const retryOnTimeout = isLocalLlmProvider(config.providerId);
 
-  assertChatModelId(config.modelId);
+  assertChatModelId(modelId);
+
+  const chatOptions = {
+    timeoutMs,
+    retryOnEmpty,
+    maxTokens,
+    retryOnTimeout,
+    abortSignal: options.abortSignal,
+    temperature,
+    jsonMode,
+  };
 
   try {
     const content = await openAiCompatibleChat(
       primaryBase,
       apiKey,
-      config.modelId,
+      modelId,
       messages,
-      { timeoutMs, retryOnEmpty, maxTokens, retryOnTimeout, abortSignal: options.abortSignal }
+      chatOptions
     );
     return {
       content,
       providerId: config.providerId,
-      modelId: config.modelId,
+      modelId,
       usedFallback: false,
     };
   } catch (primaryError) {
     if (!config.useFallbackLmStudio || isLocalLlmProvider(config.providerId)) {
+      throw primaryError;
+    }
+
+    const fallbackModelId = resolveLmStudioFallbackModelId(modelId);
+    if (!fallbackModelId) {
       throw primaryError;
     }
 
@@ -429,21 +498,31 @@ export async function completeAsMj(
     const content = await openAiCompatibleChat(
       fallbackBase,
       undefined,
-      config.modelId || "local-model",
+      fallbackModelId,
       messages,
       {
-        timeoutMs,
+        ...chatOptions,
         retryOnEmpty: true,
-        maxTokens,
         retryOnTimeout: true,
-        abortSignal: options.abortSignal,
       }
     );
     return {
       content,
       providerId: "lmstudio",
-      modelId: config.modelId || "local-model",
+      modelId: fallbackModelId,
       usedFallback: true,
     };
   }
+}
+
+/** Alias récit — `completeChat` avec kind narration. */
+export async function completeAsMj(
+  config: LlmRoomConfig,
+  messages: ChatCompletionMessage[],
+  options: LlmProviderOptions = {}
+): Promise<LlmCompletionResult> {
+  return completeChat(config, messages, {
+    ...options,
+    taskKind: options.taskKind ?? "narration",
+  });
 }

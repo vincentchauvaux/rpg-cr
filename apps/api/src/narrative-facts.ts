@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { LlmRoomConfig, NarrativeFact, NarrativeFactType } from "@rpg-cr/shared";
 import {
   buildNarrativeFactsExtractMessages,
-  completeAsMj,
+  completeChat,
   parseExtractedFacts,
 } from "@rpg-cr/shared";
 import { db } from "./db.js";
@@ -80,9 +80,11 @@ export async function extractNarrativeFactsFromText(
 ): Promise<NarrativeFact[]> {
   const messages = buildNarrativeFactsExtractMessages(mjText);
   const result = await queueBackgroundLlm(roomId, "extract-facts", () =>
-    completeAsMj(config, messages, {
+    completeChat(config, messages, {
       apiKey,
       lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+      taskKind: "tool",
+      jsonMode: true,
     })
   );
   const parsed = parseExtractedFacts(result.content);

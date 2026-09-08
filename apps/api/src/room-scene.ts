@@ -3,7 +3,7 @@ import type { LlmRoomConfig, SceneLogEntry, SceneState } from "@rpg-cr/shared";
 import {
   buildSceneExtractMessages,
   clampTension,
-  completeAsMj,
+  completeChat,
   findSceneLocationInTexts,
   hasEstablishedSceneLocation,
   hasEstablishedSceneMood,
@@ -295,9 +295,11 @@ export async function extractSceneFromText(
 
   const messages = buildSceneExtractMessages(mjText, current);
   const result = await queueBackgroundLlm(roomId, "extract-scene", () =>
-    completeAsMj(config, messages, {
+    completeChat(config, messages, {
       apiKey,
       lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+      taskKind: "tool",
+      jsonMode: true,
     })
   );
   let parsed = parseExtractedScene(result.content);

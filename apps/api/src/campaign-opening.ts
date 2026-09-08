@@ -2,7 +2,7 @@ import type { Player } from "@rpg-cr/shared";
 import {
   buildCampaignOpeningNarrativePrompt,
   buildCampaignOpeningPlanMessages,
-  completeAsMj,
+  completeChat,
   parseCampaignOpeningPlan,
   type CampaignOpeningPlan,
 } from "@rpg-cr/shared";
@@ -113,10 +113,12 @@ export async function bootstrapCampaignOpening(
     };
 
     const planResult = await queueNarrativeLlm(roomId, "campaign-opening-plan", () =>
-      completeAsMj(room.llmConfig!, buildCampaignOpeningPlanMessages(ctx, host.preferredLocale), {
+      completeChat(room.llmConfig!, buildCampaignOpeningPlanMessages(ctx, host.preferredLocale), {
         apiKey: process.env.OPENAI_API_KEY,
         lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
         maxTokens: 1200,
+        taskKind: "tool",
+        jsonMode: true,
       })
     );
 

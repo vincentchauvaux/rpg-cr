@@ -47,6 +47,13 @@ export function isLikelyLmStudioModelId(modelId: string): boolean {
   return modelId.trim().includes("/");
 }
 
+/** Id marché cloud — inutilisable tel quel sur LM Studio / Ollama. */
+export function isLikelyCloudMarketModelId(modelId: string): boolean {
+  const id = modelId.trim();
+  if (!id) return true;
+  return /^(gpt-|o[1-9]|chatgpt|claude-|gemini-|grok-)/i.test(id);
+}
+
 export function isLikelyWrongModelIdForProvider(
   providerId: string,
   modelId: string

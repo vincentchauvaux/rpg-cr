@@ -61,11 +61,9 @@ export interface ExtractedNarrativeFact {
 }
 
 export function parseExtractedFacts(raw: string): ExtractedNarrativeFact[] {
-  const match = raw.match(/\[[\s\S]*\]/);
-  if (!match) return [];
+  const arr = extractJsonArray(raw);
+  if (!arr) return [];
   try {
-    const arr = JSON.parse(match[0]) as unknown[];
-    if (!Array.isArray(arr)) return [];
     return arr
       .filter((x) => x && typeof x === "object")
       .map((x) => {
@@ -88,4 +86,30 @@ export function parseExtractedFacts(raw: string): ExtractedNarrativeFact[] {
   } catch {
     return [];
   }
+}
+
+/** Tableau JSON brut, ou premier tableau dans un objet (`json_object`). */
+function extractJsonArray(raw: string): unknown[] | null {
+  const arrayMatch = raw.match(/\[[\s\S]*\]/);
+  if (arrayMatch) {
+    try {
+      const parsed = JSON.parse(arrayMatch[0]) as unknown;
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      /* essayer l'objet enveloppant */
+    }
+  }
+  const objMatch = raw.match(/\{[\s\S]*\}/);
+  if (!objMatch) return null;
+  try {
+    const parsed = JSON.parse(objMatch[0]) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      for (const v of Object.values(parsed as Record<string, unknown>)) {
+        if (Array.isArray(v)) return v;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }

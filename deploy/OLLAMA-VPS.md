@@ -31,6 +31,9 @@ sudo systemctl start ollama
 
 # Modèle chat/instruct (adapter à la RAM)
 ollama pull qwen2.5:7b-instruct
+# Si 16 Go+ RAM (meilleur suivi d'instructions) :
+# ollama pull qwen3:8b
+# ollama pull qwen3:14b
 # ou plus léger :
 # ollama pull gemma2:2b
 # ollama pull llama3.2:3b-instruct
@@ -62,8 +65,10 @@ bash deploy/push-deploy.sh
 
 1. Fournisseur : **Ollama (VPS / local)**.
 2. URL : `http://127.0.0.1:11434/v1` (le serveur utilise `LM_STUDIO_BASE_URL` dans `.env`).
-3. Modèle : id Ollama — ex. `qwen2.5:7b-instruct` (`ollama list`).
+3. Modèle : id Ollama — ex. `qwen2.5:7b-instruct` (`ollama list`). Extraction / traduction réutilisent **le même modèle** (température basse) — pas un second poids en RAM.
 4. **Enregistrer** puis **Tester la connexion**.
+
+Si la machine a **16 Go+** : `ollama pull qwen3:8b` ou `qwen3:14b` (meilleur suivi d'instructions). Ne pas lancer deux modèles en parallèle.
 
 Éviter les modèles embedding ou vision (mêmes règles que LM Studio — rejetés par l’UI si l’id contient `embed`, `-vl-`, etc.).
 

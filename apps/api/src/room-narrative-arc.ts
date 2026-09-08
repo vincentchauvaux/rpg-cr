@@ -1,7 +1,7 @@
 import type { LlmRoomConfig, NarrativeArc } from "@rpg-cr/shared";
 import {
   buildNarrativeArcExtractMessages,
-  completeAsMj,
+  completeChat,
   formatNarrativeArcForMj,
   mergeArcPatch,
   parseExtractedNarrativeArc,
@@ -44,9 +44,11 @@ export async function extractNarrativeArcFromText(
 ): Promise<NarrativeArc | null> {
   const messages = buildNarrativeArcExtractMessages(mjText);
   const result = await queueBackgroundLlm(roomId, "extract-arc", () =>
-    completeAsMj(config, messages, {
+    completeChat(config, messages, {
       apiKey,
       lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+      taskKind: "tool",
+      jsonMode: true,
     })
   );
   const parsed = parseExtractedNarrativeArc(result.content);

@@ -1,6 +1,6 @@
 import {
   buildMjMessages,
-  completeAsMj,
+  completeChat,
   formatCharacterSheetForMj,
   formatEstablishedCanonSummary,
   localeLabel,
@@ -230,11 +230,12 @@ async function completeMjWithTimeout(
 ) {
   const timeoutMs = resolveLlmTimeoutMs(config.providerId, estimatedChars);
   const maxTokens = resolveMjMaxTokens(config.providerId, config.modelId);
-  return completeAsMj(config, messages, {
+  return completeChat(config, messages, {
     apiKey,
     lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
     timeoutMs,
     maxTokens,
+    taskKind: "narration",
   });
 }
 
@@ -341,12 +342,13 @@ export async function testLlmConnection(
   ];
 
   const estimatedChars = estimatePromptChars(messages);
-  const result = await completeAsMj(config, messages, {
+  const result = await completeChat(config, messages, {
     apiKey,
     lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
     timeoutMs: resolveLlmTimeoutMs(config.providerId, estimatedChars),
     maxTokens: 5,
     retryOnEmpty: isLocalLlmProvider(config.providerId),
+    taskKind: "tool",
   });
 
   return {

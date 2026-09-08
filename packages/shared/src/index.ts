@@ -11,6 +11,7 @@ export * from "./character-progression.js";
 export * from "./action-quick-suggestions.js";
 export * from "./dice-roll.js";
 export * from "./llm/catalog.js";
+export * from "./llm/task-profile.js";
 export * from "./llm/model-kind.js";
 export * from "./llm/local-llm.js";
 export * from "./llm/lmstudio-url.js";

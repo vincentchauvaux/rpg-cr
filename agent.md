@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-08-05 (favicon dé D20)
+> Dernière mise à jour : 2026-09-08 (routage LLM narration / outils)
 
 ## Vision
 
@@ -154,9 +154,9 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 - Mode Action : menu « Utiliser… » (sorts/objets/actions de la fiche + **jet de dé** auto si le dernier message MJ demande un lancer — ex. bouton `🎲 d20 dex` ; détection `jet de DEXTERITÉ` / `(CHAIR)` avec normalisation Unicode (`action-quick-suggestions.ts`). Au clic, tirage aléatoire + message `Je lance un d20 sur ma dextérité : 14 +2 = 16.` (`dice-roll.ts`). Hint UI : les **+2/0/−2** du MJ = trois **issues** narratives ; le **(+X)** sur le jet = bonus de caractéristique (DEX 15 → +2). Si le message action contient un résultat chiffré, `mj-auto.ts` passe `pendingRollRequest` au prompt MJ (`builders/player-action.ts`) pour **résolution obligatoire** de l'issue annoncée.
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.
 
-   - **Ollama (VPS)** : provider dédié, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` — install `deploy/ollama-setup.sh`, pas de tunnel Mac
+   - **Ollama (VPS)** : provider dédié, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` (RAM-safe) — optionnel `qwen3:8b` / `qwen3:14b` si 16 Go+ ; install `deploy/ollama-setup.sh`, pas de tunnel Mac
    - **LM Studio (Mac + tunnel)** : URL `http://127.0.0.1:1234/v1`, modèle saisi à la main ; « Enregistrer la config MJ » = sauvegarde SQLite uniquement
-5. **LLM** — catalogue statique, config par salon ; **MJ auto Dire** désactivé (`AUTO_MJ_ON_PLAYER_MESSAGES`) ; **MJ auto Action** actif (`scheduleActionMj`) ; Réclamer / routes hôte ; endpoint `POST /api/rooms/:id/mj` conservé (API interne / v2)
+5. **LLM** — catalogue avec rôles `narration` / `tool` / `both` ; config par salon (`modelId` MJ + `toolModelId` optionnel cloud) ; `completeChat` + profils (`task-profile.ts`) ; **MJ auto Dire** désactivé (`AUTO_MJ_ON_PLAYER_MESSAGES`) ; **MJ auto Action** actif (`scheduleActionMj`) ; Réclamer / routes hôte ; endpoint `POST /api/rooms/:id/mj` conservé (API interne / v2)
 6. **Carte** — génération procédurale (simplex noise, biomes, effets toxic/fog/evil/buff, POI, territoires, SVG)
 7. **Modèles** — tables SQLite : messages, quêtes, journal, propositions archivées (+ endpoints REST)
 8. **Prompt MJ** — `packages/shared/src/mj/system-prompt.ts` + contexte monde + éléments établis (`established-canon.ts`)
@@ -346,7 +346,9 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Fichiers clés
 
 - `packages/shared/src/map/procedural.ts` — carte
-- `packages/shared/src/llm/providers.ts` — appels OpenAI-compatible
+- `packages/shared/src/llm/providers.ts` — `completeChat` (OpenAI-compatible) ; alias `completeAsMj` = kind narration
+- `packages/shared/src/llm/task-profile.ts` — profils `narration` (temp 0,85) / `tool` (temp 0,15) ; `resolveTaskModelId`
+- `packages/shared/src/llm/catalog.ts` — rôles modèle + défauts GPT-4o (MJ) / GPT-4o mini (outils)
 - `apps/api/src/character-all-guard.ts` — mutex fill-all par joueur + TTL 4 min
 - `apps/api/src/character-all-progress.ts` — état progression fill-all (%, phase, fiche partielle)
 - `apps/api/src/room-llm-queue.ts` — **file LLM globale par salon** (1 appel modèle à la fois) ; priorités `narrative` > `interactive` > `background` ; FIFO au sein d'une priorité
@@ -645,6 +647,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 ## Notes agent
 
 - La clé API LLM est saisie côté client (god mode) et transmise à l’appel MJ ; non persistée en base.
+- **Routage LLM** : `completeChat` + `taskKind` `narration` | `tool` ; cloud défaut hors VPS = GPT-4o (MJ) + GPT-4o mini (`toolModelId`) ; local = un seul modèle chargé.
 - **Réclamer hôte** : `pickHostMjPromptType` + `handleHostReclaim` dans `RoomView` (préambule / récap / reclaim) — déjà en place ; pas de travail dupliqué côté sous-agent `3dd156bd` si non retrouvé dans l'historique.
 - `getRoomByCode` compare en NOCASE (codes 6 caractères).
 - Pour LM Studio dans Docker : `host.docker.internal:1234`.
@@ -677,8 +680,8 @@ Le navigateur **ne contacte jamais** Ollama ni LM Studio directement. CORS local
 
 ### Ollama (VPS)
 
-1. `sudo bash deploy/ollama-setup.sh` (ou `ollama pull qwen2.5:7b-instruct`).
-2. God mode → **Ollama (VPS / local)**, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` (id **exact** de `ollama list` — pas un id LM Studio du type `qwen/qwen3.5-9b`).
+1. `sudo bash deploy/ollama-setup.sh` (ou `ollama pull qwen2.5:7b-instruct` ; optionnel `qwen3:8b` / `qwen3:14b` si 16 Go+).
+2. God mode → **Ollama (VPS / local)**, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` (id **exact** de `ollama list` — pas un id LM Studio du type `qwen/qwen3.5-9b`). Outils = même modèle (profil déterministe).
 3. **Enregistrer** puis **Tester la connexion** — bouton **Lister modèles Ollama (chat)** pour choisir l'id.
 
 ### Réglages LM Studio
@@ -775,7 +778,7 @@ Deux canaux distincts, opt-in séparés, déclenchés uniquement sur événement
 
 - Bordures **vertes** / **rouges** (`--valid` / `--invalid`) au blur ou à la soumission.
 - Section **Connexion MJ (LLM)** : repliée avec titre vert + ✓ après enregistrement réussi ; clic pour rouvrir.
-- **Test LLM** : endpoint `POST /api/rooms/:roomId/llm/test` (god mode) — mini completion `max_tokens: 5` ; rejet HTTP **400** si modèle embedding ou **VL** ; liste modèles chat : `GET /api/llm/lmstudio/models?baseUrl=…` (VL filtrés) → appelle **`GET {baseUrl}/models`** avec base normalisée **`/v1`** obligatoire ; messages d'erreur test adaptés au backend (Ollama vs LM Studio via `formatLlmTestError` + `resolveLocalLlmBackend`) ; changement de provider local réinitialise le modèle par défaut (`qwen2.5:7b-instruct` pour Ollama).
+- **Test LLM** : endpoint `POST /api/rooms/:roomId/llm/test` (god mode) — mini completion `max_tokens: 5`, profil **outil** ; rejet HTTP **400** si modèle embedding ou **VL** ; liste modèles chat : `GET /api/llm/lmstudio/models?baseUrl=…` (VL filtrés) → appelle **`GET {baseUrl}/models`** avec base normalisée **`/v1`** obligatoire ; messages d'erreur test adaptés au backend (Ollama vs LM Studio via `formatLlmTestError` + `resolveLocalLlmBackend`) ; changement de provider local réinitialise le modèle par défaut (`qwen2.5:7b-instruct` pour Ollama). Cloud : second select **Modèle outils** (`toolModelId`) ; local : même modèle, sampling déterministe.
 - **Clé API (god mode)** : champ `#llm-api-key` — `autoComplete="new-password"` (évite l’avertissement Chrome DOM sur les champs `type=password` hors formulaire de connexion).
 
 ## LLM local — timeouts, contexte, préflight
@@ -785,7 +788,9 @@ Deux canaux distincts, opt-in séparés, déclenchés uniquement sur événement
 | **Budget contexte** | `context-budget.ts` + `model-context-tier.ts` — modes `full` / `slim` / **`micro`** (4b, VL, etc.) ; prompt système **compact** (`MJ_SYSTEM_PROMPT_COMPACT`) en micro ; `resolveMjMaxTokens` selon taille modèle |
 | **Tour MJ** | `apps/api/src/mj.ts` — départ selon `initialMjContextModeForModel` (petit modèle → **micro**) ; si erreur **context length** → retry **micro** ; si timeout en **full** → retry **slim** ; message `formatSmallContextModelHint` si échec final |
 | **Préflight** | `lmstudio-preflight.ts` — LM Studio : sonde chat ~14 s ; **Ollama** : liste modèles seule (pas de sonde — CPU VPS trop lent) |
-| **Timeout HTTP** | `resolveLlmTimeoutMs` : LM Studio **180–240 s** selon taille prompt ; cloud **90–120 s** ; défaut `completeAsMj` si `timeoutMs` omis |
+| **Timeout HTTP** | `resolveLlmTimeoutMs` : LM Studio **180–240 s** selon taille prompt ; cloud **90–120 s** ; défaut `completeChat` si `timeoutMs` omis |
+| **Profils tâche** | `narration` : temp 0,85 (tours MJ, ✨ champ, intro auto, récit ouverture) ; `tool` : temp 0,15 (extraction, fill-all JSON, traduction, aide héros, test) ; `jsonMode` + retry sans `response_format` si HTTP 400 ; cloud `toolModelId` (défaut GPT-4o mini) ; local = même `modelId` |
+| **Fallback LM Studio** | Uniquement si l’id n’est **pas** un id marché (`gpt-`, `claude-`, …) — sinon l’erreur cloud est renvoyée telle quelle |
 | **JIT / vide** | `providers.ts` : retry réponse vide (6 s) ; retry timeout LM Studio (+8 s backoff, 2e tentative même prompt) |
 | **Client** | `api.ts` : routes MJ **270 s** ; `RoomView` garde-fou Réclamer **280 s** |
 | **File d'attente** | `room-llm-queue.ts` — **un seul appel LLM à la fois par salon** ; priorités : **narrative** (MJ Réclamer/Action/ouverture) > **interactive** (fill-all, ✨ champ, aide héros, présentation auto, traduction) > **background** (extraction scène/faits/trame) ; remplace l'ancien `busyRooms` + retries ; fill-all garde le mutex **par joueur** (429 doublon même PJ) |

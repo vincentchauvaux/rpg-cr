@@ -4,7 +4,7 @@ import {
   type CharacterSheet,
   type CharacterSheetFieldKey,
   type LlmRoomConfig,
-  completeAsMj,
+  completeChat,
 } from "@rpg-cr/shared";
 import { getMap, getRoomById } from "./rooms.js";
 import { readCampaignContext } from "./campaign-export.js";
@@ -43,9 +43,10 @@ export async function generateCharacterField(
   );
 
   const result = await queueInteractiveLlm(roomId, `character-field:${field}`, () =>
-    completeAsMj(config, messages, {
+    completeChat(config, messages, {
       apiKey,
       lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+      taskKind: "narration",
     })
   );
 

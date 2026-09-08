@@ -23,6 +23,9 @@ import type {
   SceneState,
 } from "@rpg-cr/shared";
 import {
+  defaultNarrationModelId,
+  defaultToolModelId,
+  getCatalogEntry,
   hostRecapSessionStorageKey,
   pickHostMjPromptType,
 } from "@rpg-cr/shared";
@@ -318,11 +321,21 @@ export function RoomView({ code }: Props) {
 
   const [llmForm, setLlmForm] = useState<LlmRoomConfig>(() => {
     const onVps = getBasePath().length > 0;
+    if (onVps) {
+      return {
+        providerId: "ollama",
+        modelId: "qwen2.5:7b-instruct",
+        baseUrl: "http://127.0.0.1:11434/v1",
+        useFallbackLmStudio: false,
+        autoExtractFacts: true,
+      };
+    }
+    const openai = getCatalogEntry("openai");
     return {
-      providerId: onVps ? "ollama" : "openai",
-      modelId: onVps ? "qwen2.5:7b-instruct" : "gpt-4o-mini",
-      baseUrl: onVps ? "http://127.0.0.1:11434/v1" : undefined,
-      useFallbackLmStudio: !onVps,
+      providerId: "openai",
+      modelId: defaultNarrationModelId(openai) || "gpt-4o",
+      toolModelId: defaultToolModelId(openai) || "gpt-4o-mini",
+      useFallbackLmStudio: true,
       autoExtractFacts: true,
     };
   });

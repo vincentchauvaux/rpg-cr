@@ -1,6 +1,6 @@
 import {
   buildPlayerSelfIntroMessages,
-  completeAsMj,
+  completeChat,
   type ChatMessage,
   type Player,
 } from "@rpg-cr/shared";
@@ -44,10 +44,11 @@ async function generateSelfIntroduction(
   );
 
   const result = await queueInteractiveLlm(player.roomId, "player-intro-auto", () =>
-    completeAsMj(room.llmConfig!, messages, {
+    completeChat(room.llmConfig!, messages, {
       apiKey,
       lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
       maxTokens: 512,
+      taskKind: "narration",
     })
   );
 

@@ -1,6 +1,6 @@
 import {
   buildHeroAssistantMessages,
-  completeAsMj,
+  completeChat,
   estimatePromptChars,
   formatMjMessageForDisplay,
   isLlmTimeoutError,
@@ -68,11 +68,12 @@ export async function runHeroAssistantTurn(
   let result;
   try {
     result = await queueInteractiveLlm(player.roomId, "hero-assistant", () =>
-      completeAsMj(config, messages, {
+      completeChat(config, messages, {
         apiKey,
         lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
         timeoutMs,
         maxTokens: mode === "creation" ? 400 : 320,
+        taskKind: "tool",
       })
     );
   } catch (e) {
@@ -90,7 +91,7 @@ export async function runHeroAssistantTurn(
       preferredLocale: player.preferredLocale,
     });
     result = await queueInteractiveLlm(player.roomId, "hero-assistant:slim", () =>
-      completeAsMj(config, slimMessages, {
+      completeChat(config, slimMessages, {
         apiKey,
         lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
         timeoutMs: resolveLlmTimeoutMs(
@@ -98,6 +99,7 @@ export async function runHeroAssistantTurn(
           estimatePromptChars(slimMessages)
         ),
         maxTokens: 280,
+        taskKind: "tool",
       })
     );
   }

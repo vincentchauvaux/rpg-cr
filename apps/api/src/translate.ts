@@ -1,5 +1,5 @@
 import {
-  completeAsMj,
+  completeChat,
   DEFAULT_LOCALE,
   localeLabel,
   shouldTranslateMessage,
@@ -115,11 +115,12 @@ export async function translateText(
 
   const messages = buildTranslatePrompt(text, tgt, src);
   const result = await queueInteractiveLlm(roomId, "translate", () =>
-    completeAsMj(config, messages, {
+    completeChat(config, messages, {
       apiKey,
       lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
       maxTokens: Math.min(2048, text.length * 3 + 128),
       timeoutMs: 60_000,
+      taskKind: "tool",
     })
   );
 

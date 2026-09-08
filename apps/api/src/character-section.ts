@@ -1,8 +1,7 @@
 import {
   buildCharacterSectionMessages,
-  completeAsMj,
+  completeChat,
   normalizeCharacterSheet,
-  parseExtractedFacts,
   type CharacterSheet,
   type CharacterSheetSectionKey,
   type LlmRoomConfig,
@@ -21,21 +20,47 @@ function parseSectionJson(
     const parsed = JSON.parse(match[0]) as unknown;
     switch (section) {
       case "stats":
-        return { stats: parsed as CharacterSheet["stats"] };
+        return { stats: unwrapObject(parsed, "stats") as CharacterSheet["stats"] };
       case "spells":
-        return { spells: parsed as CharacterSheet["spells"] };
+        return { spells: unwrapArray(parsed, "spells") as CharacterSheet["spells"] };
       case "attackTypes":
-        return { attackTypes: parsed as CharacterSheet["attackTypes"] };
+        return {
+          attackTypes: unwrapArray(parsed, "attackTypes") as CharacterSheet["attackTypes"],
+        };
       case "actions":
-        return { actions: parsed as CharacterSheet["actions"] };
+        return { actions: unwrapArray(parsed, "actions") as CharacterSheet["actions"] };
       case "usableItems":
-        return { usableItems: parsed as CharacterSheet["usableItems"] };
+        return {
+          usableItems: unwrapArray(parsed, "usableItems") as CharacterSheet["usableItems"],
+        };
       default:
         return {};
     }
   } catch {
     return {};
   }
+}
+
+function unwrapArray(parsed: unknown, key: string): unknown {
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const rec = parsed as Record<string, unknown>;
+    if (Array.isArray(rec[key])) return rec[key];
+    for (const v of Object.values(rec)) {
+      if (Array.isArray(v)) return v;
+    }
+  }
+  return parsed;
+}
+
+function unwrapObject(parsed: unknown, key: string): unknown {
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const rec = parsed as Record<string, unknown>;
+    if (rec[key] && typeof rec[key] === "object" && !Array.isArray(rec[key])) {
+      return rec[key];
+    }
+  }
+  return parsed;
 }
 
 export async function generateCharacterSection(
@@ -67,9 +92,11 @@ export async function generateCharacterSection(
   );
 
   const result = await queueInteractiveLlm(roomId, `character-section:${section}`, () =>
-    completeAsMj(config, messages, {
+    completeChat(config, messages, {
       apiKey,
       lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+      taskKind: "tool",
+      jsonMode: true,
     })
   );
 

@@ -2,7 +2,7 @@ import {
   buildCharacterAbilitiesPhaseMessages,
   buildCharacterMaterialPhaseMessages,
   buildCharacterStoryPhaseMessages,
-  completeAsMj,
+  completeChat,
   mergeCharacterSheet,
   normalizeCharacterSheet,
   type CharacterSheet,
@@ -72,12 +72,14 @@ async function runPhaseLlm(
   abortSignal?: AbortSignal
 ): Promise<string> {
   const result = await queueInteractiveLlm(roomId, label, () =>
-    completeAsMj(config, messages, {
+    completeChat(config, messages, {
       apiKey,
       lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
       timeoutMs: 120_000,
       maxTokens,
       abortSignal,
+      taskKind: "tool",
+      jsonMode: true,
     })
   );
   if (!result.content?.trim()) {

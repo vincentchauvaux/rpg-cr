@@ -1,4 +1,4 @@
-import type { LlmCatalogEntry } from "../types.js";
+import type { LlmCatalogEntry, LlmCatalogModel, LlmModelRole } from "../types.js";
 
 export const LLM_CATALOG: LlmCatalogEntry[] = [
   {
@@ -9,13 +9,23 @@ export const LLM_CATALOG: LlmCatalogEntry[] = [
     defaultBaseUrl: "https://api.openai.com/v1",
     requiresApiKey: true,
     characteristics: [
-      "Réponses rapides",
+      "Récit MJ : GPT-4o (prose, consignes, table)",
+      "Outils : GPT-4o mini (extraction JSON, traduction, moins cher)",
       "Large écosystème",
-      "Modèles généralistes et raisonnement",
     ],
     models: [
-      { id: "gpt-4o", label: "GPT-4o", contextWindow: 128000 },
-      { id: "gpt-4o-mini", label: "GPT-4o mini", contextWindow: 128000 },
+      {
+        id: "gpt-4o",
+        label: "GPT-4o (MJ)",
+        contextWindow: 128000,
+        role: "narration",
+      },
+      {
+        id: "gpt-4o-mini",
+        label: "GPT-4o mini (outils)",
+        contextWindow: 128000,
+        role: "tool",
+      },
     ],
   },
   {
@@ -25,12 +35,17 @@ export const LLM_CATALOG: LlmCatalogEntry[] = [
     openAiCompatible: true,
     requiresApiKey: true,
     characteristics: [
-      "Narration nuancée",
-      "Long contexte (selon modèle)",
-      "Configurer un proxy compatible OpenAI",
+      "Narration nuancée (Sonnet)",
+      "Même modèle pour les outils (température basse + JSON)",
+      "Le proxy doit exposer `/v1/chat/completions`",
     ],
     models: [
-      { id: "claude-sonnet-4-20250514", label: "Claude Sonnet", contextWindow: 200000 },
+      {
+        id: "claude-sonnet-4-20250514",
+        label: "Claude Sonnet",
+        contextWindow: 200000,
+        role: "both",
+      },
     ],
   },
   {
@@ -43,12 +58,14 @@ export const LLM_CATALOG: LlmCatalogEntry[] = [
     characteristics: [
       "Gratuit",
       "Sur le VPS — pas de Mac ni tunnel",
-      "Modèle chat/instruct (`ollama pull qwen2.5:7b-instruct`)",
+      "Défaut RAM-safe : `qwen2.5:7b-instruct`",
+      "Si 16 Go+ : Qwen3 instruct 8B/14B (meilleur suivi d'instructions)",
     ],
     models: [
       {
         id: "",
         label: "Nom Ollama — voir ollama list ou GET /v1/models",
+        role: "both",
       },
     ],
   },
@@ -63,12 +80,13 @@ export const LLM_CATALOG: LlmCatalogEntry[] = [
       "Hors-ligne",
       "Gratuit",
       "Modèle **chat/instruct** requis — pas d'embedding (ex. nomic-embed)",
-      "Fallback automatique si le marché échoue",
+      "Profil outils = même modèle chargé, température basse",
     ],
     models: [
       {
         id: "",
         label: "Modèle chat/instruct — pas embedding (sidebar LM Studio)",
+        role: "both",
       },
     ],
   },
@@ -76,4 +94,43 @@ export const LLM_CATALOG: LlmCatalogEntry[] = [
 
 export function getCatalogEntry(providerId: string): LlmCatalogEntry | undefined {
   return LLM_CATALOG.find((e) => e.id === providerId);
+}
+
+function modelRole(model: LlmCatalogModel): LlmModelRole {
+  return model.role ?? "both";
+}
+
+function namedModels(entry: LlmCatalogEntry | undefined): LlmCatalogModel[] {
+  return (entry?.models ?? []).filter((m) => m.id.trim());
+}
+
+export function catalogModelsForRole(
+  entry: LlmCatalogEntry | undefined,
+  role: LlmModelRole
+): LlmCatalogModel[] {
+  return namedModels(entry).filter((m) => {
+    const r = modelRole(m);
+    if (role === "both") return true;
+    return r === role || r === "both";
+  });
+}
+
+/** Modèle MJ recommandé (premier `narration`, sinon `both`). */
+export function defaultNarrationModelId(entry: LlmCatalogEntry | undefined): string {
+  const models = namedModels(entry);
+  const preferred =
+    models.find((m) => modelRole(m) === "narration") ??
+    models.find((m) => modelRole(m) === "both") ??
+    models[0];
+  return preferred?.id ?? "";
+}
+
+/** Modèle outils recommandé (premier `tool`, sinon `both`). */
+export function defaultToolModelId(entry: LlmCatalogEntry | undefined): string {
+  const models = namedModels(entry);
+  const preferred =
+    models.find((m) => modelRole(m) === "tool") ??
+    models.find((m) => modelRole(m) === "both") ??
+    models[0];
+  return preferred?.id ?? "";
 }

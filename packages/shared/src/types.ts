@@ -183,6 +183,11 @@ export interface Room {
 export interface LlmRoomConfig {
   providerId: string;
   modelId: string;
+  /**
+   * Modèle optionnel pour les tâches outils (extraction JSON, traduction).
+   * Absent = sibling catalogue (cloud) ou même id que `modelId` (local).
+   */
+  toolModelId?: string;
   baseUrl?: string;
   apiKeyEnv?: string;
   systemPromptOverride?: string;
@@ -288,11 +293,22 @@ export interface ProceduralMap {
   countries: string[];
 }
 
+/** Rôle recommandé d'un modèle dans le catalogue (MJ vs extraction / traduction). */
+export type LlmModelRole = "narration" | "tool" | "both";
+
+export interface LlmCatalogModel {
+  id: string;
+  label: string;
+  contextWindow?: number;
+  /** Défaut `both` si omis. */
+  role?: LlmModelRole;
+}
+
 export interface LlmCatalogEntry {
   id: string;
   vendor: string;
   name: string;
-  models: { id: string; label: string; contextWindow?: number }[];
+  models: LlmCatalogModel[];
   openAiCompatible: boolean;
   defaultBaseUrl?: string;
   characteristics: string[];

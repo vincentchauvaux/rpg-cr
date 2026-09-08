@@ -3,7 +3,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
-import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel } from "@rpg-cr/shared";
+import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, assertChatModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel } from "@rpg-cr/shared";
 import { initDb } from "./db.js";
 import {
   API_SECURITY_HEADERS,
@@ -455,6 +455,14 @@ app.put<{
       assertMjSuitableModelId(config.modelId);
     } catch (e) {
       const err = e instanceof Error ? e.message : "Modèle invalide";
+      return reply.status(400).send({ error: err });
+    }
+  }
+  if (config?.toolModelId?.trim()) {
+    try {
+      assertChatModelId(config.toolModelId);
+    } catch (e) {
+      const err = e instanceof Error ? e.message : "Modèle outils invalide";
       return reply.status(400).send({ error: err });
     }
   }
