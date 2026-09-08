@@ -83,6 +83,27 @@ export function isLlmTimeoutError(error: unknown): boolean {
   return /Délai dépassé|TimeoutError|timed out|timeout/i.test(error.message);
 }
 
+export function isLlmRateLimitError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /LLM 429|rate limit|tokens per minute|\bTPM\b|Please try again in/i.test(
+    error.message
+  );
+}
+
+/** Groq inclut `max_tokens` dans le TPM : attendre le délai annoncé (ex. 8.52s). */
+export function parseLlmRetryAfterMs(message: string, fallbackMs = 8_000): number {
+  const m =
+    message.match(/try again in\s+([\d.]+)\s*s/i) ??
+    message.match(/réessayez dans\s+([\d.]+)\s*s/i);
+  if (m?.[1]) {
+    const sec = Number(m[1]);
+    if (Number.isFinite(sec) && sec > 0) {
+      return Math.ceil(sec * 1000);
+    }
+  }
+  return fallbackMs;
+}
+
 export function isContextLengthLlmError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   return /context length|tokens to keep|greater than the context|context window|too many tokens/i.test(
@@ -91,6 +112,10 @@ export function isContextLengthLlmError(error: unknown): boolean {
 }
 
 export function resolveMjMaxTokens(providerId: string, modelId: string): number {
+  /** Groq TPM compte aussi la réservation `max_tokens` (4096 tuait le 20B en 2 tours). */
+  if (providerId === "groq") {
+    return isReasoningChatModelId(modelId) ? 1536 : 1400;
+  }
   if (isReasoningChatModelId(modelId)) return 4096;
   const tier = inferModelContextTier(modelId);
   if (tier === "small") return 640;

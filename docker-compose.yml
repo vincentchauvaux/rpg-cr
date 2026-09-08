@@ -15,6 +15,7 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - AI_PROVIDER=${AI_PROVIDER:-}
       - AI_MODEL=${AI_MODEL:-}
+      - AI_TOOL_MODEL=${AI_TOOL_MODEL:-}
       - AI_FALLBACK_PROVIDER=${AI_FALLBACK_PROVIDER:-}
       - LM_STUDIO_BASE_URL=${LM_STUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
     volumes:

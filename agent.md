@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-08 (Groq gpt-oss : un bouton test, retry finish_reason=length)
+> Dernière mise à jour : 2026-09-08 (MJ : Gemini Flash via OpenRouter sur le VPS, Groq en secours)
 
 ## Vision
 
@@ -155,27 +155,30 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 
 ### Choix de scène cliquables (épreuves D&D 5e)
 
-Les listes markdown (`- …`) du **dernier** récit MJ (2–8 items) sont des **boutons**. Un clic n'envoie pas un Dire : le serveur lance une **épreuve de table** (dés côté API, équité).
+Les listes markdown (`- …`) du **dernier** récit MJ encore **en vigueur** (2–8 items) sont des **boutons**. Un clic n'envoie pas un Dire : le serveur ouvre un **tour de table** (dés côté API, équité).
 
 | Élément | Détail |
 |---------|--------|
 | Parse + inférence | `packages/shared/src/scene-choice.ts` — dernière liste ; carac/compétence selon le libellé (chercher → INT Investigation, explorer → SAG Perception, convaincre → CHA Persuasion contesté, etc.) ; DD 10–15 selon la tension de scène |
+| Pile / tour | 1er clic ouvre le tour ; les autres PJ **choisissent aussi** (autre option, même option = aide), **aident**, **s'opposent** ou **laissent faire** (défaut / timeout). Résolution quand **tout le monde a répondu**, timeout **25 s**, ou **On y va**. Un seul message Action agrégé + un tour MJ |
+| Laisser faire | Pas d'opposition automatique entre PJ. Timeout = laisser faire. L'aide / l'opposition restent optionnelles |
+| Périmé | Dès qu'un tour se résout, **toute** la liste source est consommée (les options non cliquées n'ont pas eu lieu). Un nouveau récit MJ ou une Action hors liste invalide l'ancienne liste. `liveChoiceMessageId` (GET + WS) |
 | Jets | `packages/shared/src/scene-check.ts` — d20 + modificateur de fiche `(score-10)/2` ; 20/1 = saveur, pas d'auto-réussite RAW |
 | Aide | Autres PJ : **Aider** (jet, souvent Perception) ; total ≥ 10 → **avantage** à l'acteur (2d20, le plus haut) — l'avantage ne se cumule pas |
-| Opposition | **S'opposer** = jet contesté (Persuasion vs Perspicacité, Discrétion vs Perception, sinon même carac). Mode « opposed » (social/combat) : le **monde** jette aussi `d20 + worldMod` |
-| Fenêtre | 1 humain à la table → résolution **immédiate** ; sinon **18 s** pour aider/opposer ; l'acteur peut **Lancer maintenant** |
-| API | `POST /api/rooms/:roomId/scene-checks` `{ actorPlayerId, sourceMessageId, choice }` ; `…/:checkId/join` `{ stance: help\|oppose }` ; `…/:checkId/resolve` ; `GET /api/rooms/:code` + WS `{ type: "scene_check", sceneCheck }` |
+| Opposition | **S'opposer** = jet contesté (Persuasion vs Perspicacité, Discrétion vs Perception, sinon même carac). Mode « opposed » (social/combat) : le **monde** jette aussi `d20 + worldMod` — ce n'est pas une opposition entre PJ |
+| Fenêtre | 1 humain à la table → résolution **immédiate** ; sinon **25 s** |
+| API | `POST /api/rooms/:roomId/scene-checks` `{ actorPlayerId, sourceMessageId, choice }` ; `…/:checkId/join` `{ stance: help\|oppose\|pass\|choice }` ; `…/:checkId/resolve` ; `GET /api/rooms/:code` expose `sceneCheck` + `liveChoiceMessageId` ; WS `{ type: "scene_check", sceneCheck, liveChoiceMessageId }` |
 | Mémoire | In-memory par salon (comme le verrou fill-all) — pas de SQLite |
-| MJ | Un seul message **Action** agrégé (`Je lance un d20…` + totaux + `Résultat`) puis **un** `scheduleActionMj` — la file LLM ne voit pas N tours d'aide |
-| UI | `MjMessageMarkdown` (li cliquables, désactivés si traduction) ; `SceneCheckBanner` (Aider / S'opposer / Lancer maintenant) ; **scroll figé sur le jet** (pas de saut en fin de récit MJ ; reprendre le suivi en bas si le joueur y revient) |
-| Prompt | `system-prompt.ts` : proposer 2–3 options en liste `-` ; ne pas inventer les dés. `player-action.ts` : si `Jet D&D 5e`, narrer uniquement selon les totaux |
+| MJ | Un seul message **Action** (`Tour de table` si plusieurs avis) puis **un** `scheduleActionMj`. Voix **2e personne** (tu / vous) : les PJ ne sont jamais narrés comme des PNJ, y compris quand un nouveau joueur arrive |
+| UI | `MjMessageMarkdown` (li cliquables tant que la liste est live et que le joueur n'a pas répondu) ; `SceneCheckBanner` (Laisser faire / Aider / S'opposer / On y va) ; **scroll figé sur le jet** |
+| Prompt | `system-prompt.ts` + `MJ_PLAYER_VOICE_RULES` : 2e personne, pile de table, options non retenues ignorées. `player-action.ts` : narre le beat unique selon les totaux |
 
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.
 
    - **Ollama (VPS)** : provider dédié, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` (RAM-safe) — optionnel `qwen3:8b` / `qwen3:14b` si 16 Go+ ; install `deploy/ollama-setup.sh`, pas de tunnel Mac
    - **LM Studio (Mac + tunnel)** : URL `http://127.0.0.1:1234/v1`, modèle saisi à la main ; « Enregistrer la config MJ » = sauvegarde SQLite uniquement
    - **OpenRouter** : URL `https://openrouter.ai/api/v1`, ids `openai/gpt-4o` (MJ) + `openai/gpt-4o-mini` (outils) ; clé `sk-or-…` **jamais en git**
-   - **Groq / Gemini (gratuit, serveur)** : `AI_PROVIDER=groq|gemini`, `AI_MODEL`, `AI_FALLBACK_PROVIDER=gemini` ; clés `GROQ_API_KEY` / `GEMINI_API_KEY` **uniquement `process.env`** (jamais frontend, jamais SQLite, jamais logs) ; même `completeChat` ; dernier fallback LM Studio / Ollama conservé
+   - **Groq / Gemini (gratuit, serveur)** : `AI_PROVIDER=gemini|groq|openrouter`, `AI_MODEL`, `AI_FALLBACK_PROVIDER=groq` ; clés `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` **uniquement `process.env`** (jamais frontend, jamais SQLite, jamais logs) ; même `completeChat` ; dernier fallback LM Studio / Ollama conservé. **VPS OVH** : l’API Gemini Google refuse souvent l’IP datacenter (`location is not supported`) → MJ Flash via OpenRouter (`google/gemini-3.8-flash`).
 5. **LLM** — catalogue avec rôles `narration` / `tool` / `both` ; config par salon (`modelId` MJ + `toolModelId` optionnel cloud) ; `completeChat` + profils (`task-profile.ts`) ; **MJ auto Dire** désactivé (`AUTO_MJ_ON_PLAYER_MESSAGES`) ; **MJ auto Action** actif (`scheduleActionMj`) ; Réclamer / routes hôte ; endpoint `POST /api/rooms/:id/mj` conservé (API interne / v2)
 6. **Carte** — génération procédurale (simplex noise, biomes, effets toxic/fog/evil/buff, POI, territoires, SVG)
 7. **Modèles** — tables SQLite : messages, quêtes, journal, propositions archivées (+ endpoints REST)
@@ -494,7 +497,7 @@ API : `GET/PATCH /api/players/:id/character`, `POST …/finalize`, `POST …/int
 | Annuler génération → **400** | `DELETE` lock avec `Content-Type: application/json` mais corps vide (Fastify `FST_ERR_CTP_EMPTY_JSON_BODY`) | Rebuild web : `fetchJson` n’envoie le header JSON que si `body` présent |
 | Deux fill-all en parallèle (LAN, même PJ) | Deux appels LLM lourds sur le même personnage | **429** mutex par `playerId` ; deux PJ différents **sérialisés** via la file salon (plus de collision LM Studio) |
 | **502** test LLM Ollama « Modèle introuvable » (ex. `qwen/qwen3.5-9b`) | Id **LM Studio** conservé après changement de provider — Ollama utilise un autre format (`qwen2.5:7b-instruct`) | God mode → **Ollama** → liste auto au chargement + correction id → **Enregistrer** puis **Tester** (le test lit la config **en base**, pas le champ non enregistré) |
-| Select Groq « Modèle » toujours rouge (20B et 120B) | La liste Ollama/LM Studio restait en mémoire et invalidait l’id cloud | Rebuild web ; les deux GPT-OSS sont valides — **120B** récit, **20B** outils |
+| Select Groq « Modèle » toujours rouge (20B et 120B) | La liste Ollama/LM Studio restait en mémoire et invalidait l’id cloud | Rebuild web ; Llama 70B / GPT-OSS sont valides |
 | MJ erreur « encore en chargement » puis répond | Préflight Ollama : sonde 14s trop courte sur CPU VPS | Préflight Ollama = liste modèles seule (pas sonde chat) ; voyant `MjLlmStatusIndicator` (prêt / en cours / erreur) |
 
 **Test curl** (remplacer `{playerId}`, `{roomId}` ; API + `llmConfig` requis pour generate-all) :
@@ -701,12 +704,16 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 ```
 GROQ_API_KEY=…
 GEMINI_API_KEY=…
-AI_PROVIDER=groq
-AI_MODEL=openai/gpt-oss-20b
-AI_FALLBACK_PROVIDER=gemini
+OPENROUTER_API_KEY=…
+AI_PROVIDER=openrouter
+AI_MODEL=google/gemini-3.8-flash
+AI_FALLBACK_PROVIDER=groq
 ```
 
-- Groq : API officielle `https://api.groq.com/openai/v1` ; défaut `openai/gpt-oss-20b` (vérifié via GET `/models`). Si l’id disparaît : `GET /openai/v1/models` puis `AI_MODEL=…`.
+- **Défaut soirée (prod VPS)** : Gemini Flash **via OpenRouter** (`google/gemini-3.8-flash`). L’API Gemini Google (`generativelanguage.googleapis.com`) renvoie souvent `User location is not supported` depuis une IP datacenter OVH. Si OpenRouter échoue → Groq.
+- **Local Mac** : `AI_PROVIDER=gemini` + `GEMINI_API_KEY` peut marcher (hors datacenter).
+- Groq **free** compte les jetons **par minute** (TPM) **et** la réservation `max_tokens`. `openai/gpt-oss-20b` = **8k TPM**. Sur Groq : prompt **slim**, `max_tokens` ~1536, extraits auto **sans LLM**, retry 429.
+- Groq : API `https://api.groq.com/openai/v1` ; si un id disparaît : `GET /openai/v1/models`.
 - Gemini : API officielle OpenAI-compatible Google ; défaut Flash `gemini-3.8-flash` (ou `AI_MODEL=gemini-flash-latest`).
 - Chaîne : provider env → `AI_FALLBACK_PROVIDER` → LM Studio/Ollama (`LM_STUDIO_BASE_URL`) si `useFallbackLmStudio`.
 - Revenir au local : commenter `AI_PROVIDER` (ou `AI_PROVIDER=lmstudio` / `ollama`) puis god mode comme ci-dessous.
@@ -820,7 +827,7 @@ Deux canaux distincts, opt-in séparés, déclenchés uniquement sur événement
 
 - Bordures **vertes** / **rouges** (`--valid` / `--invalid`) au blur ou à la soumission.
 - Section **Connexion MJ (LLM)** : repliée avec titre vert + ✓ après enregistrement réussi ; clic pour rouvrir.
-- **Test LLM** : endpoint `POST /api/rooms/:roomId/llm/test` (god mode) — mini completion `max_tokens` 24 (128 si modèle *reasoning* `gpt-oss` / o-series) ; rejet HTTP **400** si modèle embedding ou **VL** ; liste modèles chat : `GET /api/llm/lmstudio/models?baseUrl=…` (VL filtrés) → appelle **`GET {baseUrl}/models`** avec base normalisée **`/v1`** obligatoire ; messages d'erreur test adaptés au backend (Ollama vs LM Studio via `formatLlmTestError` + `resolveLocalLlmBackend`) ; changement de provider local réinitialise le modèle par défaut (`qwen2.5:7b-instruct` pour Ollama). Cloud : second select **Modèle outils** (`toolModelId`) ; local : même modèle, sampling déterministe. Groq **gpt-oss** : `reasoning_effort=low` + retry si `finish_reason=length` (le raisonnement interne mangait tout le budget tokens → 502 « réponse vide ») — pas lié au nombre de salons.
+- **Test LLM** : endpoint `POST /api/rooms/:roomId/llm/test` (god mode) — mini completion `max_tokens` 24 (128 si modèle *reasoning* `gpt-oss` / o-series) ; rejet HTTP **400** si modèle embedding ou **VL** ; liste modèles chat : `GET /api/llm/lmstudio/models?baseUrl=…` (VL filtrés) → appelle **`GET {baseUrl}/models`** avec base normalisée **`/v1`** obligatoire ; messages d'erreur test adaptés au backend (Ollama vs LM Studio via `formatLlmTestError` + `resolveLocalLlmBackend`) ; changement de provider local réinitialise le modèle par défaut (`qwen2.5:7b-instruct` pour Ollama). Cloud : second select **Modèle outils** (`toolModelId`) ; local : même modèle, sampling déterministe. Env prod : **OpenRouter `google/gemini-3.8-flash`** (Gemini Google direct est souvent refusé depuis l’IP OVH) ; Groq `gpt-oss-20b` en secours.
 - **Clé API (god mode)** : champ `#llm-api-key` — `autoComplete="new-password"` (évite l’avertissement Chrome DOM sur les champs `type=password` hors formulaire de connexion).
 
 ## LLM local — timeouts, contexte, préflight

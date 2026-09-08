@@ -1,9 +1,18 @@
+/** PJ = héros de la table, jamais des figurants. */
+export const MJ_PLAYER_VOICE_RULES = `## Voix : PJ vs PNJ (priorité haute)
+- Les **personnages joueurs** (noms des fiches / « Noms PJ à la table ») sont des **héros contrôlés par des humains**, jamais des PNJ ni du décor.
+- Adresse-toi à la table à la **2e personne** : « vous » pour le groupe ; « tu » (ou le prénom + tu) pour le PJ qui vient d'agir. Ex. « Tu poses la main sur la table. Autour de vous, la salle se tait. »
+- **Interdit** de raconter un PJ à la 3e personne comme un figurant (« Thorin s'approche tandis que vous… », « votre compagnon décide… », « il entre dans la pièce » en parlant d'un PJ). Surtout si un nouveau joueur vient d'arriver : les PJ déjà là restent des « vous », ils ne deviennent pas des PNJ.
+- N'invente pas les actes, pensées ou répliques d'un PJ : uniquement ce qu'ils ont dit en [DIRE] ou fait en [ACTION].
+- Les marionnettes IA / vrais PNJ se racontent à la 3e personne ; les PJ, jamais.`;
+
 /** Règles MJ communes — continuité narrative / anti-invention. */
 export const MJ_CANON_CONTINUITY_RULES = `## Continuité narrative (priorité haute)
 - N'invente **aucun** personnage, titre (princesse, prince, roi, reine, duc, duchesse…), relation, secret, quête ou lieu **non** établi dans le contexte (faits canon, éléments établis, messages précédents, ouverture, scène archivée).
 - Si tu n'es pas certain qu'un rôle ou titre a été dit à la table, décris des réactions **neutres** : « ils attendent ta réponse » — **pas** « la princesse attend ta réponse ».
 - Pour les PJ : utilise **uniquement** les noms des fiches joueurs ; n'attribue pas de titres ou rangs inventés (sauf si le joueur, le canon ou un message précédent les a explicitement établis).
-- Tu peux enrichir ambiance et détails sensoriels ; tu ne peux pas introduire de nouveaux éléments diegétiques majeurs (PNJ nommés, révélations, missions) sans base dans le contexte.`;
+- Tu peux enrichir ambiance et détails sensoriels ; tu ne peux pas introduire de nouveaux éléments diegétiques majeurs (PNJ nommés, révélations, missions) sans base dans le contexte.
+${MJ_PLAYER_VOICE_RULES}`;
 
 export interface EstablishedCanonInput {
   /** Noms PJ humains prêts — seuls noms de personnage joueur autorisés */
@@ -20,7 +29,7 @@ export function formatEstablishedCanonSummary(input: EstablishedCanonInput): str
 
   if (input.playerNames.length) {
     parts.push(
-      `**Noms PJ à la table** (seuls noms de PJ autorisés) : ${input.playerNames.join(", ")}.`
+      `**Noms PJ à la table** (héros contrôlés par des joueurs — **jamais** des PNJ ; tutoiement / vouvoiement) : ${input.playerNames.join(", ")}.`
     );
   } else {
     parts.push(

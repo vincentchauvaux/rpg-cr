@@ -23,8 +23,8 @@ Variables optionnelles (voir `.env.example`) :
 - `OPENAI_API_KEY` — pour le MJ via OpenAI
 - `OPENROUTER_API_KEY` — pour le MJ via OpenRouter (`sk-or-…`)
 - `GROQ_API_KEY` / `GEMINI_API_KEY` — MJ cloud gratuit (serveur uniquement)
-- `AI_PROVIDER` — `groq` ou `gemini` (surcharge salon) ; `AI_FALLBACK_PROVIDER=gemini`
-- `AI_MODEL` — ex. `openai/gpt-oss-20b` (Groq) ou `gemini-3.8-flash`
+- `AI_PROVIDER` — prod : `openrouter` (Gemini Flash) ; local Mac : `gemini` ; secours `AI_FALLBACK_PROVIDER=groq`
+- `AI_MODEL` — OpenRouter : `google/gemini-3.8-flash` ; Gemini direct : `gemini-3.8-flash` ; Groq : `openai/gpt-oss-20b`
 - `LM_STUDIO_BASE_URL` — fallback local (défaut `http://127.0.0.1:1234/v1`)
 - `NEXT_PUBLIC_API_PORT` / `NEXT_PUBLIC_WS_PORT` — ports API/WS (défaut 4000)
 

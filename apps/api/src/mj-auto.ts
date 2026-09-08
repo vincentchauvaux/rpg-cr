@@ -21,6 +21,7 @@ import {
   playerMessageDeclaresRoll,
   mjMessageRequestsRoll,
   stripMjMetadataComments,
+  usesTightGroqTpm,
 } from "@rpg-cr/shared";
 import {
   getRoomById,
@@ -126,9 +127,21 @@ function buildPlayerActionNarrationContext(
 ): NarrationContext {
   const scene = getSceneState(roomId);
   const arc = getNarrativeArc(roomId);
-  const companionsPresent = listPlayers(roomId)
-    .filter((p) => p.id !== playerId && isCompanionNarrativelyActive(p))
-    .map((p) => p.name);
+  const companionsPresent = (() => {
+    const others = listPlayers(roomId).filter(
+      (p) => p.id !== playerId && isCompanionNarrativelyActive(p)
+    );
+    const humans = others.filter((p) => p.kind === "human").map((p) => p.name);
+    const puppets = others.filter((p) => p.kind === "ai_puppet").map((p) => p.name);
+    const lines: string[] = [];
+    if (humans.length) {
+      lines.push(`PJ (joueurs — pas des PNJ) : ${humans.join(", ")}`);
+    }
+    if (puppets.length) {
+      lines.push(`Marionnettes IA : ${puppets.join(", ")}`);
+    }
+    return lines;
+  })();
 
   return {
     kind: "player_action",
@@ -205,6 +218,7 @@ async function maybeExtractFacts(
 ): Promise<void> {
   const room = getRoomById(roomId);
   if (!room?.llmConfig || !shouldAutoExtractFacts(room.llmConfig)) return;
+  if (usesTightGroqTpm(room.llmConfig)) return;
   await runBackgroundScrib(roomId, "extract-facts", async () => {
     await extractNarrativeFactsFromText(
       roomId,
@@ -235,7 +249,7 @@ async function maybeExtractScene(
     if (scene) broadcastScene(roomId, scene);
   };
 
-  if (skipSceneExtract) {
+  if (usesTightGroqTpm(room.llmConfig) || skipSceneExtract) {
     await runBackgroundScrib(roomId, "scene-bootstrap", async () => {
       await runLightBootstrap();
     });
@@ -268,6 +282,7 @@ async function maybeExtractArc(
 ): Promise<void> {
   const room = getRoomById(roomId);
   if (!room?.llmConfig || !shouldAutoExtractFacts(room.llmConfig)) return;
+  if (usesTightGroqTpm(room.llmConfig)) return;
   if (alreadyAppliedInline) return;
   await runBackgroundScrib(roomId, "extract-arc", async () => {
     await extractNarrativeArcFromText(

@@ -281,9 +281,14 @@ export function broadcastScene(roomId: string, scene: SceneState): void {
 
 export function broadcastSceneCheck(
   roomId: string,
-  sceneCheck: SceneCheckPublic | null
+  sceneCheck: SceneCheckPublic | null,
+  liveChoiceMessageId?: string | null
 ): void {
-  broadcastToRoom(roomId, { type: "scene_check", sceneCheck });
+  broadcastToRoom(roomId, {
+    type: "scene_check",
+    sceneCheck,
+    liveChoiceMessageId: liveChoiceMessageId ?? null,
+  });
 }
 
 export function broadcastCharacterGenProgress(

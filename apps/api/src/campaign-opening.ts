@@ -4,6 +4,7 @@ import {
   buildCampaignOpeningPlanMessages,
   completeChat,
   parseCampaignOpeningPlan,
+  resolveEffectiveLlmConfig,
   resolveMjMaxTokens,
   type CampaignOpeningPlan,
 } from "@rpg-cr/shared";
@@ -114,11 +115,12 @@ export async function bootstrapCampaignOpening(
       hostSheet: host.characterSheet,
     };
 
+    const llm = resolveEffectiveLlmConfig(room.llmConfig!);
     const planResult = await queueNarrativeLlm(roomId, "campaign-opening-plan", () =>
       completeChat(room.llmConfig!, buildCampaignOpeningPlanMessages(ctx, host.preferredLocale), {
         apiKey: resolveRoomApiKey(room.llmConfig),
         lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-        maxTokens: resolveMjMaxTokens(room.llmConfig!.providerId, room.llmConfig!.modelId),
+        maxTokens: resolveMjMaxTokens(llm.providerId, llm.modelId),
         taskKind: "tool",
         jsonMode: true,
       })

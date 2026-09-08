@@ -4,6 +4,13 @@ import { DEFAULT_LOCALE, UND_LOCALE } from "@rpg-cr/shared";
 import { db } from "./db.js";
 import { touchRoomActivity } from "./rooms.js";
 
+type AfterMessageSave = (msg: ChatMessage) => void;
+let afterMessageSave: AfterMessageSave | undefined;
+
+export function setAfterMessageSave(fn: AfterMessageSave): void {
+  afterMessageSave = fn;
+}
+
 function rowToMessage(r: Record<string, unknown>): ChatMessage {
   return {
     id: r.id as string,
@@ -55,6 +62,7 @@ export function saveMessage(
   );
 
   touchRoomActivity(roomId, msg.createdAt);
+  afterMessageSave?.(msg);
   return msg;
 }
 

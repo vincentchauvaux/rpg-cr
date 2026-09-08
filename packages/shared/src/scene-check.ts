@@ -4,7 +4,9 @@ import {
 } from "./character-sheet.js";
 import type { SceneCheckMode, SceneCheckSpec } from "./scene-choice.js";
 
-export type SceneCheckStance = "help" | "oppose";
+export type SceneCheckStance = "help" | "oppose" | "pass";
+export type SceneCheckJoinStance = SceneCheckStance | "choice";
+export type SceneCheckPickKind = "choice" | "help" | "oppose" | "pass";
 
 export type SceneCheckRoll = {
   playerId: string;
@@ -15,6 +17,14 @@ export type SceneCheckRoll = {
   naturalAlt?: number;
   modifier: number;
   total: number;
+};
+
+export type SceneCheckPickPublic = {
+  playerId: string;
+  playerName: string;
+  kind: SceneCheckPickKind;
+  choice?: string;
+  ability?: StatKey;
 };
 
 export type SceneCheckPublic = {
@@ -32,6 +42,8 @@ export type SceneCheckPublic = {
   expiresAt: number;
   helpers: Array<{ playerId: string; playerName: string; ability: StatKey }>;
   opposers: Array<{ playerId: string; playerName: string; ability: StatKey }>;
+  picks: SceneCheckPickPublic[];
+  offeredChoices: string[];
   status: "open" | "resolved";
 };
 
@@ -180,11 +192,12 @@ export function formatSceneCheckActionMessage(resolved: ResolvedSceneCheck): str
     resolved.usedAdvantage && actor.naturalAlt != null
       ? ` (avantage : ${Math.min(kept, actor.naturalAlt)} et ${Math.max(kept, actor.naturalAlt)})`
       : "";
+  const who = actor.playerName || "Je";
 
   const lines = [
-    `Je tente : « ${resolved.choice} ».`,
+    `[${who}] tente : « ${resolved.choice} ».`,
     header,
-    `Je lance un d20 sur ma ${resolved.abilityLabel.toLowerCase()} : ${kept} ${formatMod(actor.modifier)} = ${actor.total}${adv}.`,
+    `[${who}] lance un d20 sur ${resolved.abilityLabel.toLowerCase()} : ${kept} ${formatMod(actor.modifier)} = ${actor.total}${adv}.`,
   ];
 
   for (const h of resolved.helpers) {
@@ -215,6 +228,41 @@ export function formatSceneCheckActionMessage(resolved: ResolvedSceneCheck): str
   return lines.join("\n");
 }
 
+export type SceneChoiceRoundResolved = {
+  offeredChoices: string[];
+  actors: ResolvedSceneCheck[];
+  passers: Array<{ playerId: string; playerName: string }>;
+};
+
+/** Message Action unique pour un tour de table (plusieurs PJ, laisser-faire, options abandonnées). */
+export function formatSceneChoiceRoundActionMessage(
+  round: SceneChoiceRoundResolved
+): string {
+  const chosen = new Set(
+    round.actors.map((a) => a.choice.trim()).filter(Boolean)
+  );
+  const abandoned = round.offeredChoices.filter((c) => !chosen.has(c.trim()));
+  const blocks = round.actors.map((a) => formatSceneCheckActionMessage(a));
+  const passLines = round.passers.map(
+    (p) => `[${p.playerName}] laisse faire.`
+  );
+  const lines = [
+    "Tour de table — choix de scène.",
+    "",
+    ...blocks,
+  ];
+  if (passLines.length) {
+    lines.push("", ...passLines);
+  }
+  if (abandoned.length) {
+    lines.push(
+      "",
+      `Options non retenues (ne plus les jouer) : ${abandoned.join(" / ")}.`
+    );
+  }
+  return lines.join("\n");
+}
+
 export function toSceneCheckPublic(input: {
   id: string;
   roomId: string;
@@ -226,6 +274,8 @@ export function toSceneCheckPublic(input: {
   expiresAt: number;
   helpers: Array<{ playerId: string; playerName: string; ability: StatKey }>;
   opposers: Array<{ playerId: string; playerName: string; ability: StatKey }>;
+  picks?: SceneCheckPickPublic[];
+  offeredChoices?: string[];
   status?: "open" | "resolved";
 }): SceneCheckPublic {
   return {
@@ -243,10 +293,42 @@ export function toSceneCheckPublic(input: {
     expiresAt: input.expiresAt,
     helpers: input.helpers,
     opposers: input.opposers,
+    picks: input.picks ?? [
+      {
+        playerId: input.actorPlayerId,
+        playerName: input.actorPlayerName,
+        kind: "choice",
+        choice: input.choice,
+      },
+      ...input.helpers.map((h) => ({
+        playerId: h.playerId,
+        playerName: h.playerName,
+        kind: "help" as const,
+        ability: h.ability,
+      })),
+      ...input.opposers.map((o) => ({
+        playerId: o.playerId,
+        playerName: o.playerName,
+        kind: "oppose" as const,
+        ability: o.ability,
+      })),
+    ],
+    offeredChoices: input.offeredChoices ?? [],
     status: input.status ?? "open",
   };
 }
 
 export function isSceneCheckActionContent(content: string): boolean {
-  return /Jet D&D 5e/i.test(content);
+  return /Jet D&D 5e|Tour de table — choix de scène/i.test(content);
+}
+
+export function playerHasPickedSceneCheck(
+  check: Pick<SceneCheckPublic, "picks" | "actorPlayerId" | "helpers" | "opposers">,
+  playerId: string
+): boolean {
+  if (check.picks?.some((p) => p.playerId === playerId)) return true;
+  if (check.actorPlayerId === playerId) return true;
+  if (check.helpers.some((h) => h.playerId === playerId)) return true;
+  if (check.opposers.some((o) => o.playerId === playerId)) return true;
+  return false;
 }

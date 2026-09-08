@@ -19,7 +19,7 @@ export type RoomWsEvent =
       phase?: "opening" | "turn";
     }
   | { type: "scene"; scene: SceneState }
-  | { type: "scene_check"; sceneCheck: SceneCheckPublic | null };
+  | { type: "scene_check"; sceneCheck: SceneCheckPublic | null; liveChoiceMessageId?: string | null };
 
 interface Options {
   roomId: string | null;

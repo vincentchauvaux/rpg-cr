@@ -170,6 +170,7 @@ export function getRoom(code: string): Promise<{
   map: ProceduralMap;
   mjStatus?: MjStatusSnapshot;
   sceneCheck?: SceneCheckPublic | null;
+  liveChoiceMessageId?: string | null;
 }> {
   return fetchJson(`/api/rooms/${code}`);
 }
@@ -681,8 +682,12 @@ export function startSceneCheck(
 export function joinSceneCheck(
   roomId: string,
   checkId: string,
-  body: { actorPlayerId: string; stance: "help" | "oppose" }
-): Promise<{ sceneCheck: SceneCheckPublic }> {
+  body: {
+    actorPlayerId: string;
+    stance: "help" | "oppose" | "pass" | "choice";
+    choice?: string;
+  }
+): Promise<{ sceneCheck: SceneCheckPublic | null }> {
   return fetchJson(`/api/rooms/${roomId}/scene-checks/${checkId}/join`, {
     method: "POST",
     body: JSON.stringify(body),

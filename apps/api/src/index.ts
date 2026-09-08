@@ -4,7 +4,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
-import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, assertChatModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel } from "@rpg-cr/shared";
+import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, assertChatModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel, usesTightGroqTpm } from "@rpg-cr/shared";
 import { resolveRoomApiKey } from "./llm-api-key.js";
 import { initDb } from "./db.js";
 import {
@@ -61,6 +61,7 @@ import {
   broadcastCharacterGenProgress,
 } from "./ws-hub.js";
 import {
+  getLiveChoiceMessageId,
   getOpenSceneCheck,
   joinSceneCheck,
   resolveSceneCheckNow,
@@ -330,6 +331,7 @@ app.get<{ Params: { code: string } }>("/api/rooms/:code", async (req, reply) => 
     map,
     mjStatus: getMjStatusForRoom(room.id),
     sceneCheck: getOpenSceneCheck(room.id),
+    liveChoiceMessageId: getLiveChoiceMessageId(room.id),
   };
 });
 
@@ -553,7 +555,7 @@ app.post<{
     if (arcPatch && (arcPatch.mainPlot || arcPatch.currentBeat)) {
       updateNarrativeArc(room.id, arcPatch);
     }
-    if (shouldAutoExtractFacts(room.llmConfig)) {
+    if (shouldAutoExtractFacts(room.llmConfig) && !usesTightGroqTpm(room.llmConfig)) {
       const apiKey = resolveRoomApiKey(room.llmConfig, req.body.apiKey);
       void (async () => {
         mjThinkingBegin(room.id, { kind: "background" });
@@ -1596,15 +1598,22 @@ app.post<{
 
 app.post<{
   Params: { roomId: string; checkId: string };
-  Body: { actorPlayerId: string; stance: "help" | "oppose" };
+  Body: { actorPlayerId: string; stance: "help" | "oppose" | "pass" | "choice"; choice?: string };
 }>("/api/rooms/:roomId/scene-checks/:checkId/join", async (req, reply) => {
   const room = getRoomById(req.params.roomId);
   if (!room) return reply.status(404).send({ error: "Salon introuvable" });
   const actor = requireRoomMember(room.id, req.body?.actorPlayerId);
   if (!actor) return reply.status(403).send({ error: "Non autorisé" });
   const stance = req.body?.stance;
-  if (stance !== "help" && stance !== "oppose") {
-    return reply.status(400).send({ error: "stance help ou oppose requis" });
+  if (
+    stance !== "help" &&
+    stance !== "oppose" &&
+    stance !== "pass" &&
+    stance !== "choice"
+  ) {
+    return reply.status(400).send({
+      error: "stance help, oppose, pass ou choice requis",
+    });
   }
   try {
     const sceneCheck = joinSceneCheck({
@@ -1612,6 +1621,7 @@ app.post<{
       actorPlayerId: actor.id,
       checkId: req.params.checkId,
       stance,
+      choice: req.body?.choice,
     });
     return { sceneCheck };
   } catch (e) {

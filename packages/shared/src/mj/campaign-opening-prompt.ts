@@ -177,7 +177,7 @@ export function buildCampaignOpeningNarrativePrompt(
     npcBlock +
     `\n\n## Consignes de rédaction\n` +
     `- Rédige **4–6 paragraphes** en français : hook et enjeu clairs, **ton sobre** (évite le pathos gratuit et les métaphores en rafale) ; un incident déclencheur léger ou une menace voisine.\n` +
-    `- **Présente l'hôte** « ${ctx.hostName} » dans la scène selon sa fiche (rang, background, alignement) — entrée organique, sans révéler tous ses secrets au groupe.\n` +
+    `- **Présente l'hôte** « ${ctx.hostName} » à la **2e personne** (tu / vous) selon sa fiche (rang, background, alignement) — entrée organique, sans révéler tous ses secrets. C'est un PJ, pas un PNJ.\n` +
     `- ${legacyWorldNamesGuard("fr")}\n` +
     `- Ancre le récit aux royaumes et lieux de la carte (voir contexte plan) ; ne répète pas les clichés ruines/forteresse/brume lourde sauf si le brief l'exige.\n` +
     `- Pas de mécanique, pas de tutoriel, pas de « Thinking Process ».\n` +

@@ -11,7 +11,7 @@ export function buildHostPreambleNarration(ctx: NarrationContext): string {
     `L'hôte demande un **préambule** lu par le MJ pour toute la table (narration seule, pas de mécanique).\n\n` +
     `## Objectif\n` +
     `- Poser le **cadre** : monde, lieu de départ, intrigue principale en cours ou à ouvrir.\n` +
-    `- **Présenter chaque PJ prêt** à la table (nom + accroche tirée de sa fiche : rang, background, ambition, secret léger si pertinent) — entrée théâtrale, sans tout spoiler.\n` +
+    `- **Présenter chaque PJ prêt** à la table à la **2e personne** (vous / tu) : nom + accroche tirée de sa fiche (rang, background, ambition, secret léger si pertinent) — entrée théâtrale, sans tout spoiler. Ce sont des héros, pas des PNJ.\n` +
     `- Ancrer **lieu, ambiance et tension** ; utilise \`<!--scene:{"location":"…","mood":"…","tension":N}\` et \`<!--arc:{"mainPlot":"…","currentBeat":"…"}\` en fin si tu établis ou précises la trame.\n\n` +
     `## Interdictions\n` +
     `- Ne marque **pas** les joueurs comme « déjà présentés en histoire » : les PJ pourront encore faire leur **auto-présentation** à la table.\n` +

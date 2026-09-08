@@ -11,8 +11,11 @@ export const SERVER_ONLY_API_KEY_PROVIDERS = ["groq", "gemini"] as const;
 
 export type ServerOnlyApiKeyProvider = (typeof SERVER_ONLY_API_KEY_PROVIDERS)[number];
 
-/** Production Groq (vérifié via GET /models 2026-09) — surcharge via `AI_MODEL`. */
+/** Production Groq free : `gpt-oss-20b` (8k TPM). Llama 70B/8B sont souvent « enterprise ». */
 export const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
+
+/** Pas de 8B instant (souvent indisponible en free) — extraits Groq en heuristique, pas un 2e modèle. */
+export const DEFAULT_GROQ_TOOL_MODEL = "openai/gpt-oss-20b";
 
 /** Flash Gemini actuel (vérifié 2026-09) — surcharge via `AI_MODEL`. */
 export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
@@ -22,8 +25,8 @@ export const GROQ_CHAT_MODEL_CANDIDATES = [
   "openai/gpt-oss-20b",
   "openai/gpt-oss-120b",
   "qwen/qwen3.6-27b",
+  "groq/compound",
   "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
 ] as const;
 
 export const GROQ_OPENAI_BASE_URL = "https://api.groq.com/openai/v1";
@@ -33,6 +36,7 @@ export const GEMINI_OPENAI_BASE_URL =
 export type EnvAiSettings = {
   provider: string | null;
   model: string | null;
+  toolModel?: string | null;
   fallbackProvider: string | null;
 };
 
@@ -81,6 +85,7 @@ export function readEnvAiSettings(
   return {
     provider: env.AI_PROVIDER?.trim() || null,
     model: env.AI_MODEL?.trim() || null,
+    toolModel: env.AI_TOOL_MODEL?.trim() || null,
     fallbackProvider: env.AI_FALLBACK_PROVIDER?.trim() || null,
   };
 }
@@ -117,10 +122,14 @@ export function applyEnvAiOverride(
     const entry = getCatalogEntry(provider);
     const model =
       settings.model?.trim() ||
-      defaultNarrationModelId(entry) ||
-      defaultModelForCloudProvider(provider);
+      (provider === "groq"
+        ? DEFAULT_GROQ_MODEL
+        : defaultNarrationModelId(entry) || defaultModelForCloudProvider(provider));
     const tool =
-      settings.model?.trim() || defaultToolModelId(entry) || model;
+      settings.toolModel?.trim() ||
+      (provider === "groq"
+        ? DEFAULT_GROQ_TOOL_MODEL
+        : defaultToolModelId(entry) || model);
     return {
       ...config,
       providerId: provider,
@@ -164,6 +173,11 @@ export function resolveEffectiveLlmConfig(
   return applyEnvAiOverride(config, settings);
 }
 
+/** Groq free : extraits LLM auto coupés (même plafond TPM que le MJ). */
+export function usesTightGroqTpm(config: LlmRoomConfig): boolean {
+  return resolveEffectiveLlmConfig(config).providerId === "groq";
+}
+
 export function fallbackProviderConfig(
   providerId: string,
   base: LlmRoomConfig
@@ -177,7 +191,7 @@ export function fallbackProviderConfig(
     ...base,
     providerId: provider,
     modelId: model,
-    toolModelId: model,
+    toolModelId: provider === "groq" ? DEFAULT_GROQ_TOOL_MODEL : model,
     baseUrl: entry?.defaultBaseUrl,
   };
 }

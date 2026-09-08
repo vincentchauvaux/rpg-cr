@@ -6,16 +6,22 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
   const action = ctx.actionText?.trim() ?? "";
   const abilities = ctx.abilitiesHint?.trim() ? `\n${ctx.abilitiesHint.trim()}` : "";
   const declaresRoll = playerMessageDeclaresRoll(action);
-  const isTableCheck = /Jet D&D 5e|Résultat\s*:/i.test(action);
+  const isTableCheck = /Jet D&D 5e|Tour de table — choix de scène|Résultat\s*:/i.test(
+    action
+  );
+  const isRound = /Tour de table — choix de scène/i.test(action);
   const rollBlock =
     isTableCheck
       ? `\n### Jet de dés — épreuve de table (D&D 5e)\n` +
-        `Les dés ont **déjà été lancés à la table** (test de caractéristique, éventuellement avantage si un compagnon aide, jet contesté si opposition).\n\n` +
+        `Les dés ont **déjà été lancés à la table** (test de caractéristique, éventuellement avantage si un compagnon aide, jet contesté si quelqu'un s'oppose vraiment).\n\n` +
         `**Tu DOIS** :\n` +
         `1. Partir des totaux et du « Résultat » annoncés (ne relance rien, n'invente pas d'autre d20).\n` +
         `2. Narrer **immédiatement** les conséquences concrètes : réussite = le choix aboutit (avec le degré du jet) ; échec ou opposition victorieuse = complication, refus, ou coût ; égalité = la situation ne bascule pas.\n` +
-        `3. Si d'autres PJ ont aidé ou se sont opposés, fais-les exister dans la scène (un geste, une réplique, une interférence).\n` +
-        `4. Ne redemande pas de jet ; pas de tutoriel mécanique.\n`
+        `3. Si d'autres PJ ont aidé, se sont opposés **ou laissé faire**, fais-les exister juste assez (un geste, un regard, le silence) — laisser faire n'est **pas** une opposition.\n` +
+        (isRound
+          ? `4. C'est un **tour de table** : narre **un seul beat** avec **toutes** les actions déclarées, comme simultanées. Les « Options non retenues » **n'ont pas eu lieu** — ne les ramène pas dans le récit. Ne redemande pas de jet.\n`
+          : `4. Ne redemande pas de jet ; pas de tutoriel mécanique.\n`) +
+        `5. Adresse-toi aux PJ à la **2e personne** (tu / vous). ${name} et les autres noms de PJ ne sont **pas** des PNJ.\n`
       : declaresRoll && ctx.pendingRollRequest?.trim()
       ? `\n### Jet de dés — résolution obligatoire\n` +
         `Le joueur annonce un **résultat chiffré**. Ta demande précédente :\n` +
@@ -38,14 +44,15 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
     : "";
   const companions =
     ctx.companionsPresent && ctx.companionsPresent.length > 0
-      ? `\n### Compagnons présents\n${ctx.companionsPresent.join(", ")}`
+      ? `\n### Autres présents\n${ctx.companionsPresent.join("\n")}`
       : "";
 
   return (
     `[ACTION — ${name}]\n` +
     `${name} **effectue une action** : « ${action} »${abilities}\n\n` +
     `## Consignes MJ\n` +
-    `- **Interprète** l'action demandée et intègre-la au fil narratif en cours (conséquences, réactions du monde, PNJ).\n` +
+    `- **Interprète** l'action demandée et intègre-la au fil narratif en cours (conséquences, réactions du monde, vrais PNJ).\n` +
+    `- Parle à **${name}** et aux autres PJ à la **2e personne** (tu / vous). Ce sont des héros de la table, **pas** des PNJ.\n` +
     `- Calibre la longueur et le ton : **1–2 paragraphes sobres** si l'action est simple ou la scène calme ; **2–4 paragraphes** seulement si l'action est dramatique, risquée ou change vraiment la situation — pas de lyrisme gratuit.\n` +
     `- Ne rédige **pas** un chapitre entier sauf si l'action le justifie clairement.\n` +
     `- Résous partiellement ou totalement selon le contexte ; propose un **jet de dés** si l'issue est incertaine et qu'aucun total n'a déjà été annoncé ; si les dés de table ont parlé, **ne redemande pas** de jet.\n` +

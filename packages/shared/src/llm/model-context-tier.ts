@@ -77,3 +77,12 @@ export function initialMjContextModeForModel(modelId: string): "full" | "slim" |
   if (tier === "medium") return "slim";
   return "full";
 }
+
+/** Groq free : prompt slim pour rester sous ~8–12k TPM. */
+export function initialMjContextModeForConfig(
+  providerId: string,
+  modelId: string
+): "full" | "slim" | "micro" {
+  if (providerId === "groq") return "slim";
+  return initialMjContextModeForModel(modelId);
+}

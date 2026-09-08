@@ -6,13 +6,17 @@ import {
   completeChat,
   DEFAULT_GEMINI_MODEL,
   DEFAULT_GROQ_MODEL,
+  DEFAULT_GROQ_TOOL_MODEL,
   GROQ_CHAT_MODEL_CANDIDATES,
   isLlmTimeoutError,
+  parseLlmRetryAfterMs,
+  resolveMjMaxTokens,
   normalizeCharacterSheet,
   parseCharacterSheetJson,
   pickFirstAvailableModel,
   resolveServerAiApiKey,
   isReasoningChatModelId,
+  usesTightGroqTpm,
   type LlmRoomConfig,
 } from "@rpg-cr/shared";
 
@@ -20,6 +24,7 @@ const originalFetch = globalThis.fetch;
 const ENV_KEYS = [
   "AI_PROVIDER",
   "AI_MODEL",
+  "AI_TOOL_MODEL",
   "AI_FALLBACK_PROVIDER",
   "GROQ_API_KEY",
   "GEMINI_API_KEY",
@@ -91,7 +96,43 @@ test("AI_PROVIDER=groq surcharge la config salon locale", () => {
   });
   assert.equal(effective.providerId, "groq");
   assert.equal(effective.modelId, DEFAULT_GROQ_MODEL);
+  assert.equal(effective.toolModelId, DEFAULT_GROQ_TOOL_MODEL);
   assert.equal(effective.baseUrl, "https://api.groq.com/openai/v1");
+  assert.equal(usesTightGroqTpm(effective), true);
+});
+
+test("AI_PROVIDER=gemini surcharge la config salon locale", () => {
+  const effective = applyEnvAiOverride(localRoom, {
+    provider: "gemini",
+    model: DEFAULT_GEMINI_MODEL,
+    fallbackProvider: "groq",
+  });
+  assert.equal(effective.providerId, "gemini");
+  assert.equal(effective.modelId, DEFAULT_GEMINI_MODEL);
+  assert.equal(effective.baseUrl, "https://generativelanguage.googleapis.com/v1beta/openai");
+});
+
+test("Groq : sans AI_TOOL_MODEL, outils = même 20B (extraits auto coupés ailleurs)", () => {
+  const effective = applyEnvAiOverride(localRoom, {
+    provider: "groq",
+    model: "openai/gpt-oss-20b",
+    fallbackProvider: "gemini",
+  });
+  assert.equal(effective.modelId, "openai/gpt-oss-20b");
+  assert.equal(effective.toolModelId, DEFAULT_GROQ_TOOL_MODEL);
+});
+
+test("Groq réserve peu de max_tokens (TPM)", () => {
+  assert.equal(resolveMjMaxTokens("groq", "openai/gpt-oss-20b"), 1536);
+  assert.equal(resolveMjMaxTokens("groq", "llama-3.3-70b-versatile"), 1400);
+  assert.ok(resolveMjMaxTokens("openai", "openai/gpt-oss-20b") >= 2048);
+});
+
+test("parseLlmRetryAfterMs lit le délai Groq", () => {
+  assert.equal(
+    parseLlmRetryAfterMs("Please try again in 8.52s. Need more tokens?"),
+    8520
+  );
 });
 
 test("gpt-oss est un modèle à raisonnement interne", () => {
@@ -103,6 +144,7 @@ test("gpt-oss est un modèle à raisonnement interne", () => {
 test("connexion Groq (mock HTTP)", async () => {
   process.env.GROQ_API_KEY = "test-groq-key-unit";
   process.env.AI_PROVIDER = "groq";
+  process.env.AI_MODEL = "openai/gpt-oss-20b";
   let calledUrl = "";
   let auth = "";
   globalThis.fetch = async (input, init) => {
@@ -251,6 +293,30 @@ test("timeout LLM : Délai dépassé", async () => {
   );
 });
 
+test("Groq 429 : attend le délai puis réessaie", async () => {
+  process.env.GROQ_API_KEY = "test-groq-key-unit";
+  process.env.AI_PROVIDER = "groq";
+  process.env.AI_MODEL = "openai/gpt-oss-20b";
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return errorResponse(
+        429,
+        "Rate limit reached for model openai/gpt-oss-20b in organization org_x service tier on_demand on tokens per minute (TPM): Limit 8000, Used 2449, Requested 6687. Please try again in 0.05s."
+      );
+    }
+    return chatResponse("OK after wait");
+  };
+  const result = await completeChat(
+    { ...localRoom, useFallbackLmStudio: false },
+    [{ role: "user", content: "OK" }]
+  );
+  assert.equal(calls, 2);
+  assert.equal(result.content, "OK after wait");
+  assert.equal(result.usedFallback, false);
+});
+
 test("AI_FALLBACK_PROVIDER=gemini après échec Groq", async () => {
   process.env.GROQ_API_KEY = "test-groq-key-unit";
   process.env.GEMINI_API_KEY = "test-gemini-key-unit";
@@ -297,7 +363,7 @@ test(
     const result = await completeChat(
       { ...localRoom, useFallbackLmStudio: false },
       [{ role: "user", content: "Réponds uniquement par OK." }],
-      { timeoutMs: 45_000, maxTokens: 128, taskKind: "tool" }
+      { timeoutMs: 45_000, maxTokens: 128, taskKind: "narration" }
     );
     assert.equal(result.providerId, "groq");
     assert.ok(result.content.trim().length > 0);
@@ -315,7 +381,7 @@ test(
     const result = await completeChat(
       { ...localRoom, useFallbackLmStudio: false },
       [{ role: "user", content: "Réponds uniquement par OK." }],
-      { timeoutMs: 45_000, maxTokens: 128, taskKind: "tool" }
+      { timeoutMs: 45_000, maxTokens: 128, taskKind: "narration" }
     );
     assert.equal(result.providerId, "gemini");
     assert.ok(result.content.trim().length > 0);

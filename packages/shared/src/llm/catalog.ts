@@ -99,10 +99,17 @@ export const LLM_CATALOG: LlmCatalogEntry[] = [
     requiresApiKey: true,
     characteristics: [
       "Un endpoint, des dizaines de modèles (OpenAI, Anthropic, etc.)",
-      "Récit : `openai/gpt-4o` — outils : `openai/gpt-4o-mini`",
+      "Récit : `google/gemini-3.8-flash` — outils : même Flash (ou GPT-4o mini)",
       "Clé `sk-or-…` : champ god mode ou `OPENROUTER_API_KEY` dans `.env`",
+      "Utile si Gemini Google est refusé depuis le VPS (blocage géo / IP datacenter)",
     ],
     models: [
+      {
+        id: "google/gemini-3.8-flash",
+        label: "Gemini 3.8 Flash via OpenRouter (MJ)",
+        contextWindow: 1048576,
+        role: "both",
+      },
       {
         id: "openai/gpt-4o",
         label: "GPT-4o via OpenRouter (MJ)",
@@ -133,13 +140,19 @@ export const LLM_CATALOG: LlmCatalogEntry[] = [
     characteristics: [
       "Clé `GROQ_API_KEY` serveur uniquement — jamais le navigateur",
       "API officielle OpenAI-compatible (`api.groq.com`)",
-      "Défaut production : `openai/gpt-oss-20b` — surcharge `AI_MODEL`",
+      "Défaut free : `openai/gpt-oss-20b` (8k TPM). Extraire en LLM saturerait le même plafond — extraits auto en heuristique. Llama 70B/8B souvent plan payant. Gemini tient mieux une soirée.",
       "Vérifier `GET /openai/v1/models` si un id disparaît",
     ],
     models: [
       {
         id: "openai/gpt-oss-20b",
-        label: "GPT-OSS 20B (rapide)",
+        label: "GPT-OSS 20B (free, 8k jetons/min)",
+        contextWindow: 131072,
+        role: "both",
+      },
+      {
+        id: "llama-3.3-70b-versatile",
+        label: "Llama 3.3 70B (souvent plan payant)",
         contextWindow: 131072,
         role: "both",
       },
@@ -147,11 +160,17 @@ export const LLM_CATALOG: LlmCatalogEntry[] = [
         id: "openai/gpt-oss-120b",
         label: "GPT-OSS 120B (MJ)",
         contextWindow: 131072,
-        role: "narration",
+        role: "both",
       },
       {
         id: "qwen/qwen3.6-27b",
-        label: "Qwen3.6 27B",
+        label: "Qwen3.6 27B (même 8k TPM que le 20B)",
+        contextWindow: 131072,
+        role: "both",
+      },
+      {
+        id: "groq/compound",
+        label: "Compound (70k TPM, 250 req/jour, outils web)",
         contextWindow: 131072,
         role: "both",
       },

@@ -84,6 +84,7 @@ import {
   extractMjChoices,
   formatPlayerRollMessage,
   isSceneCheckActionContent,
+  playerHasPickedSceneCheck,
   type MentionCandidate,
   type QuickUseOption,
 } from "@rpg-cr/shared";
@@ -244,6 +245,9 @@ export function RoomView({ code }: Props) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sceneCheck, setSceneCheck] = useState<SceneCheckPublic | null>(null);
+  const [liveChoiceMessageId, setLiveChoiceMessageId] = useState<string | null>(
+    null
+  );
   const [sceneCheckBusy, setSceneCheckBusy] = useState(false);
   const [map, setMap] = useState<ProceduralMap | null>(null);
   const [catalog, setCatalog] = useState<LlmCatalogEntry[]>([]);
@@ -382,6 +386,7 @@ export function RoomView({ code }: Props) {
     );
     replaceMessagesFromServer(data.messages);
     setSceneCheck(data.sceneCheck ?? null);
+    setLiveChoiceMessageId(data.liveChoiceMessageId ?? null);
     if (!mjPromptPendingRef.current) {
       const openingUnsettled = isCampaignOpeningUnsettled(
         data.messages,
@@ -593,6 +598,13 @@ export function RoomView({ code }: Props) {
       }
       if (data.type === "scene_check") {
         setSceneCheck(data.sceneCheck);
+        if (data.liveChoiceMessageId !== undefined) {
+          setLiveChoiceMessageId(data.liveChoiceMessageId);
+        } else if (data.sceneCheck) {
+          setLiveChoiceMessageId(data.sceneCheck.sourceMessageId);
+        } else {
+          setLiveChoiceMessageId(null);
+        }
       }
     },
     [clearMjThinking]
@@ -777,7 +789,10 @@ export function RoomView({ code }: Props) {
   }
 
   async function handleSceneChoice(sourceMessageId: string, choice: string) {
-    if (!session || !room || sceneCheckBusy || sceneCheck) return;
+    if (!session || !room || sceneCheckBusy) return;
+    if (sceneCheck && playerHasPickedSceneCheck(sceneCheck, session.playerId)) {
+      return;
+    }
     setSceneCheckBusy(true);
     setError(null);
     pauseStickToBottomRef.current = true;
@@ -789,9 +804,12 @@ export function RoomView({ code }: Props) {
         choice,
       });
       setSceneCheck(next);
-      if (!next && hasLlmConfig) {
-        setMjThinking(true);
-        mjThinkingSinceRef.current = Date.now();
+      if (!next) {
+        setLiveChoiceMessageId(null);
+        if (hasLlmConfig) {
+          setMjThinking(true);
+          mjThinkingSinceRef.current = Date.now();
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Impossible de lancer ce choix");
@@ -800,7 +818,7 @@ export function RoomView({ code }: Props) {
     }
   }
 
-  async function handleSceneCheckJoin(stance: "help" | "oppose") {
+  async function handleSceneCheckJoin(stance: "help" | "oppose" | "pass") {
     if (!session || !room || !sceneCheck || sceneCheckBusy) return;
     setSceneCheckBusy(true);
     setError(null);
@@ -810,6 +828,11 @@ export function RoomView({ code }: Props) {
         stance,
       });
       setSceneCheck(next);
+      if (!next && hasLlmConfig) {
+        setLiveChoiceMessageId(null);
+        setMjThinking(true);
+        mjThinkingSinceRef.current = Date.now();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Impossible de rejoindre l'épreuve");
     } finally {
@@ -1170,16 +1193,17 @@ export function RoomView({ code }: Props) {
     Boolean(session && hasLlmConfig && me && chatReady && !chatLogExpanded);
   const isAdminGod = isAdmin && adminOpen;
   const visibleMessages = filterMessagesForViewer(messages, isAdminGod);
-  const lastMjMessage = useMemo(() => {
-    for (let i = visibleMessages.length - 1; i >= 0; i--) {
-      const m = visibleMessages[i];
-      if (m?.kind === "mj") return m;
-    }
-    return null;
-  }, [visibleMessages]);
-  const lastMjChoices = useMemo(
-    () => (lastMjMessage ? extractMjChoices(lastMjMessage.content) : []),
-    [lastMjMessage]
+  const liveChoiceMessage = useMemo(
+    () =>
+      liveChoiceMessageId
+        ? visibleMessages.find((m) => m.id === liveChoiceMessageId)
+        : undefined,
+    [visibleMessages, liveChoiceMessageId]
+  );
+  const liveChoices = useMemo(
+    () =>
+      liveChoiceMessage ? extractMjChoices(liveChoiceMessage.content) : [],
+    [liveChoiceMessage]
   );
   const recentSceneTexts = useMemo(
     () =>
@@ -1443,22 +1467,30 @@ export function RoomView({ code }: Props) {
                     hostLocale={hostLocale}
                     roomId={room?.id ?? ""}
                     llmEnabled={hasLlmConfig}
-                    choices={m.id === lastMjMessage?.id ? lastMjChoices : undefined}
+                    choices={
+                      m.id === liveChoiceMessageId ? liveChoices : undefined
+                    }
                     choicesClickable={
-                      m.id === lastMjMessage?.id &&
-                      lastMjChoices.length >= 2 &&
+                      m.id === liveChoiceMessageId &&
+                      liveChoices.length >= 2 &&
                       chatReady &&
                       !awaitingIntroduction
                     }
                     choicesDisabled={
-                      Boolean(sceneCheck) ||
                       sceneCheckBusy ||
                       mjThinking ||
-                      mjPromptBusy
+                      mjPromptBusy ||
+                      Boolean(
+                        session &&
+                          sceneCheck &&
+                          playerHasPickedSceneCheck(sceneCheck, session.playerId)
+                      )
                     }
-                    activeChoice={
+                    activeChoices={
                       sceneCheck && sceneCheck.sourceMessageId === m.id
-                        ? sceneCheck.choice
+                        ? sceneCheck.picks
+                            ?.filter((p) => p.kind === "choice" && p.choice)
+                            .map((p) => p.choice as string)
                         : undefined
                     }
                     onChoiceClick={(choice) => void handleSceneChoice(m.id, choice)}
@@ -1485,6 +1517,7 @@ export function RoomView({ code }: Props) {
                 busy={sceneCheckBusy}
                 onHelp={() => void handleSceneCheckJoin("help")}
                 onOppose={() => void handleSceneCheckJoin("oppose")}
+                onPass={() => void handleSceneCheckJoin("pass")}
                 onResolveNow={() => void handleSceneCheckResolveNow()}
               />
             ) : null}

@@ -1,5 +1,5 @@
 import { getCatalogEntry, isOpenRouterProvider } from "./catalog.js";
-import { estimatePromptChars, resolveLlmTimeoutMs } from "./context-budget.js";
+import { estimatePromptChars, resolveLlmTimeoutMs, isLlmRateLimitError, parseLlmRetryAfterMs, resolveMjMaxTokens } from "./context-budget.js";
 import { assertChatModelId, isReasoningChatModelId, isUnsuitableMjModelId } from "./model-kind.js";
 import { formatLlmModelCrashRecoveryHint } from "./model-context-tier.js";
 import {
@@ -441,10 +441,12 @@ async function openAiCompatibleChat(
   let lastEmptyData: ChatCompletionResponse = {};
   const emptyAttempts = options.retryOnEmpty ? JIT_MAX_ATTEMPTS : 1;
   const timeoutAttempts = options.retryOnTimeout ? 2 : 1;
-  const maxAttempts = Math.max(emptyAttempts, timeoutAttempts, 2);
   const sampling = { temperature: options.temperature, jsonMode: options.jsonMode };
   const extraHeaders = options.extraHeaders ?? {};
   let maxTokens = options.maxTokens;
+  const groqTpmCap = /api\.groq\.com/i.test(baseUrl) ? 2048 : 8192;
+  const maxAttempts = Math.max(emptyAttempts, timeoutAttempts, 2);
+  let rateLimitRetries = 0;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (options.abortSignal?.aborted) {
@@ -474,7 +476,7 @@ async function openAiCompatibleChat(
       lastEmptyData = result.data;
       const finish = result.data.choices?.[0]?.finish_reason;
       if (finish === "length" && attempt < maxAttempts) {
-        maxTokens = Math.min(Math.max(maxTokens * 2, 512), 8192);
+        maxTokens = Math.min(Math.max(maxTokens * 2, 512), groqTpmCap);
         devLogLlm(
           "retry",
           `finish_reason=length — attempt ${attempt}/${maxAttempts}, max_tokens=${maxTokens}`
@@ -499,6 +501,17 @@ async function openAiCompatibleChat(
         `timeout — attempt ${attempt}/${timeoutAttempts}, wait ${JIT_TIMEOUT_BACKOFF_MS}ms`
       );
       await sleep(JIT_TIMEOUT_BACKOFF_MS);
+      continue;
+    }
+
+    if (isLlmRateLimitError(result.error) && rateLimitRetries < 1) {
+      rateLimitRetries += 1;
+      const waitMs = Math.min(parseLlmRetryAfterMs(result.error.message), 15_000);
+      devLogLlm(
+        "retry",
+        `HTTP 429 rate limit — wait ${waitMs}ms then retry`
+      );
+      await sleep(Math.max(waitMs, 0));
       continue;
     }
 
@@ -590,11 +603,16 @@ export async function completeChat(
   const estimatedChars = estimatePromptChars(messages);
   const timeoutMs =
     options.timeoutMs ?? resolveLlmTimeoutMs(effective.providerId, estimatedChars);
-  const maxTokens = options.maxTokens ?? profile.maxTokens;
+  const requestedMax = options.maxTokens ?? profile.maxTokens;
+  const modelIdForTask = resolveTaskModelId(effective, taskKind);
+  const maxTokens =
+    effective.providerId === "groq" && taskKind === "narration"
+      ? Math.min(requestedMax, resolveMjMaxTokens("groq", modelIdForTask))
+      : requestedMax;
   const retryOnEmpty =
     options.retryOnEmpty ??
     (isLocalLlmProvider(effective.providerId) ||
-      isReasoningChatModelId(resolveTaskModelId(effective, taskKind)));
+      isReasoningChatModelId(modelIdForTask));
   const retryOnTimeout = isLocalLlmProvider(effective.providerId);
 
   const chatOptions: ChatRunOptions = {

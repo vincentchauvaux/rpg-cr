@@ -41,6 +41,7 @@ interface Props {
   choicesClickable?: boolean;
   choicesDisabled?: boolean;
   activeChoice?: string;
+  activeChoices?: string[];
   onChoiceClick?: (choice: string) => void;
 }
 
@@ -51,12 +52,15 @@ export function MjMessageMarkdown({
   choicesClickable = false,
   choicesDisabled = false,
   activeChoice,
+  activeChoices,
   onChoiceClick,
 }: Props) {
   const interactive = choicesClickable && choices.length > 0 && Boolean(onChoiceClick);
+  const selectedKey = `${activeChoice ?? ""}\n${(activeChoices ?? []).join("\n")}`;
 
   const components = useMemo<Components>(() => {
     if (!interactive) return BASE_COMPONENTS;
+    const selected = selectedKey.split("\n").filter(Boolean);
 
     return {
       ...BASE_COMPONENTS,
@@ -67,9 +71,7 @@ export function MjMessageMarkdown({
         const choice = matchChoice(choices, text);
         if (!choice) return <li>{children}</li>;
 
-        const isActive =
-          Boolean(activeChoice) &&
-          Boolean(matchChoice([activeChoice ?? ""], choice));
+        const isActive = selected.some((c) => Boolean(matchChoice([c], choice)));
         return (
           <li className={isActive ? "mj-choice mj-choice--active" : "mj-choice"}>
             <button
@@ -84,7 +86,7 @@ export function MjMessageMarkdown({
         );
       },
     };
-  }, [interactive, choices, choicesDisabled, activeChoice, onChoiceClick]);
+  }, [interactive, choices, choicesDisabled, selectedKey, onChoiceClick]);
 
   return (
     <div className={interactive ? "chat-msg-mj chat-msg-mj--choices" : "chat-msg-mj"}>

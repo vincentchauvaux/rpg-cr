@@ -28,6 +28,7 @@ interface Props {
   choicesClickable?: boolean;
   choicesDisabled?: boolean;
   activeChoice?: string;
+  activeChoices?: string[];
   onChoiceClick?: (choice: string) => void;
 }
 
@@ -43,6 +44,7 @@ export function ChatMessageRow({
   choicesClickable,
   choicesDisabled,
   activeChoice,
+  activeChoices,
   onChoiceClick,
 }: Props) {
   const [displayText, setDisplayText] = useState(m.content);
@@ -174,6 +176,7 @@ export function ChatMessageRow({
           choicesClickable={Boolean(choicesClickable && !isTranslated)}
           choicesDisabled={choicesDisabled}
           activeChoice={activeChoice}
+          activeChoices={activeChoices}
           onChoiceClick={onChoiceClick}
         />
       </div>

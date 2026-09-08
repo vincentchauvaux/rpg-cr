@@ -7,6 +7,7 @@ import {
 } from "./scene-choice.js";
 import {
   formatSceneCheckActionMessage,
+  formatSceneChoiceRoundActionMessage,
   resolveSceneCheckOutcome,
 } from "./scene-check.js";
 
@@ -106,7 +107,7 @@ test("resolveSceneCheckOutcome : DD, contesté, égalité", () => {
   assert.equal(tie.outcome, "tie");
 });
 
-test("formatSceneCheckActionMessage contient Je lance pour le MJ", () => {
+test("formatSceneCheckActionMessage contient le lancer pour le MJ", () => {
   const text = formatSceneCheckActionMessage({
     choice: "Chercher des indices",
     ability: "intelligence",
@@ -130,7 +131,44 @@ test("formatSceneCheckActionMessage contient Je lance pour le MJ", () => {
     outcome: "success",
     outcomeLine: "réussite (16 ≥ DD 12).",
   });
-  assert.match(text, /Je lance un d20/);
+  assert.match(text, /\[Alice\] lance un d20/);
   assert.match(text, /Jet D&D 5e/);
   assert.match(text, /14 \+2 = 16/);
+});
+
+test("formatSceneChoiceRoundActionMessage ignore les options non retenues", () => {
+  const actorBlock = {
+    choice: "Prendre la route",
+    ability: "sagesse" as const,
+    abilityLabel: "Sagesse",
+    skillHint: "Survie",
+    mode: "dc" as const,
+    dc: 10,
+    spec: inferSceneCheck("Prendre la route", 40),
+    actor: {
+      playerId: "b",
+      playerName: "Bob",
+      stance: "actor" as const,
+      ability: "sagesse" as const,
+      natural: 12,
+      modifier: 1,
+      total: 13,
+    },
+    helpers: [],
+    opposers: [],
+    usedAdvantage: false,
+    outcome: "success" as const,
+    outcomeLine: "réussite (13 ≥ DD 10).",
+  };
+  const text = formatSceneChoiceRoundActionMessage({
+    offeredChoices: [
+      "Chercher des indices sur la relique dans l'auberge",
+      "Prendre la route",
+    ],
+    actors: [actorBlock],
+    passers: [{ playerId: "a", playerName: "Alice" }],
+  });
+  assert.match(text, /Tour de table — choix de scène/);
+  assert.match(text, /\[Alice\] laisse faire/);
+  assert.match(text, /Options non retenues \(ne plus les jouer\) : Chercher des indices/);
 });

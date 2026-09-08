@@ -7,13 +7,14 @@ import {
   prepareMjResponse,
   DEFAULT_LOCALE,
   estimatePromptChars,
-  initialMjContextModeForModel,
+  initialMjContextModeForConfig,
   isContextLengthLlmError,
   isLlmTimeoutError,
   isReasoningChatModelId,
   formatSmallContextModelHint,
   mjContextLimits,
   preflightLmStudioForMj,
+  resolveEffectiveLlmConfig,
   resolveMjMaxTokens,
   resolveLlmTimeoutMs,
   type ChatCompletionMessage,
@@ -228,8 +229,9 @@ async function completeMjWithTimeout(
   estimatedChars: number,
   apiKey?: string
 ) {
-  const timeoutMs = resolveLlmTimeoutMs(config.providerId, estimatedChars);
-  const maxTokens = resolveMjMaxTokens(config.providerId, config.modelId);
+  const effective = resolveEffectiveLlmConfig(config);
+  const timeoutMs = resolveLlmTimeoutMs(effective.providerId, estimatedChars);
+  const maxTokens = resolveMjMaxTokens(effective.providerId, effective.modelId);
   return completeChat(config, messages, {
     apiKey,
     lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
@@ -258,13 +260,14 @@ export async function runMjTurn(
     });
   }
 
+  const effective = resolveEffectiveLlmConfig(config);
   let mode: import("@rpg-cr/shared").MjContextMode =
-    initialMjContextModeForModel(config.modelId);
+    initialMjContextModeForConfig(effective.providerId, effective.modelId);
   let payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
   devLogMjContext(
     mode,
     payload.estimatedChars,
-    resolveLlmTimeoutMs(config.providerId, payload.estimatedChars)
+    resolveLlmTimeoutMs(effective.providerId, payload.estimatedChars)
   );
 
   let result;
