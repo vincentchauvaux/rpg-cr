@@ -42,6 +42,14 @@ export function isChatModelId(modelId: string): boolean {
   return kind === "chat";
 }
 
+/**
+ * Modèles qui consomment d'abord un budget « reasoning » (gpt-oss, o-series…).
+ * Un `max_tokens` trop bas → content vide + finish_reason=length.
+ */
+export function isReasoningChatModelId(modelId: string): boolean {
+  return /gpt-oss|\bo[134](?:-|$)|deepseek-r1|reasoner/i.test(modelId.trim());
+}
+
 /** Modèle VL / vision — mauvais choix pour le récit MJ (crash LM Studio fréquents). */
 export function isUnsuitableMjModelId(modelId: string): boolean {
   return isVisionLanguageModelId(modelId);

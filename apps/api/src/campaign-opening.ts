@@ -4,6 +4,7 @@ import {
   buildCampaignOpeningPlanMessages,
   completeChat,
   parseCampaignOpeningPlan,
+  resolveMjMaxTokens,
   type CampaignOpeningPlan,
 } from "@rpg-cr/shared";
 import { resolveRoomApiKey } from "./llm-api-key.js";
@@ -117,7 +118,7 @@ export async function bootstrapCampaignOpening(
       completeChat(room.llmConfig!, buildCampaignOpeningPlanMessages(ctx, host.preferredLocale), {
         apiKey: resolveRoomApiKey(room.llmConfig),
         lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-        maxTokens: 1200,
+        maxTokens: resolveMjMaxTokens(room.llmConfig!.providerId, room.llmConfig!.modelId),
         taskKind: "tool",
         jsonMode: true,
       })

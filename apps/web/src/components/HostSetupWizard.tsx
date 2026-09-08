@@ -4,7 +4,6 @@ import { useState } from "react";
 import type { LlmCatalogEntry, LlmRoomConfig } from "@rpg-cr/shared";
 import { AdminLlmForm } from "@/components/AdminLlmForm";
 import { LmStudioTunnelBanner } from "@/components/LmStudioTunnelBanner";
-import { formatLlmTestError } from "@/lib/llm-errors";
 import { isVpsLmStudioHostMode } from "@/lib/lmstudio-tunnel";
 import { useAutoHostTunnel } from "@/hooks/use-auto-host-tunnel";
 
@@ -34,24 +33,17 @@ export function HostSetupWizard({
   onContinue,
 }: Props) {
   const [llmTested, setLlmTested] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testError, setTestError] = useState<string | null>(null);
 
   useAutoHostTunnel(isVpsLmStudioHostMode());
 
   async function handleTest() {
-    if (!hasLlmConfig || testing) return;
-    setTesting(true);
-    setTestError(null);
+    if (!hasLlmConfig) return;
     try {
       await onTest();
       setLlmTested(true);
     } catch (e) {
       setLlmTested(false);
-      const raw = e instanceof Error ? e.message : "Test échoué";
-      setTestError(formatLlmTestError(raw, llmForm.providerId));
-    } finally {
-      setTesting(false);
+      throw e;
     }
   }
 
@@ -87,26 +79,12 @@ export function HostSetupWizard({
           onSave={async (config) => {
             await onSave(config);
             setLlmTested(false);
-            setTestError(null);
           }}
           onTest={handleTest}
           initialCollapsed={false}
         />
 
         <div className="char-wizard-actions host-setup-actions">
-          <button
-            type="button"
-            className="host-setup-test-btn"
-            disabled={!hasLlmConfig || testing}
-            onClick={() => void handleTest()}
-            title={
-              hasLlmConfig
-                ? "Vérifie que LM Studio ou le cloud répond"
-                : "Enregistrez d'abord la configuration"
-            }
-          >
-            {testing ? "Test en cours…" : "Tester la connexion"}
-          </button>
           <button
             type="button"
             className="primary"
@@ -126,19 +104,10 @@ export function HostSetupWizard({
             Enregistrez d&apos;abord la configuration MJ ci-dessus.
           </p>
         )}
-        {hasLlmConfig && !llmTested && !testError && (
+        {hasLlmConfig && !llmTested && (
           <p className="host-setup-hint muted">
             Configuration enregistrée — cliquez sur <strong>Tester la connexion</strong>{" "}
-            (ci-dessus ou dans le formulaire), puis continuez.
-          </p>
-        )}
-        {testError && (
-          <p
-            className="host-setup-hint muted llm-test-error"
-            role="alert"
-            style={{ borderLeftColor: "var(--invalid)", whiteSpace: "pre-wrap" }}
-          >
-            {testError}
+            dans le formulaire, puis continuez.
           </p>
         )}
         {canContinue && (

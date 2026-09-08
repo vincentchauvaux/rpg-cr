@@ -1,6 +1,6 @@
 import { getCatalogEntry, isOpenRouterProvider } from "./catalog.js";
 import { estimatePromptChars, resolveLlmTimeoutMs } from "./context-budget.js";
-import { assertChatModelId, isUnsuitableMjModelId } from "./model-kind.js";
+import { assertChatModelId, isReasoningChatModelId, isUnsuitableMjModelId } from "./model-kind.js";
 import { formatLlmModelCrashRecoveryHint } from "./model-context-tier.js";
 import {
   isLocalLlmProvider,
@@ -218,6 +218,13 @@ export function formatEmptyLlmResponseError(
   }
 
   if (finish === "length") {
+    if (isReasoningChatModelId(modelId)) {
+      return (
+        `Réponse vide (finish_reason=length) pour « ${modelId} » : le modèle a utilisé ` +
+        `tout son budget de tokens en raisonnement interne. Réessayez ; le 20B Groq suffit ` +
+        `souvent, ce n'est pas lié au nombre de salons.`
+      );
+    }
     return (
       `Réponse vide ou tronquée (finish_reason=length) pour « ${modelId} ». ` +
       "Le contexte MJ est peut-être trop long — réessayez ou utilisez un modèle plus grand."
@@ -242,7 +249,8 @@ async function openAiCompatibleChatOnce(
   abortSignal: AbortSignal | undefined,
   sampling: { temperature: number; jsonMode: boolean },
   extraHeaders: Record<string, string> = {},
-  allowJsonModeRetry = true
+  allowJsonModeRetry = true,
+  allowReasoningRetry = true
 ): Promise<ChatAttemptResult> {
   assertChatModelId(modelId);
 
@@ -265,6 +273,9 @@ async function openAiCompatibleChatOnce(
   };
   if (sampling.jsonMode) {
     body.response_format = { type: "json_object" };
+  }
+  if (isReasoningChatModelId(modelId) && allowReasoningRetry) {
+    body.reasoning_effort = "low";
   }
 
   let res: Response;
@@ -341,6 +352,26 @@ async function openAiCompatibleChatOnce(
         abortSignal,
         { temperature: sampling.temperature, jsonMode: false },
         extraHeaders,
+        false,
+        allowReasoningRetry
+      );
+    }
+    if (isReasoningChatModelId(modelId) && allowReasoningRetry && res.status === 400) {
+      devLogLlm(
+        "retry",
+        `reasoning_effort rejected (${res.status}) — retry without it`
+      );
+      return openAiCompatibleChatOnce(
+        baseUrl,
+        apiKey,
+        modelId,
+        messages,
+        timeoutMs,
+        maxTokens,
+        abortSignal,
+        sampling,
+        extraHeaders,
+        false,
         false
       );
     }
@@ -410,9 +441,10 @@ async function openAiCompatibleChat(
   let lastEmptyData: ChatCompletionResponse = {};
   const emptyAttempts = options.retryOnEmpty ? JIT_MAX_ATTEMPTS : 1;
   const timeoutAttempts = options.retryOnTimeout ? 2 : 1;
-  const maxAttempts = Math.max(emptyAttempts, timeoutAttempts);
+  const maxAttempts = Math.max(emptyAttempts, timeoutAttempts, 2);
   const sampling = { temperature: options.temperature, jsonMode: options.jsonMode };
   const extraHeaders = options.extraHeaders ?? {};
+  let maxTokens = options.maxTokens;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (options.abortSignal?.aborted) {
@@ -430,7 +462,7 @@ async function openAiCompatibleChat(
       modelId,
       messages,
       attemptTimeout,
-      options.maxTokens,
+      maxTokens,
       options.abortSignal,
       sampling,
       extraHeaders
@@ -440,6 +472,15 @@ async function openAiCompatibleChat(
 
     if (result.empty) {
       lastEmptyData = result.data;
+      const finish = result.data.choices?.[0]?.finish_reason;
+      if (finish === "length" && attempt < maxAttempts) {
+        maxTokens = Math.min(Math.max(maxTokens * 2, 512), 8192);
+        devLogLlm(
+          "retry",
+          `finish_reason=length — attempt ${attempt}/${maxAttempts}, max_tokens=${maxTokens}`
+        );
+        continue;
+      }
       if (attempt < emptyAttempts) {
         devLogLlm("retry", `empty response — attempt ${attempt}/${emptyAttempts}, wait ${JIT_RETRY_DELAY_MS}ms`);
         await sleep(JIT_RETRY_DELAY_MS);
@@ -551,7 +592,9 @@ export async function completeChat(
     options.timeoutMs ?? resolveLlmTimeoutMs(effective.providerId, estimatedChars);
   const maxTokens = options.maxTokens ?? profile.maxTokens;
   const retryOnEmpty =
-    options.retryOnEmpty ?? isLocalLlmProvider(effective.providerId);
+    options.retryOnEmpty ??
+    (isLocalLlmProvider(effective.providerId) ||
+      isReasoningChatModelId(resolveTaskModelId(effective, taskKind)));
   const retryOnTimeout = isLocalLlmProvider(effective.providerId);
 
   const chatOptions: ChatRunOptions = {

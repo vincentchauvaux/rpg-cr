@@ -12,6 +12,7 @@ import {
   parseCharacterSheetJson,
   pickFirstAvailableModel,
   resolveServerAiApiKey,
+  isReasoningChatModelId,
   type LlmRoomConfig,
 } from "@rpg-cr/shared";
 
@@ -93,6 +94,12 @@ test("AI_PROVIDER=groq surcharge la config salon locale", () => {
   assert.equal(effective.baseUrl, "https://api.groq.com/openai/v1");
 });
 
+test("gpt-oss est un modèle à raisonnement interne", () => {
+  assert.equal(isReasoningChatModelId("openai/gpt-oss-20b"), true);
+  assert.equal(isReasoningChatModelId("openai/gpt-oss-120b"), true);
+  assert.equal(isReasoningChatModelId("qwen2.5:7b-instruct"), false);
+});
+
 test("connexion Groq (mock HTTP)", async () => {
   process.env.GROQ_API_KEY = "test-groq-key-unit";
   process.env.AI_PROVIDER = "groq";
@@ -104,6 +111,13 @@ test("connexion Groq (mock HTTP)", async () => {
     auth = headers.get("Authorization") ?? "";
     assert.equal(auth, "Bearer test-groq-key-unit");
     assert.doesNotMatch(String(init?.body ?? ""), /test-groq-key-unit/);
+    const body = JSON.parse(String(init?.body ?? "{}")) as {
+      model?: string;
+      reasoning_effort?: string;
+    };
+    if (String(body.model ?? "").includes("gpt-oss")) {
+      assert.equal(body.reasoning_effort, "low");
+    }
     return chatResponse("OK");
   };
 

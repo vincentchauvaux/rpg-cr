@@ -9,8 +9,8 @@ import {
   estimatePromptChars,
   initialMjContextModeForModel,
   isContextLengthLlmError,
-  isLocalLlmProvider,
   isLlmTimeoutError,
+  isReasoningChatModelId,
   formatSmallContextModelHint,
   mjContextLimits,
   preflightLmStudioForMj,
@@ -346,8 +346,8 @@ export async function testLlmConnection(
     apiKey,
     lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
     timeoutMs: resolveLlmTimeoutMs(config.providerId, estimatedChars),
-    maxTokens: 5,
-    retryOnEmpty: isLocalLlmProvider(config.providerId),
+    maxTokens: isReasoningChatModelId(config.modelId) ? 128 : 24,
+    retryOnEmpty: true,
     taskKind: "tool",
   });
 

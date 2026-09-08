@@ -1,6 +1,7 @@
 import type { ChatCompletionMessage } from "./providers.js";
 import { isLocalLlmProvider } from "./local-llm.js";
 import { inferModelContextTier } from "./model-context-tier.js";
+import { isReasoningChatModelId } from "./model-kind.js";
 
 /** Cible caractères « monde » pour un tour MJ complet (hors prompt système de base). */
 export const MJ_WORLD_CONTEXT_MAX_FULL = 24_000;
@@ -90,6 +91,7 @@ export function isContextLengthLlmError(error: unknown): boolean {
 }
 
 export function resolveMjMaxTokens(providerId: string, modelId: string): number {
+  if (isReasoningChatModelId(modelId)) return 4096;
   const tier = inferModelContextTier(modelId);
   if (tier === "small") return 640;
   if (tier === "medium") return 1200;
