@@ -12,6 +12,7 @@ import {
   catalogModelsForRole,
   defaultNarrationModelId,
   defaultToolModelId,
+  usesServerOnlyApiKey,
 } from "@rpg-cr/shared";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SettingsToggle } from "@/components/SettingsToggle";
@@ -82,6 +83,7 @@ export function AdminLlmForm({
 
   const selectedProvider = catalog.find((c) => c.id === llmForm.providerId);
   const isLocalProvider = isLocalLlmProvider(llmForm.providerId);
+  const serverOnlyKey = usesServerOnlyApiKey(llmForm.providerId);
   const narrationCatalogModels = catalogModelsForRole(selectedProvider, "narration");
   const toolCatalogModels = catalogModelsForRole(selectedProvider, "tool");
   const currentNarrationModel = selectedProvider?.models.find(
@@ -257,6 +259,12 @@ export function AdminLlmForm({
                 modelId: nextModelId,
                 toolModelId: nextToolId,
                 baseUrl: entry?.defaultBaseUrl ?? f.baseUrl,
+                useFallbackLmStudio:
+                  id === "openrouter"
+                    ? false
+                    : usesServerOnlyApiKey(id)
+                      ? true
+                      : f.useFallbackLmStudio,
               }));
               touch("provider");
             }}
@@ -476,24 +484,44 @@ export function AdminLlmForm({
           )}
         </div>
 
-        <div className="field-block">
-          <label htmlFor="llm-api-key">
-            Clé API (session, non stockée)
-          </label>
-          <input
-            id="llm-api-key"
-            type="password"
-            autoComplete="new-password"
-            className={fieldClass(apiKeyState, show("apiKey"))}
-            value={apiKey}
-            onBlur={() => touch("apiKey")}
-            onChange={(e) => {
-              setApiKey(e.target.value);
-              touch("apiKey");
-            }}
-            placeholder="sk-… (optionnel — clé serveur OPENAI_API_KEY sinon)"
-          />
-        </div>
+        {serverOnlyKey ? (
+          <p className="llm-hint muted">
+            Clé lue uniquement sur le serveur (
+            <code>
+              {llmForm.providerId === "groq" ? "GROQ_API_KEY" : "GEMINI_API_KEY"}
+            </code>
+            ). Elle n&apos;est jamais envoyée au navigateur ni stockée en base.
+          </p>
+        ) : (
+          <div className="field-block">
+            <label htmlFor="llm-api-key">
+              Clé API (session, non stockée)
+            </label>
+            <input
+              id="llm-api-key"
+              type="password"
+              autoComplete="new-password"
+              className={fieldClass(apiKeyState, show("apiKey"))}
+              value={apiKey}
+              onBlur={() => touch("apiKey")}
+              onChange={(e) => {
+                setApiKey(e.target.value);
+                touch("apiKey");
+              }}
+              placeholder={
+                llmForm.providerId === "openrouter"
+                  ? "sk-or-… (ou OPENROUTER_API_KEY dans .env)"
+                  : "sk-… (optionnel — clé serveur OPENAI_API_KEY sinon)"
+              }
+            />
+            {llmForm.providerId === "openrouter" && (
+              <p className="llm-hint muted" style={{ marginTop: "0.35rem" }}>
+                Ne jamais coller la clé dans le chat. Session = ce champ (non enregistré en base).
+                Prod = <code>OPENROUTER_API_KEY</code> dans <code>.env</code> sur le VPS.
+              </p>
+            )}
+          </div>
+        )}
 
         <SettingsToggle
           id="llm-auto-extract-facts"
@@ -511,7 +539,7 @@ export function AdminLlmForm({
             setLlmForm((f) => ({ ...f, useFallbackLmStudio: checked }))
           }
           label="Fallback LM Studio si échec"
-          hint="Uniquement si fournisseur OpenAI/Anthropic — pas si LM Studio est déjà sélectionné."
+          hint="Chaîne : provider principal → AI_FALLBACK_PROVIDER (ex. Gemini) → LM Studio / Ollama local. Désactivé si le provider est déjà local."
         />
 
         {submitted && !allValid && (

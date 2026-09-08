@@ -5,6 +5,7 @@ import {
   completeChat,
   mergeCharacterSheet,
   normalizeCharacterSheet,
+  parseCharacterSheetJson,
   type CharacterSheet,
   type LlmRoomConfig,
 } from "@rpg-cr/shared";
@@ -28,22 +29,6 @@ export type CharacterAllRunContext = {
 };
 
 const PHASE_HEARTBEAT_MS = 4_000;
-
-function parseJsonObject(raw: string, label: string): Partial<CharacterSheet> {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    throw new Error(`Réponse LLM vide (${label})`);
-  }
-  const match = trimmed.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error(`Réponse LLM sans JSON (${label})`);
-  }
-  try {
-    return JSON.parse(match[0]) as Partial<CharacterSheet>;
-  } catch {
-    throw new Error(`JSON invalide (${label})`);
-  }
-}
 
 function buildWorldContext(roomId: string): string {
   const room = getRoomById(roomId);
@@ -179,7 +164,7 @@ export async function generateCharacterAll(
     40
   );
   if (runContext) assertCharacterAllNotAborted(runContext.playerId, runContext.lockToken);
-  const storyPatch = parseJsonObject(storyRaw, "histoire");
+  const storyPatch = parseCharacterSheetJson(storyRaw, "histoire");
   sheet = normalizeCharacterSheet(mergeCharacterSheet(sheet, storyPatch));
   report(onProgress, sheet, 40, "story", "Histoire et identité…");
 
@@ -213,7 +198,7 @@ export async function generateCharacterAll(
     80
   );
   if (runContext) assertCharacterAllNotAborted(runContext.playerId, runContext.lockToken);
-  const abilitiesPatch = parseJsonObject(abilitiesRaw, "capacités");
+  const abilitiesPatch = parseCharacterSheetJson(abilitiesRaw, "capacités");
   sheet = normalizeCharacterSheet(mergeCharacterSheet(sheet, abilitiesPatch));
   report(onProgress, sheet, 80, "abilities", "Sorts et capacités…");
 
@@ -233,7 +218,7 @@ export async function generateCharacterAll(
     100
   );
   if (runContext) assertCharacterAllNotAborted(runContext.playerId, runContext.lockToken);
-  const materialPatch = parseJsonObject(materialRaw, "biens");
+  const materialPatch = parseCharacterSheetJson(materialRaw, "biens");
   sheet = normalizeCharacterSheet(mergeCharacterSheet(sheet, materialPatch));
   report(onProgress, sheet, 100, "done", "Fiche complète");
 

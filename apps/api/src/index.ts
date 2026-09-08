@@ -1,9 +1,11 @@
+import "./load-env.js";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
 import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, assertChatModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel } from "@rpg-cr/shared";
+import { resolveRoomApiKey } from "./llm-api-key.js";
 import { initDb } from "./db.js";
 import {
   API_SECURITY_HEADERS,
@@ -422,7 +424,7 @@ app.post<{
         sourceLocale: req.body.sourceLocale,
         messageId: req.body.messageId,
       },
-      process.env.OPENAI_API_KEY
+      resolveRoomApiKey(room.llmConfig)
     );
     return result;
   } catch (e) {
@@ -494,7 +496,7 @@ app.post<{
   try {
     const result = await testLlmConnection(
       room.llmConfig,
-      req.body.apiKey ?? process.env.OPENAI_API_KEY
+      resolveRoomApiKey(room.llmConfig, req.body.apiKey)
     );
     return result;
   } catch (e) {
@@ -525,7 +527,7 @@ app.post<{
           room.id,
           room.llmConfig!,
           req.body.prompt,
-          req.body.apiKey ?? process.env.OPENAI_API_KEY
+          resolveRoomApiKey(room.llmConfig, req.body.apiKey)
         )
       );
     const msg = saveMessage(room.id, "mj", "MJ", content, "mj", responseLocale);
@@ -544,7 +546,7 @@ app.post<{
       updateNarrativeArc(room.id, arcPatch);
     }
     if (shouldAutoExtractFacts(room.llmConfig)) {
-      const apiKey = req.body.apiKey ?? process.env.OPENAI_API_KEY;
+      const apiKey = resolveRoomApiKey(room.llmConfig, req.body.apiKey);
       void (async () => {
         mjThinkingBegin(room.id, { kind: "background" });
         try {
@@ -1168,7 +1170,7 @@ app.post<{
       field,
       req.body.currentSheet ?? {},
       target.name,
-      process.env.OPENAI_API_KEY,
+      resolveRoomApiKey(room.llmConfig),
       actor.preferredLocale
     );
     return { value };
@@ -1198,7 +1200,7 @@ app.post<{
         "Guide-moi pour créer mon personnage : une question sur mon rang, ma famille ou mon secret.",
       "creation",
       room.llmConfig,
-      process.env.OPENAI_API_KEY
+      resolveRoomApiKey(room.llmConfig)
     );
     return { reply: content };
   } catch (e) {
@@ -1238,7 +1240,7 @@ app.post<{
       question,
       mode,
       room.llmConfig,
-      process.env.OPENAI_API_KEY
+      resolveRoomApiKey(room.llmConfig)
     );
   } catch (e) {
     const err = e instanceof Error ? e.message : "Erreur aide personnelle";
@@ -1286,7 +1288,7 @@ app.post<{
       section,
       req.body.currentSheet ?? {},
       target.name,
-      process.env.OPENAI_API_KEY,
+      resolveRoomApiKey(room.llmConfig),
       actor.preferredLocale
     );
     return { section, sheet };
@@ -1358,7 +1360,7 @@ app.post<{
       room.llmConfig,
       req.body.currentSheet ?? target.characterSheet ?? {},
       target.name,
-      process.env.OPENAI_API_KEY,
+      resolveRoomApiKey(room.llmConfig),
       req.body.hints,
       actor.preferredLocale,
       pushProgress,
@@ -1480,7 +1482,7 @@ app.post<{
     const { facts, messageId } = await extractFromLastMjMessage(
       req.params.roomId,
       room.llmConfig,
-      process.env.OPENAI_API_KEY
+      resolveRoomApiKey(room.llmConfig)
     );
     return { facts, messageId, count: facts.length };
   } catch (e) {
@@ -1546,7 +1548,7 @@ app.post<{
     const { scene, messageId } = await extractSceneFromLastMj(
       req.params.roomId,
       room.llmConfig,
-      process.env.OPENAI_API_KEY
+      resolveRoomApiKey(room.llmConfig)
     );
     if (scene) broadcastScene(req.params.roomId, scene);
     return { scene, messageId };

@@ -6,6 +6,7 @@ import {
   inferModelContextTier,
   isVisionLanguageModelId,
 } from "./model-context-tier.js";
+import { resolveEffectiveLlmConfig } from "./env-ai.js";
 import type { LlmRoomConfig } from "../types.js";
 
 const PREFLIGHT_FETCH_MS = 6_000;
@@ -133,6 +134,7 @@ export async function preflightLmStudioForMj(
   config: LlmRoomConfig,
   options?: { lmStudioBaseUrl?: string }
 ): Promise<void> {
+  config = resolveEffectiveLlmConfig(config);
   if (!isLocalLlmProvider(config.providerId)) return;
 
   const backend = resolveLocalLlmBackend(config.providerId, config.baseUrl);

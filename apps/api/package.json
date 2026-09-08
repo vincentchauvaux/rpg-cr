@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "HOST=0.0.0.0 PORT=4000 tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test:ai": "tsx --test src/llm-cloud-providers.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",

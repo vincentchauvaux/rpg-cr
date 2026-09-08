@@ -21,6 +21,7 @@
     "tunnel:ensure": "bash deploy/ensure-tunnel.sh",
     "host": "bash deploy/host-session.sh",
     "build": "npm run build -w @rpg-cr/shared && npm run build -w @rpg-cr/api && npm run build -w @rpg-cr/web",
+    "test:ai": "npm run build -w @rpg-cr/shared && npm run test:ai -w @rpg-cr/api",
     "start": "concurrently -n api,web \"npm run start -w @rpg-cr/api\" \"npm run start -w @rpg-cr/web\"",
     "dev:kill": "lsof -ti:3000 | xargs kill -9 2>/dev/null; lsof -ti:4000 | xargs kill -9 2>/dev/null; true"
   },

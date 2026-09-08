@@ -31,6 +31,7 @@ import {
   touchLastPreambleAt,
   touchLastRecapAt,
 } from "./rooms.js";
+import { resolveRoomApiKey } from "./llm-api-key.js";
 import { listJournal } from "./campaign.js";
 import { listMessages } from "./messages.js";
 import { hasCampaignExport, readCampaignContext } from "./campaign-export.js";
@@ -210,7 +211,7 @@ async function maybeExtractFacts(
       messageId,
       mjContent,
       room.llmConfig!,
-      process.env.OPENAI_API_KEY
+      resolveRoomApiKey(room.llmConfig)
     );
   });
 }
@@ -253,7 +254,7 @@ async function maybeExtractScene(
       messageId,
       mjContent,
       room.llmConfig!,
-      process.env.OPENAI_API_KEY
+      resolveRoomApiKey(room.llmConfig)
     );
     if (scene) broadcastScene(roomId, scene);
     else await runLightBootstrap();
@@ -273,7 +274,7 @@ async function maybeExtractArc(
       roomId,
       mjContent,
       room.llmConfig!,
-      process.env.OPENAI_API_KEY
+      resolveRoomApiKey(room.llmConfig)
     );
   });
 }
@@ -351,7 +352,7 @@ async function executeAutoMj(
           roomId,
           room.llmConfig!,
           prompt,
-          process.env.OPENAI_API_KEY,
+          resolveRoomApiKey(room.llmConfig),
           { speakingPlayerId, responseLocale, omitSpeakingPlayerSheet }
         );
       const mjMsg = saveMessage(
@@ -877,7 +878,7 @@ export function scheduleAiPuppetGeneration(roomId: string, player: Player): void
           roomId,
           room.llmConfig!,
           prompt,
-          process.env.OPENAI_API_KEY
+          resolveRoomApiKey(room.llmConfig)
         );
         if (scenePatch) {
           const scene = applySceneUpdate(roomId, scenePatch, null, {

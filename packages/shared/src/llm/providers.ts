@@ -1,4 +1,4 @@
-import { getCatalogEntry } from "./catalog.js";
+import { getCatalogEntry, isOpenRouterProvider } from "./catalog.js";
 import { estimatePromptChars, resolveLlmTimeoutMs } from "./context-budget.js";
 import { assertChatModelId, isUnsuitableMjModelId } from "./model-kind.js";
 import { formatLlmModelCrashRecoveryHint } from "./model-context-tier.js";
@@ -12,6 +12,14 @@ import {
 } from "./local-llm.js";
 import { normalizeLmStudioV1BaseUrl, resolveLmStudioServerBaseUrl } from "./lmstudio-url.js";
 import { LLM_TASK_PROFILES, resolveTaskModelId, type LlmTaskKind } from "./task-profile.js";
+import {
+  fallbackProviderConfig,
+  missingServerApiKeyError,
+  readEnvAiSettings,
+  resolveEffectiveLlmConfig,
+  resolveServerAiApiKey,
+  usesServerOnlyApiKey,
+} from "./env-ai.js";
 import type { LlmRoomConfig } from "../types.js";
 
 export interface ChatCompletionMessage {
@@ -112,6 +120,20 @@ export function extractAssistantText(message?: AssistantMessage): string {
   return chunks.join("\n\n").trim();
 }
 
+function openRouterAttributionHeaders(): Record<string, string> {
+  const referer =
+    (typeof process !== "undefined" &&
+      (process.env.OPENROUTER_HTTP_REFERER?.trim() ||
+        process.env.AUTH_URL?.trim() ||
+        process.env.NEXT_PUBLIC_APP_URL?.trim())) ||
+    "https://vps-e09ed6db.vps.ovh.net/rpg-cr";
+  return {
+    "HTTP-Referer": referer.replace(/\/$/, ""),
+    "X-Title": "RPG-CR",
+    "X-OpenRouter-Title": "RPG-CR",
+  };
+}
+
 function localLlmChecklist(modelId: string, baseUrl: string): string {
   return formatLocalLlmChecklist(inferLocalLlmBackend(baseUrl), modelId);
 }
@@ -135,7 +157,18 @@ export function formatLlmHttpError(
   const errMsg = parsed.error?.message?.trim();
   const errCode = parsed.error?.code;
 
+  const isLocalUrl =
+    baseUrl.includes("127.0.0.1") ||
+    baseUrl.includes("localhost") ||
+    baseUrl.includes("host.docker.internal");
+
   if (status === 404 || errCode === "model_not_found") {
+    if (!isLocalUrl) {
+      return (
+        `Modèle introuvable « ${modelId} » sur ${baseUrl}. ` +
+        "Vérifiez `AI_MODEL` (Groq : GET https://api.groq.com/openai/v1/models)."
+      );
+    }
     return formatLocalLlmModelNotFoundError(backend, modelId, baseUrl);
   }
 
@@ -208,6 +241,7 @@ async function openAiCompatibleChatOnce(
   maxTokens: number,
   abortSignal: AbortSignal | undefined,
   sampling: { temperature: number; jsonMode: boolean },
+  extraHeaders: Record<string, string> = {},
   allowJsonModeRetry = true
 ): Promise<ChatAttemptResult> {
   assertChatModelId(modelId);
@@ -215,6 +249,7 @@ async function openAiCompatibleChatOnce(
   const url = `${baseUrl.replace(/\/$/, "")}/chat/completions`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  Object.assign(headers, extraHeaders);
 
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const signal =
@@ -254,9 +289,14 @@ async function openAiCompatibleChatOnce(
       }
     }
     if (error instanceof DOMException && error.name === "TimeoutError") {
+      const isLocalUrl =
+        baseUrl.includes("127.0.0.1") ||
+        baseUrl.includes("localhost") ||
+        baseUrl.includes("host.docker.internal");
       const backend = inferLocalLlmBackend(baseUrl);
-      const waitHint =
-        backend === "ollama"
+      const waitHint = !isLocalUrl
+        ? "Le fournisseur cloud n'a pas répondu à temps — réessayez."
+        : backend === "ollama"
           ? "Le modèle est peut-être encore en chargement — réessayez."
           : "Contexte peut-être trop long ou modèle encore en chargement (JIT) — attendez READY dans LM Studio, réduisez l'historique, puis réessayez Réclamer.";
       return {
@@ -300,6 +340,7 @@ async function openAiCompatibleChatOnce(
         maxTokens,
         abortSignal,
         { temperature: sampling.temperature, jsonMode: false },
+        extraHeaders,
         false
       );
     }
@@ -363,6 +404,7 @@ async function openAiCompatibleChat(
     abortSignal?: AbortSignal;
     temperature: number;
     jsonMode: boolean;
+    extraHeaders?: Record<string, string>;
   }
 ): Promise<string> {
   let lastEmptyData: ChatCompletionResponse = {};
@@ -370,6 +412,7 @@ async function openAiCompatibleChat(
   const timeoutAttempts = options.retryOnTimeout ? 2 : 1;
   const maxAttempts = Math.max(emptyAttempts, timeoutAttempts);
   const sampling = { temperature: options.temperature, jsonMode: options.jsonMode };
+  const extraHeaders = options.extraHeaders ?? {};
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (options.abortSignal?.aborted) {
@@ -389,7 +432,8 @@ async function openAiCompatibleChat(
       attemptTimeout,
       options.maxTokens,
       options.abortSignal,
-      sampling
+      sampling,
+      extraHeaders
     );
 
     if (result.ok) return result.content;
@@ -423,10 +467,69 @@ async function openAiCompatibleChat(
   throw new Error(formatEmptyLlmResponseError(modelId, lastEmptyData, baseUrl));
 }
 
-function resolveLmStudioFallbackModelId(modelId: string): string | null {
-  const id = modelId.trim();
+function resolveLmStudioFallbackModelId(
+  effectiveModelId: string,
+  originalConfig: LlmRoomConfig
+): string | null {
+  const original = originalConfig.modelId?.trim() ?? "";
+  if (
+    isLocalLlmProvider(originalConfig.providerId) &&
+    original &&
+    !isLikelyCloudMarketModelId(original)
+  ) {
+    return original;
+  }
+  const id = effectiveModelId.trim();
   if (!id || isLikelyCloudMarketModelId(id)) return null;
   return id;
+}
+
+type ChatRunOptions = {
+  timeoutMs: number;
+  retryOnEmpty: boolean;
+  maxTokens: number;
+  retryOnTimeout: boolean;
+  abortSignal?: AbortSignal;
+  temperature: number;
+  jsonMode: boolean;
+};
+
+async function completeAgainstConfig(
+  config: LlmRoomConfig,
+  messages: ChatCompletionMessage[],
+  options: LlmProviderOptions,
+  chatOptions: ChatRunOptions,
+  requestApiKey?: string
+): Promise<{ content: string; providerId: string; modelId: string }> {
+  const entry = getCatalogEntry(config.providerId);
+  if (!entry) throw new Error(`Provider inconnu: ${config.providerId}`);
+
+  const taskKind = options.taskKind ?? "narration";
+  const modelId = resolveTaskModelId(config, taskKind);
+  assertChatModelId(modelId);
+
+  const rawBase = config.baseUrl ?? entry.defaultBaseUrl ?? "https://api.openai.com/v1";
+  const baseUrl = isLocalLlmProvider(config.providerId)
+    ? resolveLmStudioServerBaseUrl(config, options.lmStudioBaseUrl)
+    : rawBase;
+  const apiKey = usesServerOnlyApiKey(config.providerId)
+    ? resolveServerAiApiKey(config.providerId)
+    : resolveServerAiApiKey(config.providerId, requestApiKey);
+
+  if (usesServerOnlyApiKey(config.providerId) && !apiKey) {
+    throw new Error(missingServerApiKeyError(config.providerId));
+  }
+
+  const extraHeaders =
+    isOpenRouterProvider(config.providerId) || baseUrl.includes("openrouter.ai")
+      ? openRouterAttributionHeaders()
+      : {};
+
+  const content = await openAiCompatibleChat(baseUrl, apiKey, modelId, messages, {
+    ...chatOptions,
+    extraHeaders,
+  });
+  return { content, providerId: config.providerId, modelId };
 }
 
 export async function completeChat(
@@ -434,31 +537,24 @@ export async function completeChat(
   messages: ChatCompletionMessage[],
   options: LlmProviderOptions = {}
 ): Promise<LlmCompletionResult> {
-  const entry = getCatalogEntry(config.providerId);
-  if (!entry) throw new Error(`Provider inconnu: ${config.providerId}`);
+  const envAi = readEnvAiSettings();
+  const effective = resolveEffectiveLlmConfig(config, envAi);
+  const entry = getCatalogEntry(effective.providerId);
+  if (!entry) throw new Error(`Provider inconnu: ${effective.providerId}`);
 
   const taskKind = options.taskKind ?? "narration";
   const profile = LLM_TASK_PROFILES[taskKind];
-  const modelId = resolveTaskModelId(config, taskKind);
   const temperature = options.temperature ?? profile.temperature;
   const jsonMode = options.jsonMode ?? profile.jsonMode;
-
-  const rawBase = config.baseUrl ?? entry.defaultBaseUrl ?? "https://api.openai.com/v1";
-  const primaryBase = isLocalLlmProvider(config.providerId)
-      ? resolveLmStudioServerBaseUrl(config, options.lmStudioBaseUrl)
-      : rawBase;
-  const apiKey = options.apiKey;
   const estimatedChars = estimatePromptChars(messages);
   const timeoutMs =
-    options.timeoutMs ?? resolveLlmTimeoutMs(config.providerId, estimatedChars);
+    options.timeoutMs ?? resolveLlmTimeoutMs(effective.providerId, estimatedChars);
   const maxTokens = options.maxTokens ?? profile.maxTokens;
   const retryOnEmpty =
-    options.retryOnEmpty ?? isLocalLlmProvider(config.providerId);
-  const retryOnTimeout = isLocalLlmProvider(config.providerId);
+    options.retryOnEmpty ?? isLocalLlmProvider(effective.providerId);
+  const retryOnTimeout = isLocalLlmProvider(effective.providerId);
 
-  assertChatModelId(modelId);
-
-  const chatOptions = {
+  const chatOptions: ChatRunOptions = {
     timeoutMs,
     retryOnEmpty,
     maxTokens,
@@ -468,51 +564,76 @@ export async function completeChat(
     jsonMode,
   };
 
+  let primaryError: unknown;
   try {
-    const content = await openAiCompatibleChat(
-      primaryBase,
-      apiKey,
-      modelId,
+    const result = await completeAgainstConfig(
+      effective,
       messages,
-      chatOptions
+      options,
+      chatOptions,
+      options.apiKey
     );
-    return {
-      content,
-      providerId: config.providerId,
-      modelId,
-      usedFallback: false,
-    };
-  } catch (primaryError) {
-    if (!config.useFallbackLmStudio || isLocalLlmProvider(config.providerId)) {
-      throw primaryError;
-    }
-
-    const fallbackModelId = resolveLmStudioFallbackModelId(modelId);
-    if (!fallbackModelId) {
-      throw primaryError;
-    }
-
-    const fallbackBase = normalizeLmStudioV1BaseUrl(
-      options.lmStudioBaseUrl ?? "http://127.0.0.1:1234/v1"
-    );
-    const content = await openAiCompatibleChat(
-      fallbackBase,
-      undefined,
-      fallbackModelId,
-      messages,
-      {
-        ...chatOptions,
-        retryOnEmpty: true,
-        retryOnTimeout: true,
-      }
-    );
-    return {
-      content,
-      providerId: "lmstudio",
-      modelId: fallbackModelId,
-      usedFallback: true,
-    };
+    return { ...result, usedFallback: false };
+  } catch (error) {
+    primaryError = error;
   }
+
+  const namedFallback = fallbackProviderConfig(
+    envAi.fallbackProvider ?? "",
+    effective
+  );
+  if (namedFallback) {
+    try {
+      const result = await completeAgainstConfig(
+        namedFallback,
+        messages,
+        options,
+        {
+          ...chatOptions,
+          retryOnEmpty: false,
+          retryOnTimeout: false,
+        },
+        options.apiKey
+      );
+      return { ...result, usedFallback: true };
+    } catch {
+      /* dernier recours : LM Studio / Ollama local */
+    }
+  }
+
+  if (!config.useFallbackLmStudio || isLocalLlmProvider(effective.providerId)) {
+    throw primaryError;
+  }
+
+  const fallbackModelId = resolveLmStudioFallbackModelId(
+    resolveTaskModelId(effective, taskKind),
+    config
+  );
+  if (!fallbackModelId) {
+    throw primaryError;
+  }
+
+  const fallbackBase = normalizeLmStudioV1BaseUrl(
+    options.lmStudioBaseUrl ?? "http://127.0.0.1:1234/v1"
+  );
+  const content = await openAiCompatibleChat(
+    fallbackBase,
+    undefined,
+    fallbackModelId,
+    messages,
+    {
+      ...chatOptions,
+      retryOnEmpty: true,
+      retryOnTimeout: true,
+      extraHeaders: {},
+    }
+  );
+  return {
+    content,
+    providerId: "lmstudio",
+    modelId: fallbackModelId,
+    usedFallback: true,
+  };
 }
 
 /** Alias récit — `completeChat` avec kind narration. */

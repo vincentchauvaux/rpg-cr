@@ -51,7 +51,14 @@ export function isLikelyLmStudioModelId(modelId: string): boolean {
 export function isLikelyCloudMarketModelId(modelId: string): boolean {
   const id = modelId.trim();
   if (!id) return true;
-  return /^(gpt-|o[1-9]|chatgpt|claude-|gemini-|grok-)/i.test(id);
+  if (/^(gpt-|o[1-9]|chatgpt|claude-|gemini-|grok-)/i.test(id)) return true;
+  if (/^(openai|anthropic|meta-llama|mistralai|deepseek|x-ai|cohere|groq|qwen)\//i.test(id)) {
+    return true;
+  }
+  if (/^google\//i.test(id) && !/gemma/i.test(id)) return true;
+  if (/^llama-3\.[0-9]+-/i.test(id)) return true;
+  if (/^(llama-3\.3-70b-versatile|llama-3\.1-8b-instant)$/i.test(id)) return true;
+  return false;
 }
 
 export function isLikelyWrongModelIdForProvider(

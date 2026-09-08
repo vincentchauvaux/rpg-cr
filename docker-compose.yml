@@ -10,6 +10,12 @@ services:
       - HOST=0.0.0.0
       - DATABASE_PATH=/data/rpg-cr.db
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - AI_PROVIDER=${AI_PROVIDER:-}
+      - AI_MODEL=${AI_MODEL:-}
+      - AI_FALLBACK_PROVIDER=${AI_FALLBACK_PROVIDER:-}
       - LM_STUDIO_BASE_URL=${LM_STUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
     volumes:
       - rpg-data:/data

@@ -90,10 +90,108 @@ export const LLM_CATALOG: LlmCatalogEntry[] = [
       },
     ],
   },
+  {
+    id: "openrouter",
+    vendor: "OpenRouter",
+    name: "OpenRouter",
+    openAiCompatible: true,
+    defaultBaseUrl: "https://openrouter.ai/api/v1",
+    requiresApiKey: true,
+    characteristics: [
+      "Un endpoint, des dizaines de modèles (OpenAI, Anthropic, etc.)",
+      "Récit : `openai/gpt-4o` — outils : `openai/gpt-4o-mini`",
+      "Clé `sk-or-…` : champ god mode ou `OPENROUTER_API_KEY` dans `.env`",
+    ],
+    models: [
+      {
+        id: "openai/gpt-4o",
+        label: "GPT-4o via OpenRouter (MJ)",
+        contextWindow: 128000,
+        role: "narration",
+      },
+      {
+        id: "openai/gpt-4o-mini",
+        label: "GPT-4o mini via OpenRouter (outils)",
+        contextWindow: 128000,
+        role: "tool",
+      },
+      {
+        id: "anthropic/claude-sonnet-4",
+        label: "Claude Sonnet via OpenRouter",
+        contextWindow: 200000,
+        role: "both",
+      },
+    ],
+  },
+  {
+    id: "groq",
+    vendor: "Groq",
+    name: "Groq (gratuit)",
+    openAiCompatible: true,
+    defaultBaseUrl: "https://api.groq.com/openai/v1",
+    requiresApiKey: true,
+    characteristics: [
+      "Clé `GROQ_API_KEY` serveur uniquement — jamais le navigateur",
+      "API officielle OpenAI-compatible (`api.groq.com`)",
+      "Défaut production : `openai/gpt-oss-20b` — surcharge `AI_MODEL`",
+      "Vérifier `GET /openai/v1/models` si un id disparaît",
+    ],
+    models: [
+      {
+        id: "openai/gpt-oss-20b",
+        label: "GPT-OSS 20B (rapide)",
+        contextWindow: 131072,
+        role: "both",
+      },
+      {
+        id: "openai/gpt-oss-120b",
+        label: "GPT-OSS 120B (MJ)",
+        contextWindow: 131072,
+        role: "narration",
+      },
+      {
+        id: "qwen/qwen3.6-27b",
+        label: "Qwen3.6 27B",
+        contextWindow: 131072,
+        role: "both",
+      },
+    ],
+  },
+  {
+    id: "gemini",
+    vendor: "Google",
+    name: "Google Gemini (gratuit)",
+    openAiCompatible: true,
+    defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    requiresApiKey: true,
+    characteristics: [
+      "Clé `GEMINI_API_KEY` serveur uniquement — jamais le navigateur",
+      "API officielle Gemini (endpoint OpenAI-compatible Google)",
+      "Défaut Flash : `gemini-3.8-flash` — surcharge `AI_MODEL`",
+    ],
+    models: [
+      {
+        id: "gemini-3.8-flash",
+        label: "Gemini 3.8 Flash (rapide)",
+        contextWindow: 1048576,
+        role: "both",
+      },
+      {
+        id: "gemini-flash-latest",
+        label: "Gemini Flash (alias latest)",
+        contextWindow: 1048576,
+        role: "both",
+      },
+    ],
+  },
 ];
 
 export function getCatalogEntry(providerId: string): LlmCatalogEntry | undefined {
   return LLM_CATALOG.find((e) => e.id === providerId);
+}
+
+export function isOpenRouterProvider(providerId: string): boolean {
+  return providerId === "openrouter";
 }
 
 function modelRole(model: LlmCatalogModel): LlmModelRole {

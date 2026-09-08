@@ -6,6 +6,7 @@ import {
   parseCampaignOpeningPlan,
   type CampaignOpeningPlan,
 } from "@rpg-cr/shared";
+import { resolveRoomApiKey } from "./llm-api-key.js";
 import {
   getCampaignOpeningDone,
   getMap,
@@ -114,7 +115,7 @@ export async function bootstrapCampaignOpening(
 
     const planResult = await queueNarrativeLlm(roomId, "campaign-opening-plan", () =>
       completeChat(room.llmConfig!, buildCampaignOpeningPlanMessages(ctx, host.preferredLocale), {
-        apiKey: process.env.OPENAI_API_KEY,
+        apiKey: resolveRoomApiKey(room.llmConfig),
         lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
         maxTokens: 1200,
         taskKind: "tool",
@@ -135,7 +136,7 @@ export async function bootstrapCampaignOpening(
           roomId,
           room.llmConfig!,
           narrativePrompt,
-          process.env.OPENAI_API_KEY,
+          resolveRoomApiKey(room.llmConfig),
           { speakingPlayerId: host.id, responseLocale: host.preferredLocale }
         )
     );

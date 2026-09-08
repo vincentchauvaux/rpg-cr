@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-08 (routage LLM narration / outils)
+> Dernière mise à jour : 2026-09-08 (Groq + Gemini cloud)
 
 ## Vision
 
@@ -156,6 +156,8 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 
    - **Ollama (VPS)** : provider dédié, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` (RAM-safe) — optionnel `qwen3:8b` / `qwen3:14b` si 16 Go+ ; install `deploy/ollama-setup.sh`, pas de tunnel Mac
    - **LM Studio (Mac + tunnel)** : URL `http://127.0.0.1:1234/v1`, modèle saisi à la main ; « Enregistrer la config MJ » = sauvegarde SQLite uniquement
+   - **OpenRouter** : URL `https://openrouter.ai/api/v1`, ids `openai/gpt-4o` (MJ) + `openai/gpt-4o-mini` (outils) ; clé `sk-or-…` **jamais en git**
+   - **Groq / Gemini (gratuit, serveur)** : `AI_PROVIDER=groq|gemini`, `AI_MODEL`, `AI_FALLBACK_PROVIDER=gemini` ; clés `GROQ_API_KEY` / `GEMINI_API_KEY` **uniquement `process.env`** (jamais frontend, jamais SQLite, jamais logs) ; même `completeChat` ; dernier fallback LM Studio / Ollama conservé
 5. **LLM** — catalogue avec rôles `narration` / `tool` / `both` ; config par salon (`modelId` MJ + `toolModelId` optionnel cloud) ; `completeChat` + profils (`task-profile.ts`) ; **MJ auto Dire** désactivé (`AUTO_MJ_ON_PLAYER_MESSAGES`) ; **MJ auto Action** actif (`scheduleActionMj`) ; Réclamer / routes hôte ; endpoint `POST /api/rooms/:id/mj` conservé (API interne / v2)
 6. **Carte** — génération procédurale (simplex noise, biomes, effets toxic/fog/evil/buff, POI, territoires, SVG)
 7. **Modèles** — tables SQLite : messages, quêtes, journal, propositions archivées (+ endpoints REST)
@@ -315,7 +317,7 @@ Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**
 | Nginx | `deploy/nginx-rpg-cr.conf.example` → `include` dans server HTTPS `vps-e09ed6db.vps.ovh.net` |
 | MJ gratuit (VPS) | [deploy/OLLAMA-VPS.md](deploy/OLLAMA-VPS.md) — Ollama sur le VPS (`LM_STUDIO_BASE_URL=http://127.0.0.1:11434/v1`), sans Mac |
 | MJ gratuit (Mac) | [deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md) — LM Studio + tunnel ; `npm run tunnel:helper` + bouton wizard **Démarrer le tunnel** |
-| Secrets | `.env` : `LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1`, `NEXT_PUBLIC_BASE_PATH=/rpg-cr` ; `OPENAI_API_KEY` optionnel |
+| Secrets | `.env` : `LM_STUDIO_BASE_URL=http://127.0.0.1:11434/v1`, `NEXT_PUBLIC_BASE_PATH=/rpg-cr` ; `OPENAI_API_KEY` / `OPENROUTER_API_KEY` optionnels |
 | Déploiement | `bash deploy/deploy.sh` — Docker `127.0.0.1:3010` / `4010`, `extra_hosts` host-gateway |
 | Compose | `docker-compose.prod.yml` — build `NEXT_PUBLIC_BASE_PATH`, volume `rpg-data` |
 | Première graine | [deploy/HOST-SETUP.md](deploy/HOST-SETUP.md) |
@@ -346,10 +348,13 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Fichiers clés
 
 - `packages/shared/src/map/procedural.ts` — carte
-- `packages/shared/src/llm/providers.ts` — `completeChat` (OpenAI-compatible) ; alias `completeAsMj` = kind narration
+- `packages/shared/src/llm/providers.ts` — `completeChat` (OpenAI-compatible) ; alias `completeAsMj` = kind narration ; overlay `AI_PROVIDER` + fallback `AI_FALLBACK_PROVIDER` puis LM Studio
+- `packages/shared/src/llm/env-ai.ts` — Groq/Gemini : clés `process.env` uniquement, jamais le frontend
+- `packages/shared/src/llm/character-json.ts` — parse JSON fiche (fill-all)
 - `packages/shared/src/llm/task-profile.ts` — profils `narration` (temp 0,85) / `tool` (temp 0,15) ; `resolveTaskModelId`
-- `packages/shared/src/llm/catalog.ts` — rôles modèle + défauts GPT-4o (MJ) / GPT-4o mini (outils)
-- `apps/api/src/character-all-guard.ts` — mutex fill-all par joueur + TTL 4 min
+- `packages/shared/src/llm/catalog.ts` — openai, anthropic, ollama, lmstudio, openrouter, **groq**, **gemini**
+- `apps/api/src/character-all-guard.ts` — mutex fill-all par joueur + TTL **4 min** (pas le timeout HTTP)
+- `apps/api/src/llm-cloud-providers.test.ts` — tests Groq/Gemini/JSON/erreur/timeout (`npm run test:ai`)
 - `apps/api/src/character-all-progress.ts` — état progression fill-all (%, phase, fiche partielle)
 - `apps/api/src/room-llm-queue.ts` — **file LLM globale par salon** (1 appel modèle à la fois) ; priorités `narrative` > `interactive` > `background` ; FIFO au sein d'une priorité
 - `apps/api/src/index.ts` — routes + WS
@@ -437,7 +442,7 @@ API : `GET/PATCH /api/players/:id/character`, `POST …/finalize`, `POST …/int
 
 - Bouton **✨** en bas à droite de chaque zone texte (wizard + édition fiche).
 - Endpoint `POST /api/players/:id/character/generate-field` — body `{ field, currentSheet, actorPlayerId }`.
-- Endpoint `POST /api/players/:id/character/generate-all` — body `{ actorPlayerId, roomId, currentSheet?, hints? }` ; **4 phases LLM** séquentielles : histoire (0→40 %) → stats (55 %) → capacités (80 %) → biens (100 %) ; `GET …/generate-all-progress` (poll client ~450 ms) + WS `{ type: "character_gen_progress", playerId, percent, label, sheet }` ; timeout **120 s** par phase ; client **240 s** ; prompts `character-all-phases-prompt.ts`.
+- Endpoint `POST /api/players/:id/character/generate-all` — body `{ actorPlayerId, roomId, currentSheet?, hints? }` ; **4 phases LLM** séquentielles : histoire (0→40 %) → stats (55 %) → capacités (80 %) → biens (100 %) ; `GET …/generate-all-progress` (poll client ~450 ms) + WS `{ type: "character_gen_progress", playerId, percent, label, sheet }` ; timeout **120 s** par phase ; client **240 s** ; verrou **4 min** ; prompts `character-all-phases-prompt.ts`. Pipeline : LLM (`jsonMode`) → `parseCharacterSheetJson` → `normalizeCharacterSheet` / `mergeCharacterSheet` (pas de texte libre).
 - **Mutex par joueur** : une seule génération fill-all par `playerId` (cible) à la fois → **429** si doublon (double-clic, autre appareil) ; TTL verrou **4 min** ; libération par **jeton** (une requête lente ne libère pas le verrou d'une relance) ; `finally` libère toujours ; `DELETE …/generate-all-lock?actorPlayerId=…` (propriétaire ou admin god) ; `GET …/generate-all-lock` pour polling.
 - **HTTP** : timeout LM Studio → **504** `{ error }` (message « Délai dépassé… ») ; autres erreurs LLM → **502**.
 - UI : bouton **« ✨ Remplir la fiche »** (`CharacterSheetFillAllButton`) — overlay avec **barre 0–100 %** + **spinner** + libellé de phase (`AiGenerationOverlay`) ; **heartbeat** toutes les 4 s pendant chaque phase LLM (« MJ en réflexion… », +2 % jusqu'à la fin de phase — gemma ~30–90 s en phase histoire) ; bouton **Annuler la génération** sur l'overlay chargement ; annulation **AbortController** serveur + client ; champs wizard/fiche mis à jour **en direct** via `onProgress` ; snapshot local avant appel ; `inFlightRef` + `disabled` pendant l’appel ; en **erreur** : brouillon inchangé + overlay `variant="error"` ; **429** : annuler verrou / réessayer (`ensureLockClear` libère auto si propriétaire) ; **409** annulation silencieuse côté client ; en succès : fiche finale mergée.
@@ -593,7 +598,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Affichage MJ** : `ChatMessageRow` + `MjMessageMarkdown` (`react-markdown`, pas de HTML brut) — paragraphes, `**gras**`, `##` titres, listes `-`. Styles `.chat-msg-mj` dans `globals.css`. Prompt MJ : paragraphes courts + markdown léger.
 - **Plein écran récit** : bouton unique ⛶/⊟ en haut à droite de `.chat-log-wrap` (`RoomView`, `aria-label` « Fermer » en étendu) — `.chat-panel--log-expanded` = overlay `100dvh` en **colonne flex** ; `sessionStorage` `rpg-cr-chat-expanded:{roomId}`. Scrollbar du fil (`.chat-log`) : piste sombre, curseur or/bronze (`globals.css`), discrète sur mobile jusqu’au scroll.
 - **Scroll chat** (`RoomView`) : scroll **dans** `.chat-log` uniquement (`scrollTop`, pas `scrollIntoView` — évite les sauts de page sur mobile) ; auto-bas si proche du bas ; resync API (`refresh`, focus, poll 30 s) **conserve** la position si l'utilisateur lit l'historique ; ignore le resync si la liste de messages est inchangée.
-- **Clé API** : `OPENAI_API_KEY` côté serveur pour l'auto ; champ god mode utile surtout pour « Tester la connexion ».
+- **Clé API** : jamais persistée en SQLite. Groq / Gemini : **uniquement** `GROQ_API_KEY` / `GEMINI_API_KEY` côté serveur (le champ god mode est masqué). OpenAI / OpenRouter : champ god mode (session) puis `OPENROUTER_API_KEY` / `OPENAI_API_KEY`. Prod VPS : lignes dans `.env` (pas dans le chat). Tester = bouton god mode ; Groq/Gemini n’envoient aucune clé au navigateur.
 
 ## Comptes joueurs (Google OAuth — MVP)
 
@@ -646,8 +651,8 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 
 ## Notes agent
 
-- La clé API LLM est saisie côté client (god mode) et transmise à l’appel MJ ; non persistée en base.
-- **Routage LLM** : `completeChat` + `taskKind` `narration` | `tool` ; cloud défaut hors VPS = GPT-4o (MJ) + GPT-4o mini (`toolModelId`) ; local = un seul modèle chargé.
+- La clé API LLM OpenAI/OpenRouter peut être saisie côté client (god mode) et transmise à l’appel MJ ; non persistée en base. **Groq / Gemini : jamais le frontend** — `GROQ_API_KEY` / `GEMINI_API_KEY` + `AI_PROVIDER` / `AI_MODEL` / `AI_FALLBACK_PROVIDER` dans `.env` (docker-compose.prod.yml).
+- **Routage LLM** : `completeChat` + `taskKind` `narration` | `tool` ; si `AI_PROVIDER=groq|gemini` le serveur surcharge la config salon ; fallback `AI_FALLBACK_PROVIDER` puis LM Studio / Ollama (`LM_STUDIO_BASE_URL`). Cloud défaut hors VPS sans env = GPT-4o (MJ) + GPT-4o mini ; local = un seul modèle chargé.
 - **Réclamer hôte** : `pickHostMjPromptType` + `handleHostReclaim` dans `RoomView` (préambule / récap / reclaim) — déjà en place ; pas de travail dupliqué côté sous-agent `3dd156bd` si non retrouvé dans l'historique.
 - `getRoomByCode` compare en NOCASE (codes 6 caractères).
 - Pour LM Studio dans Docker : `host.docker.internal:1234`.
@@ -669,6 +674,24 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
   - **Console salon** : `chrome-extension://invalid/` et `listener … asynchronous response` = extensions Chrome — pas d’action côté RPG-CR ; avertissement `[DOM] autocomplete` sur `#llm-api-key` corrigé (`new-password`).
 
 ## Config LLM local (Ollama / LM Studio)
+
+### Groq / Gemini (cloud gratuit, serveur)
+
+`AI_PROVIDER` **surcharge** la config salon (god mode) tant qu’il vaut `groq` ou `gemini`. Clés uniquement dans `.env` / Docker — jamais `NEXT_PUBLIC_*`.
+
+```
+GROQ_API_KEY=…
+GEMINI_API_KEY=…
+AI_PROVIDER=groq
+AI_MODEL=openai/gpt-oss-20b
+AI_FALLBACK_PROVIDER=gemini
+```
+
+- Groq : API officielle `https://api.groq.com/openai/v1` ; défaut `openai/gpt-oss-20b` (vérifié via GET `/models`). Si l’id disparaît : `GET /openai/v1/models` puis `AI_MODEL=…`.
+- Gemini : API officielle OpenAI-compatible Google ; défaut Flash `gemini-3.8-flash` (ou `AI_MODEL=gemini-flash-latest`).
+- Chaîne : provider env → `AI_FALLBACK_PROVIDER` → LM Studio/Ollama (`LM_STUDIO_BASE_URL`) si `useFallbackLmStudio`.
+- Revenir au local : commenter `AI_PROVIDER` (ou `AI_PROVIDER=lmstudio` / `ollama`) puis god mode comme ci-dessous.
+- Tests : `npm run test:ai` (mocks + live si les clés sont dans l’env).
 
 ### Architecture
 

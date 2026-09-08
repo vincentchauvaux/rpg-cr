@@ -14,6 +14,7 @@ import { saveMessage } from "./messages.js";
 import { broadcastMessage, broadcastPlayers } from "./ws-hub.js";
 import { schedulePlayerIntroFollowUpMj } from "./mj-auto.js";
 import { queueInteractiveLlm } from "./room-llm-queue.js";
+import { resolveRoomApiKey } from "./llm-api-key.js";
 
 export class PlayerIntroduceError extends Error {
   constructor(
@@ -95,7 +96,7 @@ export async function introducePlayerInStory(
   } else {
     content = await generateSelfIntroduction(
       player,
-      process.env.OPENAI_API_KEY
+      resolveRoomApiKey(getRoomById(player.roomId)?.llmConfig)
     );
   }
 
