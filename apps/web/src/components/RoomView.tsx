@@ -1591,7 +1591,6 @@ export function RoomView({ code }: Props) {
               {isAdmin ? (
                 <>
                   <div className="toggle-row">
-                    <h2 style={{ margin: 0 }}>Administration</h2>
                     <GodModeSwitch
                       checked={adminOpen}
                       disabled={godModeBusy}

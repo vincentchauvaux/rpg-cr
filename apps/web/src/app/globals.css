@@ -2268,8 +2268,10 @@ label {
 .admin-panel-compact .toggle-row {
   margin-bottom: 0;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .god-switch {
@@ -2278,7 +2280,8 @@ label {
   gap: 0.5rem;
   cursor: pointer;
   user-select: none;
-  flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .god-switch-input {
@@ -2292,6 +2295,7 @@ label {
   position: relative;
   width: 2.5rem;
   height: 1.35rem;
+  flex-shrink: 0;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -2332,7 +2336,7 @@ label {
 .god-switch-label {
   font-size: 0.85rem;
   color: var(--text-muted);
-  min-width: 4.5rem;
+  white-space: nowrap;
 }
 
 .god-switch-input:checked ~ .god-switch-label {

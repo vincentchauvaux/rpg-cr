@@ -106,9 +106,11 @@ export function AdminLlmForm({
     isLocalProvider &&
     isLikelyWrongModelIdForProvider(llmForm.providerId, llmForm.modelId);
   const modelInLmStudioList =
-    lmChatModels.length > 0 && lmChatModels.includes(llmForm.modelId.trim());
+    isLocalProvider &&
+    lmChatModels.length > 0 &&
+    lmChatModels.includes(llmForm.modelId.trim());
   const modelNotInRemoteList =
-    lmChatModels.length > 0 && !modelInLmStudioList;
+    isLocalProvider && lmChatModels.length > 0 && !modelInLmStudioList;
   const lmSelectValue =
     lmChatModels.includes(llmForm.modelId.trim()) ? llmForm.modelId.trim() : "";
 
@@ -219,7 +221,12 @@ export function AdminLlmForm({
   }
 
   useEffect(() => {
-    if (!isLocalProvider) return;
+    if (!isLocalProvider) {
+      setLmChatModels([]);
+      setLmModelsError(null);
+      setLmModelsUrl(null);
+      return;
+    }
     void handleListLmModels();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- au montage et changement de provider local
   }, [isLocalProvider, llmForm.providerId]);
@@ -266,6 +273,12 @@ export function AdminLlmForm({
                       ? true
                       : f.useFallbackLmStudio,
               }));
+              if (!isLocal) {
+                setLmChatModels([]);
+                setLmModelsError(null);
+                setLmModelsUrl(null);
+                setModelAutoFixed(null);
+              }
               touch("provider");
             }}
           >
@@ -398,22 +411,30 @@ export function AdminLlmForm({
               )}
             </>
           ) : (
-            <select
-              id="llm-model"
-              className={fieldClass(modelState, show("model"))}
-              value={llmForm.modelId}
-              onBlur={() => touch("model")}
-              onChange={(e) => {
-                setLlmForm((f) => ({ ...f, modelId: e.target.value }));
-                touch("model");
-              }}
-            >
-              {mjSelectModels.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
+            <>
+              <select
+                id="llm-model"
+                className={fieldClass(modelState, show("model"))}
+                value={llmForm.modelId}
+                onBlur={() => touch("model")}
+                onChange={(e) => {
+                  setLlmForm((f) => ({ ...f, modelId: e.target.value }));
+                  touch("model");
+                }}
+              >
+                {mjSelectModels.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              {llmForm.providerId === "groq" && (
+                <p className="llm-hint muted" style={{ marginTop: "0.35rem" }}>
+                  Les deux GPT-OSS conviennent. <strong>120B</strong> = récit MJ plus riche ;
+                  <strong> 20B</strong> = plus rapide (et déjà le défaut outils).
+                </p>
+              )}
+            </>
           )}
         </div>
 
