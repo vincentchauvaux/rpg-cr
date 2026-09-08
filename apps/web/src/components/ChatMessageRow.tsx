@@ -151,7 +151,7 @@ export function ChatMessageRow({
 
   if (m.kind === "system") {
     return (
-      <div className="msg system">
+      <div className="msg system" data-message-id={m.id}>
         <span>{body}</span>
       </div>
     );
@@ -161,6 +161,7 @@ export function ChatMessageRow({
     return (
       <div
         className={`msg mj${isTranslating ? " msg--translating" : ""}`}
+        data-message-id={m.id}
         style={{ "--speaker-color": MJ_DISPLAY_COLOR } as React.CSSProperties}
       >
         <span className="author msg-author-row">
@@ -186,6 +187,7 @@ export function ChatMessageRow({
     return (
       <div
         className={`msg action${isTranslating ? " msg--translating" : ""}`}
+        data-message-id={m.id}
         style={{ "--speaker-color": speakerColor } as React.CSSProperties}
       >
         <span className="action-tag" aria-hidden>
@@ -212,6 +214,7 @@ export function ChatMessageRow({
   return (
     <div
       className={`msg say${isTranslating ? " msg--translating" : ""}`}
+      data-message-id={m.id}
       style={{ "--speaker-color": speakerColor } as React.CSSProperties}
     >
       <span className="author msg-author-row">

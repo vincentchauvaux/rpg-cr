@@ -83,6 +83,7 @@ import {
   canHumanParticipateInChat,
   extractMjChoices,
   formatPlayerRollMessage,
+  isSceneCheckActionContent,
   type MentionCandidate,
   type QuickUseOption,
 } from "@rpg-cr/shared";
@@ -120,6 +121,20 @@ interface Props {
 export type SpeechMode = "say" | "action";
 
 const CHAT_SCROLL_THRESHOLD_PX = 80;
+
+function scrollChatLogToMessage(
+  el: HTMLDivElement,
+  messageId: string
+): void {
+  const node = el.querySelector(`[data-message-id="${messageId}"]`);
+  if (!(node instanceof HTMLElement)) return;
+  const prev = el.style.scrollBehavior;
+  el.style.scrollBehavior = "auto";
+  const offset =
+    node.getBoundingClientRect().top - el.getBoundingClientRect().top;
+  el.scrollTop = Math.max(0, el.scrollTop + offset - 6);
+  el.style.scrollBehavior = prev;
+}
 
 function scrollChatLogToBottom(
   el: HTMLDivElement,
@@ -292,6 +307,12 @@ export function RoomView({ code }: Props) {
   /** true si l'utilisateur est proche du bas — on n'impose pas le scroll en lecture d'historique */
   const stickToBottomRef = useRef(true);
   const isInitialChatScroll = useRef(true);
+  /** Après un jet de choix : rester sur le résultat, ne pas suivre le récit MJ. */
+  const pauseStickToBottomRef = useRef(false);
+  const pendingScrollToMessageIdRef = useRef<string | null>(null);
+  const pinnedSceneCheckMessageIdRef = useRef<string | null>(null);
+  const reanchorSceneCheckOnceRef = useRef(false);
+  const ignoreStickUpdateRef = useRef(false);
 
   const captureChatScrollIfNeeded = useCallback(() => {
     const el = chatLogRef.current;
@@ -501,6 +522,26 @@ export function RoomView({ code }: Props) {
   const handleWsEvent = useCallback(
     (data: RoomWsEvent) => {
       if (data.type === "message") {
+        const msg = data.message;
+        if (msg.kind === "action" && isSceneCheckActionContent(msg.content)) {
+          const ownId = sessionRef.current?.playerId;
+          if (stickToBottomRef.current || msg.playerId === ownId) {
+            pauseStickToBottomRef.current = true;
+            stickToBottomRef.current = false;
+            pendingScrollToMessageIdRef.current = msg.id;
+            pinnedSceneCheckMessageIdRef.current = msg.id;
+            reanchorSceneCheckOnceRef.current = true;
+          }
+        } else if (
+          msg.kind === "mj" &&
+          pauseStickToBottomRef.current &&
+          reanchorSceneCheckOnceRef.current &&
+          pinnedSceneCheckMessageIdRef.current
+        ) {
+          pendingScrollToMessageIdRef.current =
+            pinnedSceneCheckMessageIdRef.current;
+          reanchorSceneCheckOnceRef.current = false;
+        }
         setMessages((prev) => appendChatMessage(prev, data.message));
         const ownId = sessionRef.current?.playerId;
         vibrateForWsMessage(data.message, ownId);
@@ -659,15 +700,39 @@ export function RoomView({ code }: Props) {
   }, [chatLogExpanded]);
 
   const updateStickToBottom = useCallback(() => {
+    if (ignoreStickUpdateRef.current) return;
     const el = chatLogRef.current;
     if (!el) return;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-    stickToBottomRef.current = distance <= CHAT_SCROLL_THRESHOLD_PX;
+    const atBottom = distance <= CHAT_SCROLL_THRESHOLD_PX;
+    if (pauseStickToBottomRef.current) {
+      if (atBottom) {
+        pauseStickToBottomRef.current = false;
+        pinnedSceneCheckMessageIdRef.current = null;
+        reanchorSceneCheckOnceRef.current = false;
+        stickToBottomRef.current = true;
+      }
+      return;
+    }
+    stickToBottomRef.current = atBottom;
   }, []);
 
   useLayoutEffect(() => {
     const el = chatLogRef.current;
     if (!el) return;
+
+    const pinId = pendingScrollToMessageIdRef.current;
+    if (pinId) {
+      pendingScrollToMessageIdRef.current = null;
+      isInitialChatScroll.current = false;
+      scrollRestoreRef.current = null;
+      ignoreStickUpdateRef.current = true;
+      scrollChatLogToMessage(el, pinId);
+      requestAnimationFrame(() => {
+        ignoreStickUpdateRef.current = false;
+      });
+      return;
+    }
 
     if (stickToBottomRef.current) {
       const behavior: ScrollBehavior = isInitialChatScroll.current
@@ -715,6 +780,8 @@ export function RoomView({ code }: Props) {
     if (!session || !room || sceneCheckBusy || sceneCheck) return;
     setSceneCheckBusy(true);
     setError(null);
+    pauseStickToBottomRef.current = true;
+    stickToBottomRef.current = false;
     try {
       const { sceneCheck: next } = await startSceneCheck(room.id, {
         actorPlayerId: session.playerId,
@@ -754,6 +821,8 @@ export function RoomView({ code }: Props) {
     if (!session || !room || !sceneCheck || sceneCheckBusy) return;
     setSceneCheckBusy(true);
     setError(null);
+    pauseStickToBottomRef.current = true;
+    stickToBottomRef.current = false;
     try {
       if (hasLlmConfig) {
         setMjThinking(true);

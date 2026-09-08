@@ -167,7 +167,7 @@ Les listes markdown (`- …`) du **dernier** récit MJ (2–8 items) sont des **
 | API | `POST /api/rooms/:roomId/scene-checks` `{ actorPlayerId, sourceMessageId, choice }` ; `…/:checkId/join` `{ stance: help\|oppose }` ; `…/:checkId/resolve` ; `GET /api/rooms/:code` + WS `{ type: "scene_check", sceneCheck }` |
 | Mémoire | In-memory par salon (comme le verrou fill-all) — pas de SQLite |
 | MJ | Un seul message **Action** agrégé (`Je lance un d20…` + totaux + `Résultat`) puis **un** `scheduleActionMj` — la file LLM ne voit pas N tours d'aide |
-| UI | `MjMessageMarkdown` (li cliquables, désactivés si traduction) ; `SceneCheckBanner` (Aider / S'opposer / Lancer maintenant) |
+| UI | `MjMessageMarkdown` (li cliquables, désactivés si traduction) ; `SceneCheckBanner` (Aider / S'opposer / Lancer maintenant) ; **scroll figé sur le jet** (pas de saut en fin de récit MJ ; reprendre le suivi en bas si le joueur y revient) |
 | Prompt | `system-prompt.ts` : proposer 2–3 options en liste `-` ; ne pas inventer les dés. `player-action.ts` : si `Jet D&D 5e`, narrer uniquement selon les totaux |
 
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.

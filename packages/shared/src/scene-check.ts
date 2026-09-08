@@ -246,3 +246,7 @@ export function toSceneCheckPublic(input: {
     status: input.status ?? "open",
   };
 }
+
+export function isSceneCheckActionContent(content: string): boolean {
+  return /Jet D&D 5e/i.test(content);
+}

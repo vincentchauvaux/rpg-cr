@@ -472,7 +472,7 @@ label {
 .chat-log {
   height: 360px;
   overflow-y: auto;
-  overflow-anchor: auto;
+  overflow-anchor: none;
   -webkit-overflow-scrolling: touch;
   padding: 2.1rem 2.5rem 0.75rem 0.75rem;
   background: var(--bg);
@@ -825,6 +825,7 @@ label {
 .msg.action .action-body {
   flex: 1;
   font-style: italic;
+  white-space: pre-wrap;
   color: color-mix(in srgb, var(--speaker-color, #8fbc8f) 75%, var(--text));
 }
 
