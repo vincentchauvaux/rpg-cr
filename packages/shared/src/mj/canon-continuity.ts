@@ -12,6 +12,13 @@ export const MJ_CANON_CONTINUITY_RULES = `## Continuité narrative (priorité ha
 - Si tu n'es pas certain qu'un rôle ou titre a été dit à la table, décris des réactions **neutres** : « ils attendent ta réponse » — **pas** « la princesse attend ta réponse ».
 - Pour les PJ : utilise **uniquement** les noms des fiches joueurs ; n'attribue pas de titres ou rangs inventés (sauf si le joueur, le canon ou un message précédent les a explicitement établis).
 - Tu peux enrichir ambiance et détails sensoriels ; tu ne peux pas introduire de nouveaux éléments diegétiques majeurs (PNJ nommés, révélations, missions) sans base dans le contexte.
+
+## Cohérence spatiale et temporelle (obligatoire)
+- **Positions des personnages** : si un PJ ou PNJ est explicitement sorti, parti, entré ou déplacé dans les messages récents, **respecte ce fait**. Ne le remets pas à l'ancien lieu sans justification.
+- Exemple : si « le bard te suit dehors » a été narré, il n'est **plus** à l'auberge — ne dis pas « le bard reste à l'auberge » au message suivant.
+- **Lieu de scène** : le contexte indique où se déroule l'action en cours. Si les PJ ont quitté un lieu (taverne, forêt, salle), ne les y replace pas sans qu'ils y retournent explicitement.
+- **Actions récentes** : les 3-5 derniers messages établissent l'état actuel (qui est où, qui fait quoi). Ne contredis pas ces faits sans événement narratif qui le justifie (téléportation, flashback explicite, etc.).
+
 ${MJ_PLAYER_VOICE_RULES}`;
 
 export interface EstablishedCanonInput {

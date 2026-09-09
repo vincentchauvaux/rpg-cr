@@ -498,7 +498,8 @@ function resolveInternal(
   check.resolving = true;
   clearTimeoutSafe(check);
   byRoom.delete(roomId);
-  consumeSource(roomId, check.sourceMessageId);
+  // Ne pas consommer le message source ici - les autres choix restent cliquables
+  // consumeSource(roomId, check.sourceMessageId);
   emit(roomId, null);
 
   const allPicks = [...check.picks, ...implicitPassers(roomId, check)];

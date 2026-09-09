@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-09 (Dire + @PNJ : réaction in-character)
+> Dernière mise à jour : 2026-09-09 (Dire + @PNJ : réaction in-character ; **scroll début message MJ** ; **choix cliquables persistants** ; **cohérence spatiale renforcée**)
 
 ## Vision
 
@@ -874,3 +874,55 @@ La carte n'est chargée en state client **que** si god mode actif.
 - **MJ** : répond dans la langue du joueur qui a déclenché le tour (`preferredLocale` du dernier locuteur debounce).
 - **Fiche PJ (IA)** : `generate-field` / `generate-section` / `generate-all` / `ask-mj` utilisent la locale de l'**acteur** (`actorPlayerId`), pas celle de la cible.
 - Pas de traduction de ses propres messages ; sans LLM : clic 🌐 → tooltip « MJ non configuré » (pas d'appel auto au chargement).
+
+## Correctifs 2026-09-09
+
+### Scroll vers début message MJ (non vers la fin)
+
+**Problème** : après une réponse MJ, le chat scrollait vers le bas (fin du message) au lieu du début du nouveau texte.
+
+**Correctif** (`RoomView.tsx` L528+) : quand un message MJ arrive ET que `stickToBottomRef.current` est true (utilisateur proche du bas), on définit `pendingScrollToMessageIdRef.current = msg.id` et désactive stickToBottom. Le `useLayoutEffect` scroll alors vers le **début** du message MJ via `scrollChatLogToMessage`.
+
+```typescript
+} else if (msg.kind === "mj" && stickToBottomRef.current) {
+  // Scroll vers le début du nouveau message MJ, pas vers le bas
+  pendingScrollToMessageIdRef.current = msg.id;
+  stickToBottomRef.current = false;
+}
+```
+
+### Choix cliquables persistants après résolution
+
+**Problème** : les 3 dernières propositions MJ devenaient non cliquables dès qu'un premier sceneCheck se résolvait, même si d'autres choix de la même liste restaient valides.
+
+**Cause** : `resolveInternal` consommait le message source immédiatement (`consumeSource(roomId, check.sourceMessageId)`), empêchant d'autres joueurs de cliquer sur les choix restants.
+
+**Correctif** (`apps/api/src/scene-check.ts` L491+) : ne plus consommer le message source lors de la résolution d'un sceneCheck. Le message n'est consommé que :
+- Quand un nouveau message MJ arrive (`onNewMjMessage`)
+- Quand une action libre (non sceneCheck) arrive (`onFreePlayerAction`)
+
+```typescript
+function resolveInternal(...) {
+  // ...
+  byRoom.delete(roomId);
+  // Ne pas consommer le message source ici - les autres choix restent cliquables
+  // consumeSource(roomId, check.sourceMessageId);
+  emit(roomId, null);
+```
+
+### Cohérence spatiale et temporelle renforcée
+
+**Problème** : incohérences narratives (ex. « le bard te suit dehors » puis « le bard reste à l'auberge »).
+
+**Correctif** (`packages/shared/src/mj/canon-continuity.ts`) : ajout d'une section **« Cohérence spatiale et temporelle »** dans `MJ_CANON_CONTINUITY_RULES` qui exige :
+- Respect des positions des personnages établies dans les messages récents
+- Cohérence avec le lieu de scène actuel
+- Interdiction de contredire les 3-5 derniers messages sans justification narrative
+
+```typescript
+## Cohérence spatiale et temporelle (obligatoire)
+- **Positions des personnages** : si un PJ ou PNJ est explicitement sorti, parti, 
+  entré ou déplacé dans les messages récents, **respecte ce fait**.
+- **Lieu de scène** : le contexte indique où se déroule l'action en cours.
+- **Actions récentes** : les 3-5 derniers messages établissent l'état actuel.
+```

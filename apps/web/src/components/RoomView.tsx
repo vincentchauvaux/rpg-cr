@@ -547,6 +547,10 @@ export function RoomView({ code }: Props) {
           pendingScrollToMessageIdRef.current =
             pinnedSceneCheckMessageIdRef.current;
           reanchorSceneCheckOnceRef.current = false;
+        } else if (msg.kind === "mj" && stickToBottomRef.current) {
+          // Scroll vers le début du nouveau message MJ, pas vers le bas
+          pendingScrollToMessageIdRef.current = msg.id;
+          stickToBottomRef.current = false;
         }
         setMessages((prev) => appendChatMessage(prev, data.message));
         const ownId = sessionRef.current?.playerId;
