@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-09 (Dire + @PNJ : réaction in-character ; **scroll début message MJ** ; **choix cliquables persistants** ; **cohérence spatiale renforcée**)
+> Dernière mise à jour : 2026-09-09 (Dire + @PNJ : réaction in-character ; **scroll début message MJ** ; **choix cliquables persistants** ; **cohérence spatiale renforcée** ; **sync auto graines Google**)
 
 ## Vision
 
@@ -629,6 +629,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Auth** : NextAuth v5 (`apps/web/src/auth.ts`) — provider Google ; sync API `POST /api/auth/sync` (secret interne `AUTH_INTERNAL_SECRET`).
 - **UI accueil** : `GoogleAuthPanel` — connexion / déconnexion ; graines fusionnées local + `GET /api/users/:id/grains`.
 - **Création / join** : body optionnel `userId` sur `POST /api/rooms` et `POST …/join` ; reprise graine → `POST …/link-user`.
+- **Sync automatique graines** : dès la connexion Google, toutes les graines localStorage sont automatiquement liées au compte (`linkPlayerToUserApi`) — les campagnes deviennent accessibles sur tous les appareils. Un `useRef` évite le re-linking à chaque render. Le refresh des graines est déclenché après le linking pour afficher l'état à jour.
 - **Tunnel auto hôte** : `ensureHostTunnel()` — à la création salon, reprise graine (admin), entrée salon hôte et wizard MJ (mode VPS). Appelle l'assistant local `POST http://127.0.0.1:17434/start`, puis poll `GET /api/llm/tunnel-status` jusqu'à `reachable:true`. CLI : `npm run tunnel:ensure`.
 - **Auth.js** : `basePath` = `/rpg-cr/api/auth` en prod ; handler route réinjecte `/rpg-cr` (Next.js le retire). `AUTH_URL` = origine HTTPS **sans** `/rpg-cr`. Nginx conserve le préfixe vers le conteneur web.
 - **Nginx** : `location /rpg-cr/api/auth/` → conteneur **web** (3010) ; repli `location /api/auth/` pour le callback OAuth sans préfixe — voir `deploy/nginx-rpg-cr.conf.example`.
@@ -925,4 +926,42 @@ function resolveInternal(...) {
   entré ou déplacé dans les messages récents, **respecte ce fait**.
 - **Lieu de scène** : le contexte indique où se déroule l'action en cours.
 - **Actions récentes** : les 3-5 derniers messages établissent l'état actuel.
+```
+
+### Synchronisation automatique des graines avec compte Google
+
+**Problème** : Les graines (campagnes sauvegardées) étaient stockées uniquement en localStorage et n'étaient pas automatiquement liées au compte Google. Un utilisateur connecté depuis un nouvel appareil ne voyait pas ses anciennes campagnes.
+
+**Solution** : Ajout d'un système de synchronisation automatique dans `HomePageContent` qui, dès la détection d'une connexion Google (`appUserId` non-null), lie automatiquement toutes les graines localStorage au compte utilisateur via `linkPlayerToUserApi`. 
+
+**Comportement** :
+- À la première connexion Google, toutes les graines localStorage existantes sont liées au compte
+- Un `useRef` (`autoLinkedUserIdRef`) évite le re-linking à chaque render
+- Le refresh des graines est déclenché après linking pour afficher l'état à jour
+- Les erreurs de linking sont ignorées silencieusement (player déjà lié, invalide, etc.)
+
+**Fichier modifié** : `apps/web/src/components/HomePageContent.tsx`
+
+```typescript
+// Auto-link local grains to user account on login
+useEffect(() => {
+  if (!appUserId) return;
+  if (autoLinkedUserIdRef.current === appUserId) return;
+  
+  const local = listGrains();
+  if (local.length === 0) return;
+  
+  autoLinkedUserIdRef.current = appUserId;
+  
+  void (async () => {
+    for (const grain of local) {
+      try {
+        await linkPlayerToUserApi(grain.playerId, appUserId);
+      } catch {
+        // Silently ignore errors
+      }
+    }
+    void refreshGrains();
+  })();
+}, [appUserId, refreshGrains]);
 ```

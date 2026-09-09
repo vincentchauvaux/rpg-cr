@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom, getRoom, joinRoom, listCampaigns, listUserGrainsFromApi, linkPlayerToUserApi } from "@/lib/api";
 import { GoogleAuthPanel, useAppUserId } from "@/components/GoogleAuthPanel";
@@ -51,6 +51,7 @@ export function HomePageContent() {
   const [loading, setLoading] = useState(false);
   const [tunnelHint, setTunnelHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoLinkedUserIdRef = useRef<string | null>(null);
 
   const {
     roomSuggestion,
@@ -123,6 +124,31 @@ export function HomePageContent() {
       /* liste locale seulement */
     }
   }, [appUserId]);
+
+  // Auto-link local grains to user account on login
+  useEffect(() => {
+    if (!appUserId) return;
+    // Only auto-link once per userId
+    if (autoLinkedUserIdRef.current === appUserId) return;
+    
+    const local = listGrains();
+    if (local.length === 0) return;
+    
+    autoLinkedUserIdRef.current = appUserId;
+    
+    // Link all local grains to the user account in the background
+    void (async () => {
+      for (const grain of local) {
+        try {
+          await linkPlayerToUserApi(grain.playerId, appUserId);
+        } catch {
+          // Silently ignore errors (player may already be linked or invalid)
+        }
+      }
+      // Refresh grains after linking to show updated state
+      void refreshGrains();
+    })();
+  }, [appUserId, refreshGrains]);
 
   useEffect(() => {
     if (tab === "grains") refreshGrains();
