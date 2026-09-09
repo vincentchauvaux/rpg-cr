@@ -73,6 +73,7 @@ import { runMjTurn, testLlmConnection } from "./mj.js";
 import {
   scheduleAutoMj,
   scheduleActionMj,
+  scheduleSayNpcMj,
   scheduleCircleMj,
   scheduleAiPuppetGeneration,
   requestPlayerMjTrigger,
@@ -1762,6 +1763,8 @@ app.register(async function wsRoutes(f) {
           broadcastMessage(roomId, msg);
           if (kind === "action") {
             scheduleActionMj(roomId, playerId, playerName, data.content.trim());
+          } else if (kind === "say") {
+            scheduleSayNpcMj(roomId, playerId, playerName, data.content.trim());
           }
           scheduleAutoMj(roomId, playerId, playerName, data.content.trim(), kind);
         }

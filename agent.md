@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-08 (MJ : Gemini Flash via OpenRouter sur le VPS, Groq en secours)
+> Dernière mise à jour : 2026-09-09 (Dire + @PNJ : réaction in-character)
 
 ## Vision
 
@@ -179,7 +179,7 @@ Les listes markdown (`- …`) du **dernier** récit MJ encore **en vigueur** (2�
    - **LM Studio (Mac + tunnel)** : URL `http://127.0.0.1:1234/v1`, modèle saisi à la main ; « Enregistrer la config MJ » = sauvegarde SQLite uniquement
    - **OpenRouter** : URL `https://openrouter.ai/api/v1`, ids `openai/gpt-4o` (MJ) + `openai/gpt-4o-mini` (outils) ; clé `sk-or-…` **jamais en git**
    - **Groq / Gemini (gratuit, serveur)** : `AI_PROVIDER=gemini|groq|openrouter`, `AI_MODEL`, `AI_FALLBACK_PROVIDER=groq` ; clés `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` **uniquement `process.env`** (jamais frontend, jamais SQLite, jamais logs) ; même `completeChat` ; dernier fallback LM Studio / Ollama conservé. **VPS OVH** : l’API Gemini Google refuse souvent l’IP datacenter (`location is not supported`) → MJ Flash via OpenRouter (`google/gemini-3.8-flash`).
-5. **LLM** — catalogue avec rôles `narration` / `tool` / `both` ; config par salon (`modelId` MJ + `toolModelId` optionnel cloud) ; `completeChat` + profils (`task-profile.ts`) ; **MJ auto Dire** désactivé (`AUTO_MJ_ON_PLAYER_MESSAGES`) ; **MJ auto Action** actif (`scheduleActionMj`) ; Réclamer / routes hôte ; endpoint `POST /api/rooms/:id/mj` conservé (API interne / v2)
+5. **LLM** — catalogue avec rôles `narration` / `tool` / `both` ; config par salon (`modelId` MJ + `toolModelId` optionnel cloud) ; `completeChat` + profils (`task-profile.ts`) ; **MJ auto Dire** désactivé (`AUTO_MJ_ON_PLAYER_MESSAGES`) sauf **Dire + @PNJ** (`scheduleSayNpcMj`) ; **MJ auto Action** actif (`scheduleActionMj`) ; Réclamer / routes hôte ; endpoint `POST /api/rooms/:id/mj` conservé (API interne / v2)
 6. **Carte** — génération procédurale (simplex noise, biomes, effets toxic/fog/evil/buff, POI, territoires, SVG)
 7. **Modèles** — tables SQLite : messages, quêtes, journal, propositions archivées (+ endpoints REST)
 8. **Prompt MJ** — `packages/shared/src/mj/system-prompt.ts` + contexte monde + éléments établis (`established-canon.ts`)
@@ -592,6 +592,7 @@ Module réutilisable : `NarrationKind` + `NarrationContext` + `buildNarrationPro
 |------|----------------|
 | `player_action` | WS message `kind: action` → `scheduleActionMj` (debounce 4 s) |
 | `player_say` | WS `say` si `AUTO_MJ_ON_PLAYER_MESSAGES` → `scheduleAutoMj` |
+| `player_say_npc` | WS `say` + `@PNJ` (canon / marionnette, pas un autre PJ) → `scheduleSayNpcMj` |
 | `reclaim_continue` | Joueur **Réclamer** (`POST …/mj/prompt` type `reclaim`) |
 | `player_start` / `player_continue` | Commencer / Continuer (joueur) |
 | `hint` | Indice (joueur) |
@@ -607,8 +608,8 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 ## MJ automatique
 
 - **Supprimé** : textarea « Consigne pour le MJ » + bouton « Faire parler le MJ » (redondant avec Dire/Action).
-- **Dire** : `AUTO_MJ_ON_PLAYER_MESSAGES = false` → `scheduleAutoMj` no-op ; pas de MJ sur banter.
-- **Action** : `scheduleActionMj` **actif** même si `AUTO_MJ_ON_PLAYER_MESSAGES` est false ; trivial (`isTrivialPlayerMessage`) ignoré ; WS `kind: action` obligatoire côté client (`speechMode`) ; `mjThinkingBegin` au debounce + `executeAutoMj` avec `NarrationKind.player_action` ; handler WS `apps/api/src/index.ts` appelle `scheduleActionMj` puis `scheduleAutoMj` (second no-op).
+- **Dire** : `AUTO_MJ_ON_PLAYER_MESSAGES = false` → `scheduleAutoMj` no-op ; pas de MJ sur banter **entre PJ**. Exception : un `@` vers un **PNJ** du canon ou une marionnette (`scheduleSayNpcMj`, kind `player_say_npc`) — le PNJ réagit selon son rôle (peut ignorer, grogner, mentir). Un `@` vers un autre PJ ne déclenche rien.
+- **Action** : `scheduleActionMj` **actif** même si `AUTO_MJ_ON_PLAYER_MESSAGES` est false ; trivial (`isTrivialPlayerMessage`) ignoré ; WS `kind: action` obligatoire côté client (`speechMode`) ; `mjThinkingBegin` au debounce + `executeAutoMj` avec `NarrationKind.player_action` ; handler WS `apps/api/src/index.ts` appelle `scheduleActionMj` / `scheduleSayNpcMj` puis `scheduleAutoMj` (second no-op).
 - **Désactivé** (même flag) : `schedulePlayerIntroFollowUpMj`, `tryIntegrateHumanPlayerInStory`.
 - **Toujours actifs** : `requestPlayerMjTrigger` / `requestHostMjTrigger` (Réclamer, indice, préambule, récap), `scheduleCampaignOpening`, `scheduleCircleMj`, `scheduleAiPuppetGeneration`, routes god mode / `promptMj` HTTP.
 - Réactiver le MJ auto sur **Dire** : `AUTO_MJ_ON_PLAYER_MESSAGES = true` (heuristiques triviaux + banter dans `scheduleAutoMj` ; les actions passent par `scheduleActionMj` ou `scheduleAutoMj` selon le flag, sans double tour).

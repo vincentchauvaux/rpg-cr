@@ -25,6 +25,8 @@ export type PlayerBanterContext = {
   players: PlayerBanterPlayer[];
   /** Messages récents du salon (ordre chronologique), incluant le message courant. */
   recentMessages: Pick<ChatMessage, "kind" | "playerId" | "content">[];
+  /** PNJ / marionnettes apostrophés avec @ — pas du banter PJ. */
+  addressedNpcNames?: string[];
 };
 
 export function countReadyIntroducedHumans(players: PlayerBanterPlayer[]): number {
@@ -89,6 +91,7 @@ export function shouldSkipAutoMjForPlayerBanter(
   const trimmed = content.trim();
   if (!trimmed) return true;
 
+  if (ctx.addressedNpcNames?.some((n) => n.trim())) return false;
   if (messageAddressesMjOrWorld(trimmed)) return false;
   if (messageDemandsMjResolution(trimmed, kind)) return false;
 

@@ -82,6 +82,7 @@ import {
   buildQuickUseOptions,
   canHumanParticipateInChat,
   extractMjChoices,
+  findMentionedNpcs,
   formatPlayerRollMessage,
   isSceneCheckActionContent,
   playerHasPickedSceneCheck,
@@ -778,12 +779,16 @@ export function RoomView({ code }: Props) {
 
     if (!wsRef.current || wsRef.current.readyState !== 1) return;
     stickToBottomRef.current = true;
-    if (speechMode === "action" && hasLlmConfig) {
+    const text = input.trim();
+    const npcTagged =
+      speechMode === "say" &&
+      findMentionedNpcs(text, mentionCandidates).length > 0;
+    if ((speechMode === "action" || npcTagged) && hasLlmConfig) {
       setMjThinking(true);
       mjThinkingSinceRef.current = Date.now();
     }
     wsRef.current.send(
-      JSON.stringify({ type: "chat", content: input.trim(), kind: speechMode })
+      JSON.stringify({ type: "chat", content: text, kind: speechMode })
     );
     setInput("");
   }

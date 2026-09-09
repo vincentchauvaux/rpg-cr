@@ -2,6 +2,7 @@ import type { NarrationContext, NarrationKind } from "./types.js";
 import { narrationCanonContinuityFooter } from "../canon-continuity.js";
 import { buildPlayerActionNarration } from "./builders/player-action.js";
 import { buildPlayerSayNarration } from "./builders/player-say.js";
+import { buildPlayerSayNpcNarration } from "./builders/player-say-npc.js";
 import {
   buildPlayerStartNarration,
   buildPlayerContinueNarration,
@@ -28,6 +29,8 @@ function buildNarrationPromptBody(ctx: NarrationContext): string {
       return buildPlayerActionNarration(ctx);
     case "player_say":
       return buildPlayerSayNarration(ctx);
+    case "player_say_npc":
+      return buildPlayerSayNpcNarration(ctx);
     case "player_start":
       return buildPlayerStartNarration(ctx);
     case "player_continue":

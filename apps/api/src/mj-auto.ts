@@ -12,6 +12,7 @@ import {
   type HostMjPromptContext,
   buildPlayerIntroFollowUpPrompt,
   type PlayerIntroFollowUpMode,
+  findMentionedNpcs,
   isTrivialPlayerMessage,
   shouldSkipAutoMjForPlayerBanter,
   buildNarrationPrompt,
@@ -31,6 +32,7 @@ import {
   getWorldSeed,
   touchLastPreambleAt,
   touchLastRecapAt,
+  getCampaignOpeningDone,
 } from "./rooms.js";
 import { resolveRoomApiKey } from "./llm-api-key.js";
 import { listJournal } from "./campaign.js";
@@ -69,7 +71,7 @@ import {
   scheduleCampaignOpening,
   shouldBootstrapCampaignOpening,
 } from "./campaign-opening.js";
-import { getCampaignOpeningDone } from "./rooms.js";
+import { buildMentionCandidates } from "./mention-suggestions.js";
 import {
   queueInteractiveLlm,
   queueNarrativeLlm,
@@ -119,6 +121,22 @@ function findPendingRollRequest(roomId: string): string | undefined {
   return undefined;
 }
 
+function listPresentCompanionLines(roomId: string, playerId: string): string[] | undefined {
+  const others = listPlayers(roomId).filter(
+    (p) => p.id !== playerId && isCompanionNarrativelyActive(p)
+  );
+  const humans = others.filter((p) => p.kind === "human").map((p) => p.name);
+  const puppets = others.filter((p) => p.kind === "ai_puppet").map((p) => p.name);
+  const lines: string[] = [];
+  if (humans.length) {
+    lines.push(`PJ (joueurs — pas des PNJ) : ${humans.join(", ")}`);
+  }
+  if (puppets.length) {
+    lines.push(`Marionnettes IA : ${puppets.join(", ")}`);
+  }
+  return lines.length > 0 ? lines : undefined;
+}
+
 function buildPlayerActionNarrationContext(
   roomId: string,
   playerId: string,
@@ -127,21 +145,6 @@ function buildPlayerActionNarrationContext(
 ): NarrationContext {
   const scene = getSceneState(roomId);
   const arc = getNarrativeArc(roomId);
-  const companionsPresent = (() => {
-    const others = listPlayers(roomId).filter(
-      (p) => p.id !== playerId && isCompanionNarrativelyActive(p)
-    );
-    const humans = others.filter((p) => p.kind === "human").map((p) => p.name);
-    const puppets = others.filter((p) => p.kind === "ai_puppet").map((p) => p.name);
-    const lines: string[] = [];
-    if (humans.length) {
-      lines.push(`PJ (joueurs — pas des PNJ) : ${humans.join(", ")}`);
-    }
-    if (puppets.length) {
-      lines.push(`Marionnettes IA : ${puppets.join(", ")}`);
-    }
-    return lines;
-  })();
 
   return {
     kind: "player_action",
@@ -150,10 +153,28 @@ function buildPlayerActionNarrationContext(
     abilitiesHint: buildAbilitiesHintForPlayer(playerId),
     sceneSummary: formatSceneForMj(scene),
     trameSummary: formatNarrativeArcForMj(arc),
-    companionsPresent: companionsPresent.length > 0 ? companionsPresent : undefined,
+    companionsPresent: listPresentCompanionLines(roomId, playerId),
     pendingRollRequest: playerMessageDeclaresRoll(content)
       ? findPendingRollRequest(roomId)
       : undefined,
+  };
+}
+
+function buildPlayerSayNpcNarrationContext(
+  roomId: string,
+  playerId: string,
+  playerName: string,
+  content: string,
+  npcNames: string[]
+): NarrationContext {
+  const scene = getSceneState(roomId);
+  return {
+    kind: "player_say_npc",
+    playerName,
+    actionText: content,
+    addressedNpcNames: npcNames,
+    sceneSummary: formatSceneForMj(scene),
+    companionsPresent: listPresentCompanionLines(roomId, playerId),
   };
 }
 
@@ -162,7 +183,8 @@ export function buildChatAutoPrompt(
   playerName: string,
   content: string,
   kind: string,
-  speakingPlayerId?: string
+  speakingPlayerId?: string,
+  addressedNpcNames?: string[]
 ): string {
   if (kind === "action") {
     const roomId = speakingPlayerId
@@ -180,6 +202,26 @@ export function buildChatAutoPrompt(
       abilitiesHint: speakingPlayerId
         ? buildAbilitiesHintForPlayer(speakingPlayerId)
         : undefined,
+    });
+  }
+  if (addressedNpcNames?.length && speakingPlayerId) {
+    const roomId = getPlayerById(speakingPlayerId)?.roomId;
+    if (roomId) {
+      return buildNarrationPrompt(
+        buildPlayerSayNpcNarrationContext(
+          roomId,
+          speakingPlayerId,
+          playerName,
+          content,
+          addressedNpcNames
+        )
+      );
+    }
+    return buildNarrationPrompt({
+      kind: "player_say_npc",
+      playerName,
+      actionText: content,
+      addressedNpcNames,
     });
   }
   return buildNarrationPrompt({
@@ -453,8 +495,9 @@ function scheduleMj(
       pendingTimers.delete(roomId);
       const entry = lastTrigger.get(roomId);
       if (entry) {
-        const actionThinking =
-          options.source === "action" && actionMjThinkingRooms.has(roomId);
+        const autoThinking =
+          (options.source === "action" || options.source === "say-npc") &&
+          actionMjThinkingRooms.has(roomId);
         void executeAutoMj(
           roomId,
           entry.prompt,
@@ -464,7 +507,7 @@ function scheduleMj(
           entry.omitSpeakingPlayerSheet,
           {
             source: options.source ?? "debounced",
-            narrativeThinkingShown: actionThinking,
+            narrativeThinkingShown: autoThinking,
             narrativePhase: "turn",
           }
         );
@@ -703,25 +746,35 @@ export function scheduleAutoMj(
 
   const player = getPlayerById(playerId);
   if (!player) return;
+  const npcNames = findMentionedNpcs(
+    trimmed,
+    buildMentionCandidates(roomId, playerId)
+  ).map((c) => c.name);
   const recentMessages = listMessages(roomId, 40);
   if (
     shouldSkipAutoMjForPlayerBanter(trimmed, kind, player, {
       players: listPlayers(roomId),
       recentMessages,
+      addressedNpcNames: npcNames,
     })
   ) {
     return;
   }
 
   const skipSceneExtract = trimmed.length > 0 && trimmed.length <= SHORT_PLAYER_MESSAGE_MAX_LEN;
-  scheduleMj(roomId, buildChatAutoPrompt(playerName, content, kind, playerId), playerId, {
-    skipSceneExtract,
-  });
+  scheduleMj(
+    roomId,
+    buildChatAutoPrompt(playerName, content, kind, playerId, npcNames),
+    playerId,
+    {
+      skipSceneExtract,
+    }
+  );
 }
 
 /**
  * Tour MJ auto sur message **Action** — actif même si AUTO_MJ_ON_PLAYER_MESSAGES est false.
- * Les messages Dire ne déclenchent pas le MJ (Réclamer / indice / hôte inchangés).
+ * Les messages Dire sans @PNJ ne déclenchent pas le MJ (Réclamer / indice / hôte inchangés).
  */
 export function scheduleActionMj(
   roomId: string,
@@ -755,6 +808,51 @@ export function scheduleActionMj(
   scheduleMj(roomId, prompt, playerId, {
     skipSceneExtract,
     source: "action",
+  });
+}
+
+/**
+ * Dire + @PNJ (canon ou marionnette) : le PNJ réagit selon son rôle.
+ * Un @PJ seul reste du banter (pas de tour MJ).
+ */
+export function scheduleSayNpcMj(
+  roomId: string,
+  playerId: string,
+  playerName: string,
+  content: string
+): void {
+  if (AUTO_MJ_ON_PLAYER_MESSAGES) return;
+
+  const trimmed = content.trim();
+  if (!trimmed) return;
+  if (isTrivialPlayerMessage(trimmed)) return;
+
+  const room = getRoomById(roomId);
+  if (!room?.llmConfig) return;
+
+  const player = getPlayerById(playerId);
+  if (!player) return;
+
+  const npcNames = findMentionedNpcs(
+    trimmed,
+    buildMentionCandidates(roomId, playerId)
+  ).map((c) => c.name);
+  if (!npcNames.length) return;
+
+  const prompt = buildNarrationPrompt(
+    buildPlayerSayNpcNarrationContext(roomId, playerId, playerName, trimmed, npcNames)
+  );
+  const skipSceneExtract =
+    trimmed.length > 0 && trimmed.length <= SHORT_PLAYER_MESSAGE_MAX_LEN;
+
+  if (!actionMjThinkingRooms.has(roomId)) {
+    actionMjThinkingRooms.add(roomId);
+    mjThinkingBegin(roomId);
+  }
+
+  scheduleMj(roomId, prompt, playerId, {
+    skipSceneExtract,
+    source: "say-npc",
   });
 }
 

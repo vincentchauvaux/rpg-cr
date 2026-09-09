@@ -4,6 +4,7 @@ import type { PlayerIntroFollowUpMode } from "../player-intro-followup-prompt.js
 export type NarrationKind =
   | "player_action"
   | "player_say"
+  | "player_say_npc"
   | "reclaim_continue"
   | "player_start"
   | "player_continue"
@@ -44,6 +45,8 @@ export interface NarrationContext {
   pendingRollRequest?: string;
   /** Noms des compagnons actifs à la table */
   companionsPresent?: string[];
+  /** PNJ / marionnettes apostrophés avec @ dans un Dire */
+  addressedNpcNames?: string[];
 
   /** Options scène / trame / campagne */
   hasEstablishedScene?: boolean;

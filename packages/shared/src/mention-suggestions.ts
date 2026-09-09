@@ -1,5 +1,72 @@
 export type MentionCandidateKind = "player" | "companion" | "character";
 
+/** Marionnettes IA et noms du canon — pas les autres PJ. */
+export function isNpcMentionKind(kind: MentionCandidateKind): boolean {
+  return kind === "companion" || kind === "character";
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function rangesOverlap(
+  start: number,
+  end: number,
+  ranges: [number, number][]
+): boolean {
+  return ranges.some(([a, b]) => start < b && end > a);
+}
+
+/** Candidats effectivement apostrophés avec `@` dans le texte (plus long d'abord). */
+export function findMentionedCandidates(
+  content: string,
+  candidates: MentionCandidate[]
+): MentionCandidate[] {
+  const text = content.trim();
+  if (!text || !candidates.length) return [];
+
+  const sorted = [...candidates].sort((a, b) => b.name.length - a.name.length);
+  const found: MentionCandidate[] = [];
+  const seen = new Set<string>();
+  const usedRanges: [number, number][] = [];
+
+  for (const candidate of sorted) {
+    const name = candidate.name.trim();
+    if (name.length < 2) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+
+    const re = new RegExp(
+      `@\\s*(${escapeRegExp(name)})(?=$|[^\\p{L}\\p{N}'’-])`,
+      "giu"
+    );
+    let match: RegExpExecArray | null;
+    let matched = false;
+    while ((match = re.exec(text)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (rangesOverlap(start, end, usedRanges)) continue;
+      usedRanges.push([start, end]);
+      matched = true;
+      break;
+    }
+    if (!matched) continue;
+    seen.add(key);
+    found.push(candidate);
+  }
+
+  return found;
+}
+
+export function findMentionedNpcs(
+  content: string,
+  candidates: MentionCandidate[]
+): MentionCandidate[] {
+  return findMentionedCandidates(content, candidates).filter((c) =>
+    isNpcMentionKind(c.kind)
+  );
+}
+
 export interface MentionCandidate {
   name: string;
   kind: MentionCandidateKind;
