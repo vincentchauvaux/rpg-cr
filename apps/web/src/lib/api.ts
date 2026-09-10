@@ -161,6 +161,7 @@ export type MjStatusSnapshot = {
   thinking: boolean;
   background: boolean;
   phase: "opening" | "turn";
+  lastCall?: import("@rpg-cr/shared").LlmLastCall;
 };
 
 export function getRoom(code: string): Promise<{

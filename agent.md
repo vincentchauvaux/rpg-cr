@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-10 (**jets** : 10 INT = +0, pas +10 ; « on est où » = un seul lieu)
+> Dernière mise à jour : 2026-09-10 (**silence MJ** : quota / jetons restants ; INT 10 = +0)
 
 ## Vision
 
@@ -853,6 +853,22 @@ Deux canaux distincts, opt-in séparés, déclenchés uniquement sur événement
 - Bordures **vertes** / **rouges** (`--valid` / `--invalid`) au blur ou à la soumission.
 - Section **Connexion MJ (LLM)** : repliée avec titre vert + ✓ après enregistrement réussi ; clic pour rouvrir.
 - **Test LLM** : endpoint `POST /api/rooms/:roomId/llm/test` (god mode) — mini completion **sur le modèle de récit** (`taskKind: narration`, `max_tokens` 48 / 128 si *reasoning*) ; ce n'est **pas** le modèle outils. Un test OK ne garantit pas un tour MJ (prompt beaucoup plus long, quota TPM / crédit). Rejet HTTP **400** si modèle embedding ou **VL** ; liste modèles chat : `GET /api/llm/lmstudio/models?baseUrl=…` (VL filtrés) → appelle **`GET {baseUrl}/models`** avec base normalisée **`/v1`** obligatoire ; messages d'erreur test adaptés au backend (Ollama vs LM Studio via `formatLlmTestError` + `resolveLocalLlmBackend`) ; changement de provider local réinitialise le modèle par défaut (`qwen2.5:7b-instruct` pour Ollama). Cloud : second select **Modèle outils** (`toolModelId`) ; local : même modèle, sampling déterministe. Env prod : **OpenRouter `google/gemini-3.8-flash`** (Gemini Google direct est souvent refusé depuis l’IP OVH) ; Groq `gpt-oss-20b` en secours. **OpenRouter** : sans `AI_TOOL_MODEL`, les outils utilisent **le même id** que le récit (plus de `gpt-4o-mini` silencieux qui faisait passer le test alors que le MJ Flash échouait).
+
+### Diagnostic silence MJ (quota, jetons, délai)
+
+Quand le MJ ne répond plus, le salon affiche **pourquoi** (plus un simple « MJ cloud » muet).
+
+| Signal | Signification |
+|--------|----------------|
+| Badge **MJ : 0 jeton** / **quota minute** | Plafond **TPM** (jetons / minute, surtout Groq). Le reste = `limite − utilisés`. Un tour MJ peut réserver 1–2k jetons d’un coup alors qu’il en reste moins. |
+| Badge **MJ : crédit 0** | Compte cloud **à 0** (OpenRouter 402, plafond de clé). Ce n’est pas le TPM. |
+| Badge **MJ : délai** | Timeout HTTP (cloud ~90–120 s, Ollama/LM Studio plus long). |
+| **Ollama local** | Pas de « solde de jetons » : le modèle tourne sur le VPS, silence = timeout, crash, ou CPU saturé. |
+
+- Parse : `packages/shared/src/llm/llm-health.ts` — `usage` (prompt/réponse), Groq `Limit/Used/Requested`, en-têtes `x-ratelimit-remaining-tokens`.
+- Stockage mémoire par salon + WS `mj_status.lastCall` + GET salon.
+- UI : pastille MJ **cliquable** → détail (restant / demandé / réessayer dans Xs). Le chat système « Le MJ n'a pas pu répondre (…) » reprend les mêmes chiffres.
+- Un **test de connexion OK** (une phrase) n’empêche pas un 429 sur le récit (prompt 8–24k car.).
 - **Clé API (god mode)** : champ `#llm-api-key` — `autoComplete="new-password"` (évite l’avertissement Chrome DOM sur les champs `type=password` hors formulaire de connexion).
 
 ## LLM local — timeouts, contexte, préflight

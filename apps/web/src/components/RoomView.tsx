@@ -15,6 +15,7 @@ import { InviteQrPanel } from "@/components/InviteQrPanel";
 import type {
   ChatMessage,
   LlmCatalogEntry,
+  LlmLastCall,
   LlmRoomConfig,
   MjHostReclaimChoice,
   Player,
@@ -221,10 +222,12 @@ function applyMjStatusSnapshot(
     setMjThinking: (v: boolean) => void;
     setMjBackgroundScrib: (v: boolean) => void;
     setMjPhase: (v: "opening" | "turn") => void;
+    setLastLlmCall: (v: LlmLastCall | null) => void;
     mjThinkingSinceRef: { current: number | null };
   }
 ): void {
   if (!snap || opts.mjPromptPending) return;
+  if (snap.lastCall) opts.setLastLlmCall(snap.lastCall);
   opts.setMjBackgroundScrib(Boolean(snap.background));
   if (snap.thinking) {
     opts.setMjThinking(true);
@@ -259,6 +262,7 @@ export function RoomView({ code }: Props) {
   const [mjBackgroundScrib, setMjBackgroundScrib] = useState(false);
   const [mjPhase, setMjPhase] = useState<"opening" | "turn">("turn");
   const [mjPromptBusy, setMjPromptBusy] = useState(false);
+  const [lastLlmCall, setLastLlmCall] = useState<LlmLastCall | null>(null);
   const [reclaimError, setReclaimError] = useState<string | null>(null);
   const [hostMjPrepKind, setHostMjPrepKind] = useState<
     "reclaim" | "preamble" | "session_recap" | null
@@ -389,6 +393,9 @@ export function RoomView({ code }: Props) {
     replaceMessagesFromServer(data.messages);
     setSceneCheck(data.sceneCheck ?? null);
     setLiveChoiceMessageId(data.liveChoiceMessageId ?? null);
+    if (data.mjStatus?.lastCall) {
+      setLastLlmCall(data.mjStatus.lastCall);
+    }
     if (!mjPromptPendingRef.current) {
       const openingUnsettled = isCampaignOpeningUnsettled(
         data.messages,
@@ -401,6 +408,7 @@ export function RoomView({ code }: Props) {
           setMjThinking,
           setMjBackgroundScrib,
           setMjPhase,
+          setLastLlmCall,
           mjThinkingSinceRef,
         });
       } else if (openingUnsettled) {
@@ -586,6 +594,7 @@ export function RoomView({ code }: Props) {
         );
       }
       if (data.type === "mj_status") {
+        if (data.lastCall) setLastLlmCall(data.lastCall);
         setMjBackgroundScrib(Boolean(data.background));
         if (data.thinking) {
           if (mjPromptPendingRef.current) {
@@ -1439,6 +1448,7 @@ export function RoomView({ code }: Props) {
               mjThinking={mjThinking || mjPromptBusy}
               mjBackground={mjBackgroundScrib}
               messages={messages}
+              lastCall={lastLlmCall}
               refreshKey={room?.llmConfig?.modelId?.length ?? 0}
             />
             <ScribIndicator active={mjBackgroundScrib} />

@@ -17,6 +17,7 @@ export type RoomWsEvent =
       thinking: boolean;
       background?: boolean;
       phase?: "opening" | "turn";
+      lastCall?: import("@rpg-cr/shared").LlmLastCall;
     }
   | { type: "scene"; scene: SceneState }
   | { type: "scene_check"; sceneCheck: SceneCheckPublic | null; liveChoiceMessageId?: string | null };

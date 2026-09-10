@@ -1,5 +1,5 @@
-import type { ChatMessage, LlmRoomConfig } from "@rpg-cr/shared";
-import { isLocalLlmProvider } from "@rpg-cr/shared";
+import type { ChatMessage, LlmLastCall, LlmRoomConfig } from "@rpg-cr/shared";
+import { isLocalLlmProvider, llmLastCallShortLabel } from "@rpg-cr/shared";
 
 export const MJ_FAILURE_CHAT_PREFIX = "Le MJ n'a pas pu répondre";
 
@@ -38,9 +38,11 @@ export function resolveMjLlmVisualState(input: {
   mjThinking: boolean;
   mjBackground: boolean;
   activeFailure: string | null;
+  lastCall?: LlmLastCall | null;
 }): MjLlmVisualState {
   if (!input.hasLlmConfig) return "unconfigured";
   if (input.mjThinking) return "thinking";
+  if (input.lastCall && !input.lastCall.ok) return "error";
   if (input.activeFailure) return "error";
   if (input.llmReachable === null) return "checking";
   const local = input.llmConfig && isLocalLlmProvider(input.llmConfig.providerId);
@@ -52,7 +54,12 @@ export function resolveMjLlmVisualState(input: {
 
 export function mjLlmStatusLabel(
   state: MjLlmVisualState,
-  opts?: { providerId?: string; modelId?: string; failure?: string | null }
+  opts?: {
+    providerId?: string;
+    modelId?: string;
+    failure?: string | null;
+    lastCall?: LlmLastCall | null;
+  }
 ): string {
   switch (state) {
     case "unconfigured":
@@ -63,8 +70,12 @@ export function mjLlmStatusLabel(
       return "MJ en cours…";
     case "background":
       return "MJ (tâche de fond)";
-    case "error":
+    case "error": {
+      if (opts?.lastCall && !opts.lastCall.ok) {
+        return llmLastCallShortLabel(opts.lastCall);
+      }
       return "MJ erreur";
+    }
     case "unreachable":
       return opts?.providerId === "ollama" ? "Ollama injoignable" : "LLM injoignable";
     case "cloud":
@@ -78,10 +89,18 @@ export function mjLlmStatusLabel(
 
 export function mjLlmStatusTitle(
   state: MjLlmVisualState,
-  opts?: { providerId?: string; modelId?: string; failure?: string | null }
+  opts?: {
+    providerId?: string;
+    modelId?: string;
+    failure?: string | null;
+    lastCall?: LlmLastCall | null;
+  }
 ): string {
   const model = opts?.modelId?.trim();
   const modelHint = model ? `Modèle : ${model}. ` : "";
+  if (opts?.lastCall?.summary) {
+    return `${modelHint}${opts.lastCall.summary}`;
+  }
   if (state === "error" && opts?.failure) {
     return `${modelHint}${opts.failure}`;
   }

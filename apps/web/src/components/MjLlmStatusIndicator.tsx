@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ChatMessage, LlmRoomConfig } from "@rpg-cr/shared";
+import type { ChatMessage, LlmLastCall, LlmRoomConfig } from "@rpg-cr/shared";
 import {
   extractActiveMjFailure,
   mjLlmStatusLabel,
@@ -17,6 +17,7 @@ type Props = {
   mjThinking: boolean;
   mjBackground: boolean;
   messages: ChatMessage[];
+  lastCall?: LlmLastCall | null;
   /** Rafraîchir après test connexion god mode */
   refreshKey?: number;
 };
@@ -29,9 +30,11 @@ export function MjLlmStatusIndicator({
   mjThinking,
   mjBackground,
   messages,
+  lastCall = null,
   refreshKey = 0,
 }: Props) {
   const [llmReachable, setLlmReachable] = useState<boolean | null>(null);
+  const [open, setOpen] = useState(false);
 
   const refreshReachability = useCallback(async () => {
     if (!hasLlmConfig) {
@@ -58,29 +61,46 @@ export function MjLlmStatusIndicator({
     mjThinking,
     mjBackground,
     activeFailure,
+    lastCall,
   });
 
   const label = mjLlmStatusLabel(state, {
     providerId: llmConfig?.providerId,
     modelId: llmConfig?.modelId,
     failure: activeFailure,
+    lastCall,
   });
 
   const title = mjLlmStatusTitle(state, {
     providerId: llmConfig?.providerId,
     modelId: llmConfig?.modelId,
     failure: activeFailure,
+    lastCall,
   });
 
+  const detail = lastCall?.summary || activeFailure || title;
+  const canExpand = Boolean(lastCall?.summary || activeFailure);
+
   return (
-    <div
-      className={`mj-llm-status mj-llm-status--${state}`}
-      role="status"
-      aria-live="polite"
-      title={title}
-    >
-      <span className="mj-llm-status__dot" aria-hidden />
-      <span className="mj-llm-status__label">{label}</span>
+    <div className="mj-llm-status-wrap">
+      <button
+        type="button"
+        className={`mj-llm-status mj-llm-status--${state}`}
+        aria-live="polite"
+        aria-expanded={canExpand ? open : undefined}
+        title={title}
+        onClick={() => {
+          if (canExpand) setOpen((v) => !v);
+        }}
+      >
+        <span className="mj-llm-status__dot" aria-hidden />
+        <span className="mj-llm-status__label">{label}</span>
+      </button>
+      {open && canExpand ? (
+        <p className="mj-llm-status__detail" role="status">
+          {detail}
+        </p>
+      ) : null}
     </div>
   );
 }

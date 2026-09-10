@@ -551,6 +551,12 @@ label {
   animation: mj-pulse 1.5s ease-in-out infinite;
 }
 
+.mj-llm-status-wrap {
+  position: relative;
+  flex-shrink: 0;
+  max-width: min(100%, 14rem);
+}
+
 .mj-llm-status {
   display: inline-flex;
   align-items: center;
@@ -561,8 +567,22 @@ label {
   line-height: 1.2;
   border: 1px solid color-mix(in srgb, var(--text-muted) 25%, transparent);
   background: color-mix(in srgb, var(--panel) 88%, transparent);
-  max-width: min(100%, 11rem);
+  max-width: 100%;
   flex-shrink: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mj-llm-status__detail {
+  margin: 0.35rem 0 0;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--panel) 94%, #000);
+  border: 1px solid color-mix(in srgb, var(--text-muted) 22%, transparent);
+  color: var(--text, inherit);
 }
 
 .mj-llm-status__dot {

@@ -1,5 +1,14 @@
 import { getCatalogEntry, isOpenRouterProvider } from "./catalog.js";
 import { estimatePromptChars, resolveLlmTimeoutMs, isLlmRateLimitError, parseLlmRetryAfterMs, resolveMjMaxTokens } from "./context-budget.js";
+import {
+  appendQuotaToLlmError,
+  parseLlmQuotaFromHeaders,
+  parseLlmQuotaFromText,
+  parseLlmUsage,
+  mergeLlmQuota,
+  type LlmQuotaHint,
+  type LlmUsage,
+} from "./llm-health.js";
 import { assertChatModelId, isReasoningChatModelId, isUnsuitableMjModelId } from "./model-kind.js";
 import { formatLlmModelCrashRecoveryHint } from "./model-context-tier.js";
 import {
@@ -32,6 +41,8 @@ export interface LlmCompletionResult {
   providerId: string;
   modelId: string;
   usedFallback: boolean;
+  usage?: LlmUsage;
+  quota?: LlmQuotaHint;
 }
 
 export interface LlmProviderOptions {
@@ -68,6 +79,7 @@ type ChatCompletionResponse = {
     finish_reason?: string | null;
   }[];
   error?: { message?: string; code?: string; type?: string };
+  usage?: Record<string, unknown>;
 };
 
 /** Fallback si `resolveLlmTimeoutMs` indisponible (tests unitaires minimalistes). */
@@ -234,8 +246,9 @@ export function formatEmptyLlmResponseError(
   return `Réponse LLM vide pour « ${modelId} ».\n${localLlmChecklist(modelId, baseUrl)}`;
 }
 
+type ChatOk = { ok: true; content: string; usage?: LlmUsage; quota?: LlmQuotaHint };
 type ChatAttemptResult =
-  | { ok: true; content: string }
+  | ChatOk
   | { ok: false; empty: true; data: ChatCompletionResponse }
   | { ok: false; empty: false; error: Error };
 
@@ -375,10 +388,19 @@ async function openAiCompatibleChatOnce(
         false
       );
     }
+    const quota = mergeLlmQuota(
+      parseLlmQuotaFromHeaders(res.headers),
+      parseLlmQuotaFromText(bodyText)
+    );
     return {
       ok: false,
       empty: false,
-      error: new Error(formatLlmHttpError(res.status, bodyText, modelId, baseUrl)),
+      error: new Error(
+        appendQuotaToLlmError(
+          formatLlmHttpError(res.status, bodyText, modelId, baseUrl),
+          quota
+        )
+      ),
     };
   }
 
@@ -413,7 +435,7 @@ async function openAiCompatibleChatOnce(
     return { ok: false, empty: true, data };
   }
 
-  return { ok: true, content };
+  return { ok: true, content, usage: parseLlmUsage(data), quota: parseLlmQuotaFromHeaders(res.headers) };
 }
 
 function isTimeoutAttemptError(
@@ -421,6 +443,12 @@ function isTimeoutAttemptError(
 ): boolean {
   return /Délai dépassé|TimeoutError|timed out/i.test(result.error.message);
 }
+
+type LlmChatPayload = {
+  content: string;
+  usage?: LlmUsage;
+  quota?: LlmQuotaHint;
+};
 
 async function openAiCompatibleChat(
   baseUrl: string,
@@ -437,7 +465,7 @@ async function openAiCompatibleChat(
     jsonMode: boolean;
     extraHeaders?: Record<string, string>;
   }
-): Promise<string> {
+): Promise<LlmChatPayload> {
   let lastEmptyData: ChatCompletionResponse = {};
   const emptyAttempts = options.retryOnEmpty ? JIT_MAX_ATTEMPTS : 1;
   const timeoutAttempts = options.retryOnTimeout ? 2 : 1;
@@ -470,7 +498,9 @@ async function openAiCompatibleChat(
       extraHeaders
     );
 
-    if (result.ok) return result.content;
+    if (result.ok) {
+      return { content: result.content, usage: result.usage, quota: result.quota };
+    }
 
     if (result.empty) {
       lastEmptyData = result.data;
@@ -554,7 +584,13 @@ async function completeAgainstConfig(
   options: LlmProviderOptions,
   chatOptions: ChatRunOptions,
   requestApiKey?: string
-): Promise<{ content: string; providerId: string; modelId: string }> {
+): Promise<{
+  content: string;
+  providerId: string;
+  modelId: string;
+  usage?: LlmUsage;
+  quota?: LlmQuotaHint;
+}> {
   const entry = getCatalogEntry(config.providerId);
   if (!entry) throw new Error(`Provider inconnu: ${config.providerId}`);
 
@@ -579,11 +615,11 @@ async function completeAgainstConfig(
       ? openRouterAttributionHeaders()
       : {};
 
-  const content = await openAiCompatibleChat(baseUrl, apiKey, modelId, messages, {
+  const payload = await openAiCompatibleChat(baseUrl, apiKey, modelId, messages, {
     ...chatOptions,
     extraHeaders,
   });
-  return { content, providerId: config.providerId, modelId };
+  return { ...payload, providerId: config.providerId, modelId };
 }
 
 function formatChainedLlmFailure(
@@ -704,7 +740,7 @@ export async function completeChat(
   const fallbackBase = normalizeLmStudioV1BaseUrl(
     options.lmStudioBaseUrl ?? "http://127.0.0.1:1234/v1"
   );
-  const content = await openAiCompatibleChat(
+  const payload = await openAiCompatibleChat(
     fallbackBase,
     undefined,
     fallbackModelId,
@@ -717,7 +753,7 @@ export async function completeChat(
     }
   );
   return {
-    content,
+    ...payload,
     providerId: "lmstudio",
     modelId: fallbackModelId,
     usedFallback: true,

@@ -1,6 +1,7 @@
 import type { WebSocket } from "ws";
 import type {
   ChatMessage,
+  LlmLastCall,
   Player,
   SceneCheckPublic,
   SceneState,
@@ -11,6 +12,7 @@ import {
   markPlayerDisconnected,
   markPlayerLeaving,
 } from "./presence.js";
+import { getLlmLastCall } from "./llm-last-call.js";
 
 interface Client {
   ws: WebSocket;
@@ -78,12 +80,14 @@ function parseEndOpts(
 
 function emitMjStatus(roomId: string): void {
   const s = getMjRoomState(roomId);
+  const lastCall = getLlmLastCall(roomId);
   if (!s) {
     broadcastToRoom(roomId, {
       type: "mj_status",
       thinking: false,
       background: false,
       phase: "turn",
+      lastCall,
     });
     return;
   }
@@ -93,6 +97,7 @@ function emitMjStatus(roomId: string): void {
     thinking: narrative,
     background: s.backgroundRefs > 0,
     phase: mjPhaseForState(s),
+    lastCall,
   });
 }
 
@@ -131,6 +136,7 @@ export function mjThinkingEnd(
       thinking: false,
       background: false,
       phase: "turn",
+      lastCall: getLlmLastCall(roomId),
     });
     return;
   }
@@ -151,6 +157,7 @@ export function mjThinkingEnd(
       thinking: false,
       background: false,
       phase: "turn",
+      lastCall: getLlmLastCall(roomId),
     });
     return;
   }
@@ -162,17 +169,20 @@ export type MjStatusSnapshot = {
   thinking: boolean;
   background: boolean;
   phase: MjPhase;
+  lastCall?: LlmLastCall;
 };
 
 export function getMjStatusForRoom(roomId: string): MjStatusSnapshot {
+  const lastCall = getLlmLastCall(roomId);
   const s = getMjRoomState(roomId);
   if (!s) {
-    return { thinking: false, background: false, phase: "turn" };
+    return { thinking: false, background: false, phase: "turn", lastCall };
   }
   return {
     thinking: s.narrativeRefs > 0 || s.openingRefs > 0,
     background: s.backgroundRefs > 0,
     phase: mjPhaseForState(s),
+    lastCall,
   };
 }
 

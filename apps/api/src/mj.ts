@@ -28,6 +28,8 @@ import {
   type ExtractedNarrativeArc,
   formatCompanionRosterForMj,
   type CompanionDirective,
+  type LlmUsage,
+  type LlmQuotaHint,
 } from "@rpg-cr/shared";
 import { getMap, getRoomById, getPlayerById, listPlayers } from "./rooms.js";
 import { listQuests, listJournal } from "./campaign.js";
@@ -280,6 +282,10 @@ export async function runMjTurn(
   scenePatch: ScenePatchInput | null;
   arcPatch: ExtractedNarrativeArc | null;
   companionDirectives: CompanionDirective[];
+  providerId: string;
+  modelId: string;
+  usage?: LlmUsage;
+  quota?: LlmQuotaHint;
 }> {
   if (!options.skipLmStudioPreflight) {
     await preflightLmStudioForMj(config, {
@@ -359,6 +365,10 @@ export async function runMjTurn(
     scenePatch: prepared.scenePatch,
     arcPatch: prepared.arcPatch,
     companionDirectives: prepared.companionDirectives,
+    providerId: result.providerId,
+    modelId: result.modelId,
+    usage: result.usage,
+    quota: result.quota,
   };
 }
 

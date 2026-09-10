@@ -29,6 +29,9 @@ import {
   sceneLooksCrowded,
   shouldNarrateUnaddressedSay,
   uniqueListenerNames,
+  formatLlmSilenceDetail,
+  buildLlmLastCallOk,
+  buildLlmLastCallFromError,
 } from "@rpg-cr/shared";
 import {
   getRoomById,
@@ -46,6 +49,7 @@ import { listMessages } from "./messages.js";
 import { hasCampaignExport, readCampaignContext } from "./campaign-export.js";
 import { saveMessage } from "./messages.js";
 import { runMjTurn } from "./mj.js";
+import { recordLlmLastCall } from "./llm-last-call.js";
 import { applyCompanionDirectives } from "./companion-pact.js";
 import {
   broadcastMessage,
@@ -501,6 +505,7 @@ async function executeAutoMj(
   if (!room?.llmConfig) {
     const detail = "MJ non configuré";
     console.error(`[mj-auto] ${detail}`, { roomId, source });
+    recordLlmLastCall(roomId, buildLlmLastCallFromError(detail));
     broadcastMjFailure(roomId, detail);
     finishMjTurn(roomId, execOpts);
     return;
@@ -515,7 +520,7 @@ async function executeAutoMj(
     await queueNarrativeLlm(roomId, source, async () => {
       const speaker = speakingPlayerId ? getPlayerById(speakingPlayerId) : null;
       const responseLocale = speaker?.preferredLocale ?? DEFAULT_LOCALE;
-      const { content, responseLocale: mjLocale, scenePatch, arcPatch, companionDirectives } =
+      const { content, responseLocale: mjLocale, scenePatch, arcPatch, companionDirectives, providerId, modelId, usage, quota } =
         await runMjTurn(
           roomId,
           room.llmConfig!,
@@ -523,6 +528,15 @@ async function executeAutoMj(
           resolveRoomApiKey(room.llmConfig),
           { speakingPlayerId, responseLocale, omitSpeakingPlayerSheet }
         );
+      recordLlmLastCall(
+        roomId,
+        buildLlmLastCallOk({
+          providerId,
+          modelId,
+          usage,
+          quota,
+        })
+      );
       const mjMsg = saveMessage(
         roomId,
         "mj",
@@ -562,6 +576,13 @@ async function executeAutoMj(
     finishMjTurn(roomId, execOpts);
   } catch (e) {
     const err = formatMjFailureDetail(e);
+    recordLlmLastCall(
+      roomId,
+      buildLlmLastCallFromError(e, {
+        providerId: room.llmConfig?.providerId,
+        modelId: room.llmConfig?.modelId,
+      })
+    );
     console.error(`[mj-auto] tour MJ échoué (${source})`, { roomId, err });
     broadcastMjFailure(roomId, err);
     finishMjTurn(roomId, execOpts);
@@ -824,25 +845,7 @@ function formatMjFailureDetail(err: unknown): string {
   if (/en chargement|pas listé sur|injoignable|Ollama sur CPU/i.test(msg)) {
     return msg;
   }
-  if (/Délai dépassé/i.test(msg)) {
-    return (
-      `${msg} Si le modèle est READY dans LM Studio, réessayez **Réclamer** (une seconde tentative allège le contexte).`
-    );
-  }
-  if (/key limit|LLM 402|insufficient.?credits|payment required/i.test(msg)) {
-    return (
-      "Le récit MJ est plus lourd que le test de connexion (une phrase). " +
-      "Le fournisseur cloud a refusé le tour (crédit ou plafond de clé). " +
-      "Vérifiez OpenRouter / la clé serveur, attendez une minute, puis Réclamer."
-    );
-  }
-  if (/LLM 429|rate limit|tokens per minute|\bTPM\b/i.test(msg)) {
-    return (
-      "Le MJ a saturé le quota à la minute (Groq compte aussi les tokens du prompt). " +
-      "Attendez ~10 s puis Réclamer — le test court n'utilise pas le même budget."
-    );
-  }
-  return msg;
+  return formatLlmSilenceDetail(msg);
 }
 
 function broadcastMjFailure(roomId: string, detail: string): void {
