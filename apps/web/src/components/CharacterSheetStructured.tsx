@@ -536,11 +536,12 @@ export function CharacterSheetCompactSummary({ sheet }: { sheet: CharacterSheet 
   if (isQuestCompanionSheet(sheet)) {
     parts.push(formatCompanionLoyaltyHint(sheet));
   }
-  const statLine = STAT_KEYS.filter((k) => sheet.stats?.[k] != null)
-    .map((k) => {
-      const score = sheet.stats![k];
+  const statLine = STAT_KEYS.map((k) => {
+      const score = sheet.stats?.[k];
+      if (score == null) return null;
       return `${STAT_LABELS[k].slice(0, 3)} ${score} (${formatStatModifier(statModifier(score))})`;
     })
+    .filter((part): part is string => part != null)
     .join(" · ");
   if (statLine) parts.push(statLine);
   const counts: string[] = [];
