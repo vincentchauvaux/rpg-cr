@@ -77,6 +77,16 @@ export interface CharacterSheet {
   money?: string;
   mount?: string;
   notes?: string;
+  /** Trait de caractère (compagnon de route / marionnette). */
+  personality?: string;
+  /** Pourquoi ce PNJ voyage avec le groupe. */
+  companionBond?: string;
+  /** But parallèle ou secret (visible MJ, pas forcément dit à table). */
+  companionAgenda?: string;
+  /** Loyauté envers le groupe (−100 ennemi … +100 dévoué). */
+  companionLoyalty?: number;
+  /** Posture actuelle : allié, méfiant, hostile. */
+  companionStance?: "ally" | "wary" | "hostile";
   stats?: CharacterStats;
   spells?: CharacterSpell[];
   attackTypes?: CharacterAttack[];

@@ -311,6 +311,7 @@ export function RoomView({ code }: Props) {
   }
   /** true si l'utilisateur est proche du bas — on n'impose pas le scroll en lecture d'historique */
   const stickToBottomRef = useRef(true);
+  const [chatAwayFromBottom, setChatAwayFromBottom] = useState(false);
   const isInitialChatScroll = useRef(true);
   /** Après un jet de choix : rester sur le résultat, ne pas suivre le récit MJ. */
   const pauseStickToBottomRef = useRef(false);
@@ -534,6 +535,7 @@ export function RoomView({ code }: Props) {
           if (stickToBottomRef.current || msg.playerId === ownId) {
             pauseStickToBottomRef.current = true;
             stickToBottomRef.current = false;
+            setChatAwayFromBottom(true);
             pendingScrollToMessageIdRef.current = msg.id;
             pinnedSceneCheckMessageIdRef.current = msg.id;
             reanchorSceneCheckOnceRef.current = true;
@@ -551,6 +553,7 @@ export function RoomView({ code }: Props) {
           // Scroll vers le début du nouveau message MJ, pas vers le bas
           pendingScrollToMessageIdRef.current = msg.id;
           stickToBottomRef.current = false;
+          setChatAwayFromBottom(true);
         }
         setMessages((prev) => appendChatMessage(prev, data.message));
         const ownId = sessionRef.current?.playerId;
@@ -728,10 +731,24 @@ export function RoomView({ code }: Props) {
         pinnedSceneCheckMessageIdRef.current = null;
         reanchorSceneCheckOnceRef.current = false;
         stickToBottomRef.current = true;
+        setChatAwayFromBottom(false);
+      } else {
+        setChatAwayFromBottom(true);
       }
       return;
     }
     stickToBottomRef.current = atBottom;
+    setChatAwayFromBottom(!atBottom);
+  }, []);
+
+  const jumpToChatBottom = useCallback(() => {
+    const el = chatLogRef.current;
+    pauseStickToBottomRef.current = false;
+    pinnedSceneCheckMessageIdRef.current = null;
+    reanchorSceneCheckOnceRef.current = false;
+    stickToBottomRef.current = true;
+    setChatAwayFromBottom(false);
+    if (el) scrollChatLogToBottom(el, "smooth");
   }, []);
 
   useLayoutEffect(() => {
@@ -1506,6 +1523,18 @@ export function RoomView({ code }: Props) {
                   />
                 ))}
               </div>
+              {chatAwayFromBottom ? (
+                <button
+                  type="button"
+                  className="chat-jump-bottom"
+                  onClick={jumpToChatBottom}
+                  title="Descendre en bas du récit"
+                  aria-label="Descendre en bas de la conversation"
+                >
+                  <span aria-hidden>↓</span>
+                  Bas du récit
+                </button>
+              ) : null}
               {mjInputThinking ? (
                 <p
                   className="chat-mj-status"

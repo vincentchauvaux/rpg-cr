@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-10 (**zone de saisie 4 lignes** ; **test LLM = modèle du récit** ; DD adapté difficulté action ; interface chat libérée ; sync auto graines Google)
+> Dernière mise à jour : 2026-09-10 (**compagnons de route** in-fiction ; quitter dans l’en-tête ; bas du récit ; MJ sans paraphrase)
 
 ## Vision
 
@@ -27,15 +27,16 @@ Application SaaS de salons JDR rejoinables, avec MJ IA (LLM marché + fallback L
    - **Onboarding hôte (graine)** : après création/reprise salon, tant que la fiche n'est pas `ready` — `HostSetupWizard` (**étape 1/2**) bloque le chat et le wizard PJ : `AdminLlmForm` (`collapseOnSave={false}`, `configPersisted={hasLlmConfig}`) — **un seul** bouton **Tester la connexion** (dans le formulaire, pas de doublon sous le wizard) ; enregistrement `PUT /api/rooms/:id/llm` puis **test** `POST …/llm/test` obligatoire avant « Continuer » ; `localStorage` `rpg-cr-host-llm-setup:{roomId}=done` + `CharacterCreationWizard` (**étape 2/2**). Joueurs non-hôte : inchangés. Pendant l'étape 1, le formulaire LLM du god mode est masqué (évite doublon).
    - **God mode** : panneau admin = `localStorage` `rpg-cr-admin-panel:{playerId}` via `useSyncExternalStore` — **jamais** resync depuis refresh/WS/DB ; PATCH serveur fire-and-forget au toggle. Switch **sans titre dupliqué** (le titre d’onglet « Administration » suffit) pour éviter le débordement « God mo… » sur mobile.
    - **Layout salon** (`room-shell` + `room-layout`) : **une colonne** centrée ; **dock** (`RoomDockNav`) — sticky **haut** (bureau), fixe **bas** (mobile ≤640px) : **Fiche** + **Cercle** | **Accueil** (chat + scène + aide inline) | **Aide** + **Réglages** ; chaque onglet n’affiche **que** son panneau (plus de fiche/compagnons/réglages empilés sous Accueil). Masqué en plein écran récit / onboarding LLM. `sessionStorage` `rpg-cr-room-tab:{roomId}` (ancien `scene` → `main`). **Mentions @** : `ChatMentionInput` dans le **chat** et l’**aide personnelle** (`HeroAssistantPanel`) — joueurs à la table + PNJ du canon ; sous-titre **Lieu · …** (rencontre déduite des messages / scène, pas « Récit »). API `GET …/mention-suggestions`. **Compagnons** : `.companions-block` — `margin-top` 1rem (bureau) / 0,75rem (≤640px).
-   - **En-tête salon** (`RoomView`) : titre + **code seul** (sans préfixe « Code : ») — clic copie le code (`navigator.clipboard`) + retour visuel « Copié ! » + `aria-live` ; bouton **Sauvegarder et quitter** : libellé complet au bureau, **icône seule** (sortie) en `position: fixed` haut droite mobile (`≤640px`, `title` / `aria-label`).
+   - **En-tête salon** (`RoomView`) : titre + **code seul** (sans préfixe « Code : ») — clic copie le code (`navigator.clipboard`) + retour visuel « Copié ! » + `aria-live` ; bouton **Sauvegarder et quitter** : libellé complet au bureau, **icône seule** en mobile **dans l’en-tête** (pas `position: fixed` — il défile avec la page). **Bas du récit** : bouton `↓` sur le journal si on n’est plus collé en bas (après un long message MJ ou lecture d’historique).
    - **Carte + chroniques .md** : visibles **uniquement** en god mode (UI + API `GET /graine`)
 ### Fiche personnage — stats, canon narratif & verrou histoire
 
 **JSON `character_sheet`** (SQLite, PATCH existant) — champs texte + sections structurées.
 
 **Histoire (figée après finalisation wizard)** — `players.story_locked = 1` :
-- Texte : `rank`, `background`, `family`, `secret`, `ambition`
+- Texte : `rank`, `background`, `family`, `secret`, `ambition`, `personality`, `companionBond`, `companionAgenda`
 - Structuré : `stats`, `spells`, `attackTypes`, `actions`
+- Compagnon (évolue en jeu, pas verrouillé) : `companionLoyalty` (−100…+100), `companionStance` (`ally` | `wary` | `hostile`)
 
 **Biens matériels (modifiables en jeu)** :
 - Texte : `inventory`, `equipment`, `possessions`, `habitat`, `servants`, `money`, `mount`, `notes`
@@ -527,6 +528,22 @@ curl -X POST "http://127.0.0.1:4000/api/players/{playerId}/character/generate-al
   - **Sans LLM** : message système discret + fiche minimale (`background` / `notes`) → intro cercle quand même
 - **−** (admin, IA active) : `PATCH …/ai-players/:id` → `withdrawn`, MJ auto sortie narrative
 
+## Compagnons de route (recrutement in-fiction)
+
+Pas de bouton « ajouter un compagnon » : le PJ **demande au PNJ** (Dire `@PNJ` / Action : « viens avec moi », « rejoins-nous »…).
+
+| Couche | Rôle |
+|--------|------|
+| Prompt | `MJ_COMPANION_PACT_RULES` dans `system-prompt.ts` ; hints invitation / départ dans `player-say-npc.ts`, `player-action.ts`, Réclamer/Continuer |
+| Bloc MJ | `<!--companion:{"action":"recruit"\|"leave"\|"betray","name":"…","personality":"…","bond":"…","agenda":"…","loyalty":N}-->` — retiré du chat (`mj-response-prep.ts`) |
+| Applique | `apps/api/src/companion-pact.ts` après `runMjTurn` (`mj-auto.ts` + god `POST …/mj`) — **pas** de second récit d'intro cercle |
+| `recruit` | Marionnette homonyme ou `createAiPlayer` ; fiche (caractère, lien, agenda, loyauté) ; `circle_status=active` ; `story_locked` ; génération JSON de fond si stats manquantes |
+| `leave` | Le PNJ part de son chef (`withdrawn`) — but divergé, ennui, danger… |
+| `betray` | Posture `hostile`, loyauté basse ; reste pour saboter sauf `"depart":true` |
+| Refus | Récit seulement, pas de bloc |
+| UI Cercle | Badge **compagnon** + allié / méfiant / hostile + trait de caractère ; fiche lisible (sélecteur Fiche) |
+| Tests | `packages/shared/src/companion-pact.test.ts` |
+
 ## Ouverture de campagne (nouvelle graine)
 
 - Colonnes `rooms.world_seed` (UUID unique) et `rooms.campaign_opening_done` (0/1).
@@ -615,7 +632,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - Réactiver le MJ auto sur **Dire** : `AUTO_MJ_ON_PLAYER_MESSAGES = true` (heuristiques triviaux + banter dans `scheduleAutoMj` ; les actions passent par `scheduleActionMj` ou `scheduleAutoMj` selon le flag, sans double tour).
 - **UI statut MJ** : voyant compact `MjLlmStatusIndicator` (à côté scène) — prêt / vérification / en cours / erreur / injoignable ; poll `GET /api/llm/tunnel-status` ; WS `{ type: "mj_status", thinking, background?, phase? }` — `thinking` = récit narratif : bordure animée sur `.chat-log-wrap--mj-thinking` + ligne `.chat-mj-status` sous le fil (préambule, récap, reclaim inclus) ; `background` = `ScribIndicator` (plume, pas de bordure chat). Envoi / Réclamer bloqués pendant `thinking` narratif (pas pendant `background`). Overlay plein écran : **génération fiche** uniquement (`AiGenerationOverlay` dans `CharacterSheetFillAllButton`). **Compositeur** : textarea 4 lignes (`.chat-composer`), pas un champ d'une ligne. Serveur : `mjThinkingBegin` / `mjThinkingEnd` (`ws-hub.ts`) ; `executeAutoMj` appelle `mjThinkingEnd` **après** `broadcastMessage` (message ou erreur système), pas dans un `finally` qui précéderait le WS `message`. File d'attente si salon `busy` émet quand même `mjThinkingBegin` avant le retry. Client : feedback optimiste au clic Réclamer (`mjPromptPendingRef` + `setMjThinking` + libellé « Réclamer… ») ; tant que `mjPromptPendingRef`, tout `mj_status` avec `thinking: false` est **ignoré** pour l'overlay narratif (seul un message `mj` ou système « Le MJ n'a pas pu répondre… » / erreur HTTP / garde-fou 3 min termine l'attente) ; `refresh` après reconnexion compare les messages depuis le décompte au clic. Garde-fou 3 min si `thinking` bloqué.
 - **Erreur** : `broadcastMjFailure` dans le chat (tous les joueurs) + bannière / `reclaimError` côté client ; `console.error` serveur avec `source` (`player:reclaim`, `action`, `host:preamble`, …).
-- **Sanitisation réponses** : `prepareMjResponse()` / `formatMjMessageForDisplay()` — retire blocs `<!--scene:…-->` / `<!--arc:…-->` (y compris **tronqués** sans `-->`), parse JSON par accolades équilibrées, variantes `**[MJ] <!--scene:…` ; préfixe écho `[MJ]` / `[VJ]` / `[DIRE]` ; `collapseTrailingPhraseLoop` (fin « Il reste. Il reste. … »). Messages déjà en base : filtre à l'affichage.
+- **Sanitisation réponses** : `prepareMjResponse()` / `formatMjMessageForDisplay()` — retire blocs `<!--scene:…-->` / `<!--arc:…-->` / `<!--companion:…-->` (y compris **tronqués** sans `-->`), parse JSON par accolades équilibrées, variantes `**[MJ] <!--scene:…` ; préfixe écho `[MJ]` / `[VJ]` / `[DIRE]` ; `collapseTrailingPhraseLoop` (fin « Il reste. Il reste. … »). Messages déjà en base : filtre à l'affichage.
 - **Ton MJ** : `system-prompt.ts` — calibration intensité (scène calme = prose sobre, 1–3 ¶ ; pas de pathos ni répétitions) ; builders Réclamer / préambule / ouverture alignés.
 - **Tag `[VJ]` (voix joueur)** : réservé au format historique des messages PJ — le MJ ne doit **pas** le produire. Si fuite modèle : `transformVjSegmentsForDisplay()` convertit les segments en citation markdown (`> *…*`, guillemets en italique). Consignes dans `system-prompt.ts` (pas de monologue PJ inventé).
 - **Affichage MJ** : `ChatMessageRow` + `MjMessageMarkdown` (`react-markdown`, pas de HTML brut) — paragraphes, `**gras**`, `##` titres, listes `-`. Styles `.chat-msg-mj` dans `globals.css`. Prompt MJ : paragraphes courts + markdown léger.
@@ -719,7 +736,7 @@ AI_FALLBACK_PROVIDER=groq
 - Gemini : API officielle OpenAI-compatible Google ; défaut Flash `gemini-3.8-flash` (ou `AI_MODEL=gemini-flash-latest`).
 - Chaîne : provider env → `AI_FALLBACK_PROVIDER` → LM Studio/Ollama (`LM_STUDIO_BASE_URL`) si `useFallbackLmStudio`.
 - Revenir au local : commenter `AI_PROVIDER` (ou `AI_PROVIDER=lmstudio` / `ollama`) puis god mode comme ci-dessous.
-- Tests : `npm run test:ai` (mocks + live si les clés sont dans l’env).
+- Tests : `packages/shared/src/companion-pact.test.ts` (invitation, parser bloc, strip récit) ; `npm run test:ai` (mocks + live si les clés sont dans l’env).
 
 ### Architecture
 
@@ -877,6 +894,22 @@ La carte n'est chargée en state client **que** si god mode actif.
 - Pas de traduction de ses propres messages ; sans LLM : clic 🌐 → tooltip « MJ non configuré » (pas d'appel auto au chargement).
 
 ## Correctifs 2026-09-10
+
+### Quitter défile avec la page ; bouton bas du récit
+
+**Problème** : sur mobile, « Sauvegarder et quitter » était `position: fixed` en haut à droite (sticky). Après un long récit MJ, le chat se cale sur le **début** du message — pas de raccourci pour redescendre.
+
+**Solution** : le bouton quitter reste dans l’en-tête et **monte avec le scroll**. Bouton **↓ Bas du récit** (`.chat-jump-bottom`) dès que le journal n’est plus collé en bas.
+
+**Fichiers** : `RoomView.tsx`, `globals.css`
+
+### MJ qui réexplique la même scène
+
+**Problème** : Réclamer / Continuer / Action paraphrasaient le dernier tableau (même lieu, mêmes regards, même tension).
+
+**Solution** : consigne **« Avancer, ne pas paraphraser »** dans `MJ_CANON_CONTINUITY_RULES` (tous les tours) + builders Réclamer / Continuer / Action. Si rien de neuf : 2–4 phrases + une question.
+
+**Fichiers** : `canon-continuity.ts`, `system-prompt.ts`, `player-triggers.ts`, `player-action.ts`
 
 ### Zone de saisie trop petite après Réclamer (mobile)
 

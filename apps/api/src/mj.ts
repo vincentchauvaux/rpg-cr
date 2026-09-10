@@ -26,6 +26,8 @@ import {
   type MjContextMode,
   type ScenePatchInput,
   type ExtractedNarrativeArc,
+  formatCompanionRosterForMj,
+  type CompanionDirective,
 } from "@rpg-cr/shared";
 import { getMap, getRoomById, getPlayerById, listPlayers } from "./rooms.js";
 import { listQuests, listJournal } from "./campaign.js";
@@ -194,6 +196,14 @@ function buildMjTurnMessages(
         playerSheetBlock
           ? `### Capacités du joueur actif\n${truncateMjBlock(playerSheetBlock, limits.playerSheetMax)}`
           : "",
+        slim
+          ? ""
+          : (() => {
+              const roster = formatCompanionRosterForMj(listPlayers(roomId));
+              return roster
+                ? `### Compagnons de route (marionnettes — caractère, lien, agenda, loyauté)\n${truncateMjBlock(roster, 1800)}`
+                : "";
+            })(),
       ].filter(Boolean);
 
   const worldContext = truncateMjBlock(worldParts.join("\n\n"), limits.worldMax);
@@ -269,6 +279,7 @@ export async function runMjTurn(
   responseLocale: string;
   scenePatch: ScenePatchInput | null;
   arcPatch: ExtractedNarrativeArc | null;
+  companionDirectives: CompanionDirective[];
 }> {
   if (!options.skipLmStudioPreflight) {
     await preflightLmStudioForMj(config, {
@@ -347,6 +358,7 @@ export async function runMjTurn(
     responseLocale: payload.responseLocale,
     scenePatch: prepared.scenePatch,
     arcPatch: prepared.arcPatch,
+    companionDirectives: prepared.companionDirectives,
   };
 }
 

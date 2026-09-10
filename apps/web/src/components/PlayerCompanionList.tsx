@@ -6,8 +6,11 @@ import {
   MJ_DISPLAY_COLOR,
   PLAYER_PALETTE,
   companionDimTooltip,
+  formatCompanionLoyaltyHint,
   isCompanionNarrativelyActive,
+  isQuestCompanion,
   normalizeHex,
+  resolveCompanionStance,
 } from "@rpg-cr/shared";
 import { addAiPlayer, withdrawAiPlayer } from "@/lib/api";
 import { randomPlayerName } from "@/lib/random-names";
@@ -165,6 +168,9 @@ export function PlayerCompanionList({
           const dimTip = companionDimTooltip(p);
           const isSelf = p.id === sessionPlayerId;
           const rowTitle = [dimTip, PRESENCE_LABELS[presence]].filter(Boolean).join(" · ");
+          const quest = isQuestCompanion(p);
+          const stance = quest ? resolveCompanionStance(p.characterSheet) : undefined;
+          const personality = p.characterSheet.personality?.trim();
 
           return (
             <li key={p.id} className={`companion-item${isAi ? " ai" : ""}`}>
@@ -200,9 +206,23 @@ export function PlayerCompanionList({
                         <>
                           <span className="spinner-dot" aria-hidden /> IA
                         </>
+                      ) : quest ? (
+                        "compagnon"
                       ) : (
                         "IA"
                       )}
+                    </span>
+                  )}
+                  {isAi && quest && p.circleStatus === "active" && stance && (
+                    <span
+                      className={`badge companion-stance companion-stance--${stance}`}
+                      title={formatCompanionLoyaltyHint(p.characterSheet)}
+                    >
+                      {stance === "hostile"
+                        ? "hostile"
+                        : stance === "wary"
+                          ? "méfiant"
+                          : "allié"}
                     </span>
                   )}
                 </span>
@@ -218,6 +238,9 @@ export function PlayerCompanionList({
                   </button>
                 )}
               </div>
+              {personality && p.circleStatus !== "withdrawn" && (
+                <p className="companion-personality">{personality}</p>
+              )}
             </li>
           );
         })}

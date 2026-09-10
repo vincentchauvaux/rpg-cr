@@ -12,6 +12,8 @@ import {
   STAT_KEYS,
   STAT_LABELS,
   formatAlignmentLabel,
+  formatCompanionLoyaltyHint,
+  isQuestCompanionSheet,
   type CharacterSheetSectionKey,
   type StatKey,
 } from "@rpg-cr/shared";
@@ -510,6 +512,10 @@ function ListSection({
 export function CharacterSheetCompactSummary({ sheet }: { sheet: CharacterSheet }) {
   const parts: string[] = [];
   if (sheet.alignment) parts.push(formatAlignmentLabel(sheet.alignment));
+  if (sheet.personality?.trim()) parts.push(sheet.personality.trim());
+  if (isQuestCompanionSheet(sheet)) {
+    parts.push(formatCompanionLoyaltyHint(sheet));
+  }
   const statLine = STAT_KEYS.filter((k) => sheet.stats?.[k] != null)
     .map((k) => `${STAT_LABELS[k].slice(0, 3)} ${sheet.stats![k]}`)
     .join(" · ");

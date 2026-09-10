@@ -1,5 +1,10 @@
 import type { NarrationContext } from "../types.js";
 import { playerMessageDeclaresRoll } from "../../../dice-roll.js";
+import {
+  COMPANION_INVITE_MJ_HINT,
+  COMPANION_ONGOING_MJ_HINT,
+  messageLooksLikeCompanionInvite,
+} from "../../../companion-pact.js";
 
 export function buildPlayerActionNarration(ctx: NarrationContext): string {
   const name = ctx.playerName ?? "Le joueur";
@@ -46,6 +51,8 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
     ctx.companionsPresent && ctx.companionsPresent.length > 0
       ? `\n### Autres présents\n${ctx.companionsPresent.join("\n")}`
       : "";
+  const invite =
+    ctx.companionInvite === true || messageLooksLikeCompanionInvite(action);
 
   return (
     `[ACTION — ${name}]\n` +
@@ -54,10 +61,12 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
     `- **Interprète** l'action demandée et intègre-la au fil narratif en cours (conséquences, réactions du monde, vrais PNJ).\n` +
     `- Parle à **${name}** et aux autres PJ à la **2e personne** (tu / vous). Ce sont des héros de la table, **pas** des PNJ.\n` +
     `- Calibre la longueur et le ton : **1–2 paragraphes sobres** si l'action est simple ou la scène calme ; **2–4 paragraphes** seulement si l'action est dramatique, risquée ou change vraiment la situation — pas de lyrisme gratuit.\n` +
+    `- **N'explique pas deux fois** la même situation : ne reformule pas le dernier récit MJ ; narre seulement la **conséquence** de cette action.\n` +
     `- Ne rédige **pas** un chapitre entier sauf si l'action le justifie clairement.\n` +
     `- Résous partiellement ou totalement selon le contexte ; propose un **jet de dés** si l'issue est incertaine et qu'aucun total n'a déjà été annoncé ; si les dés de table ont parlé, **ne redemande pas** de jet.\n` +
     `- Tiens compte des compagnons présents et de la scène archivée ; ce que tu établis devient **canon**.\n` +
     `- Pas de tutoriel ni de mécanique hors jeu ; ton immersif en français.` +
+    (invite ? COMPANION_INVITE_MJ_HINT : COMPANION_ONGOING_MJ_HINT) +
     rollBlock +
     sceneBlock +
     trameBlock +

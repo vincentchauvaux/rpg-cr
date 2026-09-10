@@ -23,6 +23,8 @@ import {
   mjMessageRequestsRoll,
   stripMjMetadataComments,
   usesTightGroqTpm,
+  formatCompanionBriefForMj,
+  messageLooksLikeCompanionInvite,
 } from "@rpg-cr/shared";
 import {
   getRoomById,
@@ -40,6 +42,7 @@ import { listMessages } from "./messages.js";
 import { hasCampaignExport, readCampaignContext } from "./campaign-export.js";
 import { saveMessage } from "./messages.js";
 import { runMjTurn } from "./mj.js";
+import { applyCompanionDirectives } from "./companion-pact.js";
 import {
   broadcastMessage,
   broadcastPlayers,
@@ -126,13 +129,17 @@ function listPresentCompanionLines(roomId: string, playerId: string): string[] |
     (p) => p.id !== playerId && isCompanionNarrativelyActive(p)
   );
   const humans = others.filter((p) => p.kind === "human").map((p) => p.name);
-  const puppets = others.filter((p) => p.kind === "ai_puppet").map((p) => p.name);
+  const puppets = others.filter((p) => p.kind === "ai_puppet");
   const lines: string[] = [];
   if (humans.length) {
     lines.push(`PJ (joueurs — pas des PNJ) : ${humans.join(", ")}`);
   }
   if (puppets.length) {
-    lines.push(`Marionnettes IA : ${puppets.join(", ")}`);
+    lines.push(
+      `Marionnettes / compagnons de route :\n${puppets
+        .map((p) => `- ${formatCompanionBriefForMj(p)}`)
+        .join("\n")}`
+    );
   }
   return lines.length > 0 ? lines : undefined;
 }
@@ -157,6 +164,7 @@ function buildPlayerActionNarrationContext(
     pendingRollRequest: playerMessageDeclaresRoll(content)
       ? findPendingRollRequest(roomId)
       : undefined,
+    companionInvite: messageLooksLikeCompanionInvite(content),
   };
 }
 
@@ -175,6 +183,7 @@ function buildPlayerSayNpcNarrationContext(
     addressedNpcNames: npcNames,
     sceneSummary: formatSceneForMj(scene),
     companionsPresent: listPresentCompanionLines(roomId, playerId),
+    companionInvite: messageLooksLikeCompanionInvite(content),
   };
 }
 
@@ -404,7 +413,7 @@ async function executeAutoMj(
     await queueNarrativeLlm(roomId, source, async () => {
       const speaker = speakingPlayerId ? getPlayerById(speakingPlayerId) : null;
       const responseLocale = speaker?.preferredLocale ?? DEFAULT_LOCALE;
-      const { content, responseLocale: mjLocale, scenePatch, arcPatch } =
+      const { content, responseLocale: mjLocale, scenePatch, arcPatch, companionDirectives } =
         await runMjTurn(
           roomId,
           room.llmConfig!,
@@ -436,6 +445,7 @@ async function executeAutoMj(
         updateNarrativeArc(roomId, arcPatch);
         arcApplied = true;
       }
+      applyCompanionDirectives(roomId, companionDirectives);
       void maybeExtractFacts(roomId, mjMsg.id, content);
       void maybeExtractScene(
         roomId,

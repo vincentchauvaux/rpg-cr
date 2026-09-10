@@ -17,7 +17,7 @@ import { db } from "./db.js";
 import { listNarrativeFacts } from "./narrative-facts.js";
 import { listSceneLog } from "./room-scene.js";
 import { getNarrativeArc } from "./room-narrative-arc.js";
-import { formatAlignmentLabel } from "@rpg-cr/shared";
+import { formatAlignmentLabel, formatCompanionLoyaltyHint } from "@rpg-cr/shared";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -312,6 +312,12 @@ function buildPnj(
       md += `- **Depuis** : ${formatTs(p.joinedAt)}\n`;
       const s = p.characterSheet;
       if (s.alignment) md += `- **Alignement** : ${formatAlignmentLabel(s.alignment)}\n`;
+      if (s.personality) md += `- **Caractère** : ${s.personality}\n`;
+      if (s.companionBond) md += `- **Lien de route** : ${s.companionBond}\n`;
+      if (s.companionAgenda) md += `- **Agenda** : ${s.companionAgenda}\n`;
+      if (s.companionLoyalty != null || s.companionStance) {
+        md += `- **Loyauté** : ${formatCompanionLoyaltyHint(s)}\n`;
+      }
       if (s.background) md += `- **Background** : ${s.background}\n`;
       if (s.secret) md += `- **Secret** : ${s.secret}\n`;
       if (s.ambition) md += `- **Ambition** : ${s.ambition}\n`;

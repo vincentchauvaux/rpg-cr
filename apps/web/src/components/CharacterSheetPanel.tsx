@@ -5,7 +5,9 @@ import type { AlignmentId, CharacterSheet, CharacterSheetFieldKey, Player } from
 import { AlignmentGrid } from "@/components/AlignmentGrid";
 import {
   characterSheetsEqual,
+  formatCompanionLoyaltyHint,
   getCharacterFieldLabels,
+  isQuestCompanion,
   isStoryLocked,
   MATERIAL_TEXT_FIELDS,
   mergeCharacterSheet,
@@ -30,6 +32,9 @@ const STORY_FIELD_KEYS: CharacterSheetFieldKey[] = [
   "family",
   "secret",
   "ambition",
+  "personality",
+  "companionBond",
+  "companionAgenda",
 ];
 const MATERIAL_FIELD_KEYS: CharacterSheetFieldKey[] = [
   "inventory",
@@ -47,6 +52,9 @@ const SHEET_FIELD_ROWS: Partial<Record<CharacterSheetFieldKey, number>> = {
   family: 2,
   secret: 2,
   ambition: 2,
+  personality: 2,
+  companionBond: 2,
+  companionAgenda: 2,
   inventory: 2,
   equipment: 2,
   possessions: 2,
@@ -119,12 +127,16 @@ export function CharacterSheetPanel({
   const storyFields = sheetStoryFields(viewerLocale);
   const materialFields = sheetMaterialFields(viewerLocale);
 
-  const viewable = players.filter(
-    (p) =>
-      p.kind === "human" &&
-      (p.id === sessionPlayerId || isAdminGod) &&
-      p.characterStatus === "ready"
-  );
+  const viewable = players.filter((p) => {
+    if (p.characterStatus !== "ready") return false;
+    if (p.kind === "human") {
+      return p.id === sessionPlayerId || isAdminGod;
+    }
+    if (p.kind === "ai_puppet" && p.circleStatus !== "withdrawn") {
+      return true;
+    }
+    return false;
+  });
   const current = viewable.find((p) => p.id === viewId) ?? viewable[0];
 
   useEffect(() => {
@@ -145,6 +157,10 @@ export function CharacterSheetPanel({
   const canEdit = current.id === sessionPlayerId || isAdminGod;
   const hasContent = sheetHasContent(current.characterSheet);
   const isOpen = expanded || editing;
+  const companionStoryKeys = new Set(["personality", "companionBond", "companionAgenda"]);
+  const visibleStoryFields = storyFields.filter(
+    (f) => !companionStoryKeys.has(f.key) || current.kind === "ai_puppet"
+  );
 
   function startEdit() {
     setDraft(buildDraft(current.characterSheet));
@@ -219,6 +235,11 @@ export function CharacterSheetPanel({
           )}
           <span>
             Fiche personnage — {current.name}
+            {current.kind === "ai_puppet" && (
+              <span className="char-story-lock-badge" title="Marionnette IA">
+                {isQuestCompanion(current) ? "Compagnon" : "IA"}
+              </span>
+            )}
             {storyLocked && (
               <span className="char-story-lock-badge" title={STORY_LOCK_MESSAGE}>
                 Histoire fixée
@@ -235,7 +256,7 @@ export function CharacterSheetPanel({
             {isOpen ? "▾" : "▸"}
           </span>
         </button>
-        {isAdminGod && viewable.length > 1 && (
+        {viewable.length > 1 && (
           <select
             value={current.id}
             onChange={(e) => {
@@ -247,7 +268,9 @@ export function CharacterSheetPanel({
           >
             {viewable.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name}
+                {p.kind === "ai_puppet"
+                  ? `${p.name}${isQuestCompanion(p) ? " (compagnon)" : " (IA)"}`
+                  : p.name}
               </option>
             ))}
           </select>
@@ -361,7 +384,7 @@ export function CharacterSheetPanel({
                 </div>
               )}
               {tab === "story" &&
-                storyFields.map(({ key, label, rows }) => (
+                visibleStoryFields.map(({ key, label, rows }) => (
                   <CharacterFieldWithAi
                     key={key}
                     fieldKey={key}
@@ -436,7 +459,7 @@ export function CharacterSheetPanel({
               <section className="char-sheet-view-section">
                 <h4 className="char-sheet-view-heading">Histoire</h4>
                 <dl className="char-sheet-dl">
-                  {storyFields.map(({ key, label }) => {
+                  {visibleStoryFields.map(({ key, label }) => {
                     const val = current.characterSheet[key];
                     if (!val) return null;
                     return (
@@ -446,6 +469,14 @@ export function CharacterSheetPanel({
                       </div>
                     );
                   })}
+                  {(current.characterSheet.companionLoyalty != null ||
+                    current.characterSheet.companionStance ||
+                    isQuestCompanion(current)) && (
+                    <div>
+                      <dt>Loyauté</dt>
+                      <dd>{formatCompanionLoyaltyHint(current.characterSheet)}</dd>
+                    </div>
+                  )}
                 </dl>
               </section>
               <section className="char-sheet-view-section">

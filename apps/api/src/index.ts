@@ -70,6 +70,7 @@ import {
 } from "./scene-check.js";
 import { enrichPlayersWithPresence } from "./presence.js";
 import { runMjTurn, testLlmConnection } from "./mj.js";
+import { applyCompanionDirectives } from "./companion-pact.js";
 import {
   scheduleAutoMj,
   scheduleActionMj,
@@ -532,7 +533,7 @@ app.post<{
   }
 
   try {
-    const { content, usedFallback, responseLocale, scenePatch, arcPatch } =
+    const { content, usedFallback, responseLocale, scenePatch, arcPatch, companionDirectives } =
       await queueNarrativeLlm(room.id, "god:mj", () =>
         runMjTurn(
           room.id,
@@ -556,6 +557,7 @@ app.post<{
     if (arcPatch && (arcPatch.mainPlot || arcPatch.currentBeat)) {
       updateNarrativeArc(room.id, arcPatch);
     }
+    applyCompanionDirectives(room.id, companionDirectives);
     if (shouldAutoExtractFacts(room.llmConfig) && !usesTightGroqTpm(room.llmConfig)) {
       const apiKey = resolveRoomApiKey(room.llmConfig, req.body.apiKey);
       void (async () => {

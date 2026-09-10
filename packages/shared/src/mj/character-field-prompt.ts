@@ -8,6 +8,9 @@ export type CharacterSheetFieldKey =
   | "family"
   | "secret"
   | "ambition"
+  | "personality"
+  | "companionBond"
+  | "companionAgenda"
   | "inventory"
   | "equipment"
   | "possessions"
@@ -23,6 +26,9 @@ export const CHARACTER_SHEET_FIELD_KEYS: CharacterSheetFieldKey[] = [
   "family",
   "secret",
   "ambition",
+  "personality",
+  "companionBond",
+  "companionAgenda",
   "inventory",
   "equipment",
   "possessions",
@@ -45,6 +51,9 @@ const CHARACTER_FIELD_LABELS_FR: Record<CharacterSheetFieldKey, string> = {
   family: "Famille & liens",
   secret: "Passé secret ou tragédie",
   ambition: "Ambition / intrigue",
+  personality: "Caractère",
+  companionBond: "Lien de route",
+  companionAgenda: "Agenda parallèle",
   inventory: "Inventaire",
   equipment: "Équipement",
   possessions: "Possessions",
@@ -61,6 +70,9 @@ const CHARACTER_FIELD_LABELS_EN: Record<CharacterSheetFieldKey, string> = {
   family: "Family & ties",
   secret: "Secret past or tragedy",
   ambition: "Ambition / intrigue",
+  personality: "Personality",
+  companionBond: "Why they travel with the party",
+  companionAgenda: "Private agenda",
   inventory: "Inventory",
   equipment: "Equipment",
   possessions: "Possessions",
@@ -88,6 +100,9 @@ const FIELD_HINTS: Partial<Record<CharacterSheetFieldKey, string>> = {
   money: "Montant approximatif, forme (pièces, lettres de crédit) et source.",
   mount: "Animal ou véhicule ; indiquer état et charge si pertinent.",
   servants: "Noms ou rôles de domestiques, compagnons, apprentis.",
+  personality: "Un trait vivant (comique, sinistre, gourmand, mystérieux, vaniteux…), pas une liste.",
+  companionBond: "Pourquoi iel voyage avec le groupe (dette, curiosité, amour, or…).",
+  companionAgenda: "But parallèle ou secret — pas forcément avoué à table.",
 };
 
 /*

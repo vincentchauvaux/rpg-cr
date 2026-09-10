@@ -8,6 +8,11 @@ import type {
 } from "./types.js";
 import { formatAlignmentLabel, normalizeAlignment } from "./alignment.js";
 import { formatSkillsLine, normalizeSkills } from "./character-progression.js";
+import {
+  clampCompanionLoyalty,
+  formatCompanionLoyaltyHint,
+  normalizeCompanionStance,
+} from "./companion-pact.js";
 
 export const STAT_KEYS = [
   "force",
@@ -51,6 +56,9 @@ export const STORY_TEXT_FIELDS = [
   "family",
   "secret",
   "ambition",
+  "personality",
+  "companionBond",
+  "companionAgenda",
 ] as const;
 
 export type StoryTextFieldKey = (typeof STORY_TEXT_FIELDS)[number];
@@ -179,6 +187,15 @@ export function normalizeCharacterSheet(raw: Partial<CharacterSheet> = {}): Char
     money: raw.money?.trim() ?? "",
     mount: raw.mount?.trim() ?? "",
     notes: raw.notes?.trim() ?? "",
+    personality: raw.personality?.trim() ?? "",
+    companionBond: raw.companionBond?.trim() ?? "",
+    companionAgenda: raw.companionAgenda?.trim() ?? "",
+    ...(clampCompanionLoyalty(raw.companionLoyalty) != null
+      ? { companionLoyalty: clampCompanionLoyalty(raw.companionLoyalty) }
+      : {}),
+    ...(normalizeCompanionStance(raw.companionStance)
+      ? { companionStance: normalizeCompanionStance(raw.companionStance) }
+      : {}),
     stats: normalizeStats(raw.stats),
     spells: normalizeSpells(raw.spells),
     attackTypes: normalizeAttacks(raw.attackTypes),
@@ -266,6 +283,8 @@ export function pickMaterialPatch(patch: Partial<CharacterSheet>): Partial<Chara
     if (patch[key] !== undefined) out[key] = patch[key];
   }
   if (patch.usableItems !== undefined) out.usableItems = patch.usableItems;
+  if (patch.companionLoyalty !== undefined) out.companionLoyalty = patch.companionLoyalty;
+  if (patch.companionStance !== undefined) out.companionStance = patch.companionStance;
   return out;
 }
 
@@ -290,6 +309,14 @@ export function formatCharacterSheetForMj(name: string, sheet: CharacterSheet): 
   const s = normalizeCharacterSheet(sheet);
   const lines: string[] = [`### Fiche — ${name}`];
   if (s.alignment) lines.push(`- Alignement : ${formatAlignmentLabel(s.alignment)}`);
+  if (s.personality?.trim()) lines.push(`- Caractère : ${s.personality.trim()}`);
+  if (s.companionBond?.trim()) lines.push(`- Lien de route : ${s.companionBond.trim()}`);
+  if (s.companionAgenda?.trim()) {
+    lines.push(`- Agenda (secret MJ) : ${s.companionAgenda.trim()}`);
+  }
+  if (s.companionLoyalty != null || s.companionStance) {
+    lines.push(`- Loyauté compagnon : ${formatCompanionLoyaltyHint(s)}`);
+  }
   if (s.rank) lines.push(`- Rang : ${s.rank}`);
   const statLine = formatStatsLine(s.stats);
   if (statLine) lines.push(`- Caractéristiques : ${statLine}`);
@@ -354,6 +381,9 @@ export function mergeCharacterSheet(
     "money",
     "mount",
     "notes",
+    "personality",
+    "companionBond",
+    "companionAgenda",
   ] as const;
   if (patch.alignment !== undefined) {
     const a = normalizeAlignment(patch.alignment);
@@ -372,6 +402,16 @@ export function mergeCharacterSheet(
   if (patch.usableItems !== undefined) next.usableItems = normalizeUsableItems(patch.usableItems);
   if (patch.skills !== undefined) {
     next.skills = normalizeSkills({ ...normalizeSkills(base.skills), ...patch.skills });
+  }
+  if (patch.companionLoyalty !== undefined) {
+    const loyalty = clampCompanionLoyalty(patch.companionLoyalty);
+    if (loyalty == null) delete next.companionLoyalty;
+    else next.companionLoyalty = loyalty;
+  }
+  if (patch.companionStance !== undefined) {
+    const stance = normalizeCompanionStance(patch.companionStance);
+    if (!stance) delete next.companionStance;
+    else next.companionStance = stance;
   }
   return normalizeCharacterSheet(next);
 }

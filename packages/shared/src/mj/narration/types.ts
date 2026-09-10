@@ -45,6 +45,8 @@ export interface NarrationContext {
   pendingRollRequest?: string;
   /** Noms des compagnons actifs à la table */
   companionsPresent?: string[];
+  /** Le texte ressemble à une invitation à voyager / rejoindre la quête. */
+  companionInvite?: boolean;
   /** PNJ / marionnettes apostrophés avec @ dans un Dire */
   addressedNpcNames?: string[];
 

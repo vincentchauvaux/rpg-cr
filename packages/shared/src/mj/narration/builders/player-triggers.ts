@@ -1,5 +1,6 @@
 import { narrationCanonContinuityFooter } from "../../canon-continuity.js";
 import type { NarrationContext } from "../types.js";
+import { COMPANION_ONGOING_MJ_HINT } from "../../../companion-pact.js";
 
 function optionalBlock(ctx: NarrationContext): string {
   return ctx.optionalText?.trim()
@@ -51,8 +52,9 @@ export function buildPlayerContinueNarration(ctx: NarrationContext): string {
   const name = ctx.playerName ?? "Un joueur";
   return (
     `[CONTINUER LE RÉCIT] ${name} demande au MJ de faire avancer l'histoire.\n\n` +
-    "Poursuis le fil narratif et la **trame principale** sans répéter ce qui vient d'être dit. " +
+    "Poursuis le fil narratif et la **trame principale** sans répéter ni paraphraser ce qui vient d'être dit. " +
     "Fais évoluer un PNJ ou l'environnement si pertinent (1–3 paragraphes). **Conserve** lieu, ambiance et tension archivés sauf événement majeur ; pas de bloc `<!--scene:…-->` si rien ne change." +
+    COMPANION_ONGOING_MJ_HINT +
     optionalBlock(ctx) +
     narrationCanonContinuityFooter()
   );
@@ -73,9 +75,11 @@ export function buildReclaimContinueNarration(ctx: NarrationContext): string {
   const name = ctx.playerName ?? "Un joueur";
   return (
     `[RÉCLAMER — SILENCE DU JOUEUR] ${name} ne prend pas la parole ; le MJ enrichit la scène.\n\n` +
-    "Le joueur observe ou attend. **Ton sobre** : pas de grandiloquence si rien ne bouge — un détail utile, une réaction de PNJ, une tension légère suffisent. " +
+    "Le joueur observe ou attend. **Ton sobre** : pas de grandiloquence si rien ne bouge — un détail **inédit**, une réplique de PNJ jamais dite, une horloge qui avance. " +
+    "**N'explique pas à nouveau** ce qui se passe déjà (lieu, attente, regards) : les joueurs viennent de le lire. " +
     "Développe **sans changer de lieu** ni de tension archivée, sauf conséquence majeure. Ne force pas d'action du personnage. Pas de bloc `<!--scene:…-->` si rien ne change. **1–2 paragraphes** (3 max si événement net).\n" +
     "- Si des compagnons ou PNJ sont présents **sans rôle établi**, décris regards, tension ou attente **sans** leur inventer un titre (princesse, roi, etc.)." +
+    COMPANION_ONGOING_MJ_HINT +
     sceneHint(ctx) +
     optionalBlock(ctx) +
     narrationCanonContinuityFooter()

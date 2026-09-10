@@ -2,18 +2,26 @@ import type { ScenePatchInput } from "./scene-extract-prompt.js";
 import { parseExtractedScene } from "./scene-extract-prompt.js";
 import { sanitizeMjResponse } from "./sanitize-response.js";
 import type { ExtractedNarrativeArc } from "./narrative-arc-extract-prompt.js";
+import {
+  parseCompanionDirective,
+  type CompanionDirective,
+} from "../companion-pact.js";
 
-/** Blocs métadonnées MJ fermés (`<!--scene:…-->` / `<!--arc:…-->`). */
+/** Blocs métadonnées MJ fermés (`<!--scene:…-->` / `<!--arc:…-->` / `<!--companion:…-->`). */
 const SCENE_BLOCK_RE = /<!--\s*scene:\s*([\s\S]*?)\s*-->/gi;
 const ARC_BLOCK_RE = /<!--\s*arc:\s*([\s\S]*?)\s*-->/gi;
+const COMPANION_BLOCK_RE = /<!--\s*companion:\s*([\s\S]*?)\s*-->/gi;
 /** Fuite en fin de message : balise ouverte sans `-->` de fermeture. */
 const SCENE_TAIL_RE = /<!--\s*scene:(?![\s\S]*-->)[\s\S]*$/gi;
 const ARC_TAIL_RE = /<!--\s*arc:(?![\s\S]*-->)[\s\S]*$/gi;
+const COMPANION_TAIL_RE = /<!--\s*companion:(?![\s\S]*-->)[\s\S]*$/gi;
 /** Variante sans délimiteurs HTML (fuite modèle). */
 const BARE_SCENE_BLOCK_RE =
   /(?:^|\n)\s*(?:\*\*)?\s*\[MJ\]\s*(?:\*\*)?\s*<!--?\s*scene:\s*([\s\S]*?)\s*(?:-->)?\s*(?=\n|$)/gi;
 const BARE_ARC_BLOCK_RE =
   /(?:^|\n)\s*<!--?\s*arc:\s*([\s\S]*?)\s*(?:-->)?\s*(?=\n|$)/gi;
+const BARE_COMPANION_BLOCK_RE =
+  /(?:^|\n)\s*<!--?\s*companion:\s*([\s\S]*?)\s*(?:-->)?\s*(?=\n|$)/gi;
 /** Tag « voix joueur » (format historique chat) — ne doit pas apparaître dans le récit MJ. */
 const VJ_TAG_RE = /\[VJ\]\s*/gi;
 
@@ -25,6 +33,7 @@ export interface PreparedMjResponse {
   content: string;
   scenePatch: ScenePatchInput | null;
   arcPatch: ExtractedNarrativeArc | null;
+  companionDirectives: CompanionDirective[];
 }
 
 /** Extrait le premier objet JSON d'un bloc arc/scene (évite `*?` qui s'arrête au premier `}` dans une chaîne). */
@@ -88,8 +97,35 @@ function stripLeakedMetadataTails(text: string): string {
   return text
     .replace(SCENE_TAIL_RE, "")
     .replace(ARC_TAIL_RE, "")
-    .replace(/(?:^|\n)\s*<!--?\s*(?:scene|arc):\s*[\s\S]*$/gim, "")
+    .replace(COMPANION_TAIL_RE, "")
+    .replace(/(?:^|\n)\s*<!--?\s*(?:scene|arc|companion):\s*[\s\S]*$/gim, "")
     .trim();
+}
+
+function parseCompanionCommentObject(raw: string): CompanionDirective | null {
+  const json = firstJsonObjectLiteral(raw.trim()) ?? raw.trim();
+  try {
+    return parseCompanionDirective(JSON.parse(json) as unknown);
+  } catch {
+    return parseCompanionDirective(raw);
+  }
+}
+
+function stripCompanionComments(text: string): {
+  cleaned: string;
+  directives: CompanionDirective[];
+} {
+  const directives: CompanionDirective[] = [];
+  const patterns = [COMPANION_BLOCK_RE, BARE_COMPANION_BLOCK_RE];
+  let cleaned = text;
+  for (const re of patterns) {
+    cleaned = cleaned.replace(re, (_, inner: string) => {
+      const parsed = parseCompanionCommentObject(inner);
+      if (parsed) directives.push(parsed);
+      return "";
+    });
+  }
+  return { cleaned: cleaned.trim(), directives };
 }
 
 function stripSceneComments(text: string): { cleaned: string; scene: ScenePatchInput | null } {
@@ -151,7 +187,8 @@ export function transformVjSegmentsForDisplay(text: string): string {
 export function stripMjMetadataComments(raw: string): string {
   const scenePass = stripSceneComments(raw);
   const arcPass = stripArcComments(scenePass.cleaned);
-  return stripChatRoleEcho(stripLeakedMetadataTails(arcPass.cleaned));
+  const companionPass = stripCompanionComments(arcPass.cleaned);
+  return stripChatRoleEcho(stripLeakedMetadataTails(companionPass.cleaned));
 }
 
 /** Texte MJ affiché au chat (métadonnées + raisonnement interne + fuites [VJ]). */
@@ -161,16 +198,18 @@ export function formatMjMessageForDisplay(raw: string): string {
   return sanitizeMjResponse(vj);
 }
 
-/** Retire les blocs `<!--scene:…-->` / `<!--arc:…-->` et sanitize le récit joueur. */
+/** Retire les blocs `<!--scene:…-->` / `<!--arc:…-->` / `<!--companion:…-->` et sanitize le récit joueur. */
 export function prepareMjResponse(raw: string): PreparedMjResponse {
   const scenePass = stripSceneComments(raw);
   const arcPass = stripArcComments(scenePass.cleaned);
-  const vjCleaned = transformVjSegmentsForDisplay(arcPass.cleaned);
+  const companionPass = stripCompanionComments(arcPass.cleaned);
+  const vjCleaned = transformVjSegmentsForDisplay(companionPass.cleaned);
   return {
     content: sanitizeMjResponse(
       stripChatRoleEcho(stripLeakedMetadataTails(vjCleaned))
     ),
     scenePatch: scenePass.scene,
     arcPatch: arcPass.arc,
+    companionDirectives: companionPass.directives,
   };
 }

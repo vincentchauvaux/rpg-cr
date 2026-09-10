@@ -1,4 +1,5 @@
 export * from "./types.js";
+export * from "./companion-pact.js";
 export * from "./companion-active.js";
 export * from "./mention-suggestions.js";
 export * from "./alignment.js";
