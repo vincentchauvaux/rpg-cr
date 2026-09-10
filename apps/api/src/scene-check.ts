@@ -40,6 +40,7 @@ type InternalPick = {
   choice?: string;
   spec?: SceneCheckSpec;
   ability?: StatKey;
+  abilityScore?: number;
   modifier: number;
   natural: number;
   naturalAlt?: number;
@@ -72,9 +73,11 @@ export class SceneCheckHttpError extends Error {
   }
 }
 
-function modifierFor(sheet: CharacterSheet | undefined, ability: StatKey): number {
-  const score = sheet?.stats?.[ability] ?? 10;
-  return statModifier(score);
+function abilityScoreFor(
+  sheet: CharacterSheet | undefined,
+  ability: StatKey
+): number {
+  return sheet?.stats?.[ability] ?? 10;
 }
 
 function sheetOf(playerId: string): CharacterSheet | undefined {
@@ -153,6 +156,8 @@ function toPublic(check: InternalSceneCheck): SceneCheckPublic {
     spec,
     actorPlayerId: first?.playerId ?? check.firstActorId,
     actorPlayerName: first?.playerName ?? "",
+    actorAbilityScore: first?.abilityScore,
+    actorModifier: first?.modifier,
     expiresAt: check.expiresAt,
     helpers: check.picks
       .filter((p) => p.kind === "help")
@@ -211,7 +216,9 @@ function rollChoicePick(
   tension: number
 ): InternalPick {
   const spec = inferSceneCheck(choice, tension);
-  const mod = modifierFor(sheetOf(player.id), spec.ability);
+  const sheet = sheetOf(player.id);
+  const score = abilityScoreFor(sheet, spec.ability);
+  const mod = statModifier(score);
   const first = rollAbilityCheck(mod);
   const second = rollAbilityCheck(mod);
   const world = rollAbilityCheck(spec.worldMod);
@@ -222,6 +229,7 @@ function rollChoicePick(
     choice,
     spec,
     ability: spec.ability,
+    abilityScore: score,
     modifier: mod,
     natural: first.natural,
     naturalAlt: second.natural,
@@ -284,13 +292,16 @@ export function startSceneCheck(input: {
     const tension = getSceneState(input.roomId)?.tension ?? 0;
     if (sameAs) {
       const ability = helpAbilityFor(sameAs.spec?.ability ?? "sagesse");
-      const mod = modifierFor(sheetOf(actor.id), ability);
+      const sheet = sheetOf(actor.id);
+      const abilityScore = abilityScoreFor(sheet, ability);
+      const mod = statModifier(abilityScore);
       const roll = rollAbilityCheck(mod);
       return addPickAndMaybeResolve(existing, {
         playerId: actor.id,
         playerName: actor.name,
         kind: "help",
         ability,
+        abilityScore,
         modifier: mod,
         natural: roll.natural,
       });
@@ -394,13 +405,16 @@ export function joinSceneCheck(input: {
     input.stance === "help"
       ? helpAbilityFor(leadAbility)
       : opposeAbilityFor(leadAbility);
-  const mod = modifierFor(sheetOf(player.id), ability);
+  const sheet = sheetOf(player.id);
+  const abilityScore = abilityScoreFor(sheet, ability);
+  const mod = statModifier(abilityScore);
   const roll = rollAbilityCheck(mod);
   return addPickAndMaybeResolve(check, {
     playerId: player.id,
     playerName: player.name,
     kind: input.stance,
     ability,
+    abilityScore,
     modifier: mod,
     natural: roll.natural,
   });
@@ -453,6 +467,7 @@ function toActorRoll(pick: InternalPick, keptNatural: number, usedAdvantage: boo
     playerName: pick.playerName,
     stance: "actor",
     ability: pick.ability ?? "sagesse",
+    abilityScore: pick.abilityScore,
     natural: keptNatural,
     naturalAlt: other,
     modifier: pick.modifier,
@@ -468,6 +483,7 @@ function helperRolls(picks: InternalPick[]): SceneCheckRoll[] {
       playerName: h.playerName,
       stance: "help" as const,
       ability: h.ability ?? "sagesse",
+      abilityScore: h.abilityScore,
       natural: h.natural,
       modifier: h.modifier,
       total: h.natural + h.modifier,
@@ -482,6 +498,7 @@ function opposerRolls(picks: InternalPick[]): SceneCheckRoll[] {
       playerName: o.playerName,
       stance: "oppose" as const,
       ability: o.ability ?? "sagesse",
+      abilityScore: o.abilityScore,
       natural: o.natural,
       modifier: o.modifier,
       total: o.natural + o.modifier,

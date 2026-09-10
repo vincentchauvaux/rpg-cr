@@ -13,7 +13,9 @@ import {
   STAT_LABELS,
   formatAlignmentLabel,
   formatCompanionLoyaltyHint,
+  formatStatModifier,
   isQuestCompanionSheet,
+  statModifier,
   type CharacterSheetSectionKey,
   type StatKey,
 } from "@rpg-cr/shared";
@@ -108,23 +110,41 @@ export function CharacterSheetStructured({
           </div>
         )}
         <div className="char-stats-grid">
-          {STAT_KEYS.map((key) => (
-            <label key={key} className="char-stat-field">
-              <span>{STAT_LABELS[key]}</span>
-              {storyReadOnly ? (
-                <strong>{sheet.stats?.[key] ?? "—"}</strong>
-              ) : (
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={sheet.stats?.[key] ?? ""}
-                  onChange={(e) => updateStat(key, e.target.value)}
-                />
-              )}
-            </label>
-          ))}
+          {STAT_KEYS.map((key) => {
+            const score = sheet.stats?.[key];
+            const mod =
+              score != null ? formatStatModifier(statModifier(score)) : null;
+            return (
+              <label key={key} className="char-stat-field">
+                <span>{STAT_LABELS[key]}</span>
+                <span className="char-stat-value">
+                  {storyReadOnly ? (
+                    <strong>{score ?? "—"}</strong>
+                  ) : (
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={score ?? ""}
+                      onChange={(e) => updateStat(key, e.target.value)}
+                    />
+                  )}
+                  {mod ? (
+                    <span
+                      className="char-stat-mod"
+                      title="Bonus ajouté au d20 : (score − 10) ÷ 2. Un 10 donne +0, pas +10."
+                    >
+                      ({mod})
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+            );
+          })}
         </div>
+        <p className="muted char-stat-hint">
+          Le nombre entre parenthèses est le bonus au d20 (D&amp;D) : 8 → −1, 10 → +0, 12 → +1, 14 → +2. Ce n’est pas le score entier.
+        </p>
         </div>
       </details>
 
@@ -517,7 +537,10 @@ export function CharacterSheetCompactSummary({ sheet }: { sheet: CharacterSheet 
     parts.push(formatCompanionLoyaltyHint(sheet));
   }
   const statLine = STAT_KEYS.filter((k) => sheet.stats?.[k] != null)
-    .map((k) => `${STAT_LABELS[k].slice(0, 3)} ${sheet.stats![k]}`)
+    .map((k) => {
+      const score = sheet.stats![k];
+      return `${STAT_LABELS[k].slice(0, 3)} ${score} (${formatStatModifier(statModifier(score))})`;
+    })
     .join(" · ");
   if (statLine) parts.push(statLine);
   const counts: string[] = [];

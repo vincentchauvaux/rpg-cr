@@ -121,6 +121,7 @@ test("formatSceneCheckActionMessage contient le lancer pour le MJ", () => {
       playerName: "Alice",
       stance: "actor",
       ability: "intelligence",
+      abilityScore: 14,
       natural: 14,
       modifier: 2,
       total: 16,
@@ -131,9 +132,38 @@ test("formatSceneCheckActionMessage contient le lancer pour le MJ", () => {
     outcome: "success",
     outcomeLine: "réussite (16 ≥ DD 12).",
   });
-  assert.match(text, /\[Alice\] lance un d20/);
-  assert.match(text, /Jet D&D 5e/);
-  assert.match(text, /14 \+2 = 16/);
+  assert.match(text, /\*\*Alice\*\* tente/);
+  assert.match(text, /Intelligence \(Investigation\)/);
+  assert.match(text, /d20\(14\) \+2 \(Intelligence 14 → \+2\) = \*\*16\*\*/);
+});
+
+test("Intelligence 10 s'affiche en +0, pas +10", () => {
+  const text = formatSceneCheckActionMessage({
+    choice: "Fouiller les alentours",
+    ability: "intelligence",
+    abilityLabel: "Intelligence",
+    skillHint: "Investigation",
+    mode: "dc",
+    dc: 10,
+    spec: inferSceneCheck("Fouiller les alentours", 0),
+    actor: {
+      playerId: "g",
+      playerName: "Glumpentnik",
+      stance: "actor",
+      ability: "intelligence",
+      abilityScore: 10,
+      natural: 17,
+      modifier: 0,
+      total: 17,
+    },
+    helpers: [],
+    opposers: [],
+    usedAdvantage: false,
+    outcome: "success",
+    outcomeLine: "réussite (17 ≥ DD 10).",
+  });
+  assert.match(text, /d20\(17\) \+0 \(Intelligence 10 → \+0\) = \*\*17\*\*/);
+  assert.doesNotMatch(text, /\+10/);
 });
 
 test("formatSceneChoiceRoundActionMessage ignore les options non retenues", () => {
@@ -152,6 +182,7 @@ test("formatSceneChoiceRoundActionMessage ignore les options non retenues", () =
       ability: "sagesse" as const,
       natural: 12,
       modifier: 1,
+      abilityScore: 12,
       total: 13,
     },
     helpers: [],

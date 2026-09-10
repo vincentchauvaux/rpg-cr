@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  formatStatModifier,
   playerHasPickedSceneCheck,
   type SceneCheckPublic,
 } from "@rpg-cr/shared";
@@ -72,6 +73,9 @@ export function SceneCheckBanner({
       <p className="scene-check-banner-meta">
         {check.abilityLabel}
         {skill}
+        {check.actorAbilityScore != null
+          ? ` · score ${check.actorAbilityScore} → ${formatStatModifier(check.actorModifier ?? 0)}`
+          : ""}
         {remainMs > 800 ? ` · ${formatRemain(remainMs)}` : " · résolution…"}
       </p>
       {alreadyJoined ? (

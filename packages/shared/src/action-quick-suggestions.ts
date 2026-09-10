@@ -203,6 +203,7 @@ export function buildMjRollSuggestions(
         dice,
         statLabel,
         statMod: mod,
+        statScore: score,
       },
       hint: ROLL_QUICK_ACTION_HINT,
     },

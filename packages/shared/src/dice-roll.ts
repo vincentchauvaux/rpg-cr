@@ -18,6 +18,7 @@ export type PlayerRollMeta = {
   dice: string;
   statLabel: string;
   statMod: number;
+  statScore?: number;
 };
 
 /** Message action avec résultat chiffré pour que le MJ résolve l'issue. */
@@ -29,9 +30,13 @@ export function formatPlayerRollMessage(
   const natural = naturalRoll ?? rollDie(faces);
   const modLabel = formatMod(meta.statMod);
   const total = natural + meta.statMod;
+  const scoreBit =
+    meta.statScore != null
+      ? ` (${meta.statLabel} ${meta.statScore} → ${modLabel})`
+      : "";
   return (
     `Je lance un ${meta.dice} sur ma ${meta.statLabel} : ` +
-    `${natural} ${modLabel} = ${total}.`
+    `${natural} ${modLabel}${scoreBit} = ${total}.`
   );
 }
 

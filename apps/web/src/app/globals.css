@@ -2865,8 +2865,26 @@ textarea.field-invalid {
   font-size: 0.85rem;
 }
 
+.char-stat-value {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
 .char-stat-field input {
-  width: 100%;
+  width: 4.5rem;
+}
+
+.char-stat-mod {
+  font-size: 0.8rem;
+  color: var(--muted, #9aa3b2);
+  font-weight: 600;
+}
+
+.char-stat-hint {
+  font-size: 0.78rem;
+  margin: 0 0 0.5rem;
+  line-height: 1.35;
 }
 
 .char-list-section {

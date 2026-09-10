@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-10 (**« on est où »** = un seul lieu ; Dire sans @)
+> Dernière mise à jour : 2026-09-10 (**jets** : 10 INT = +0, pas +10 ; « on est où » = un seul lieu)
 
 ## Vision
 
@@ -152,7 +152,7 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 | Post-contrôle dev | `warnCanonContinuityDrift` | Log `[canon-drift]` si titre médiéval dans la réponse sans occurrence dans les sources (hors `NODE_ENV=production`) |
 
 **Exemple** : « ils attendent ta réponse » ✓ — « la princesse attend ta réponse » ✗ si aucune princesse établie.
-- Mode Action : menu « Utiliser… » (sorts/objets/actions de la fiche + **jet de dé** auto si le dernier message MJ demande un lancer — ex. bouton `🎲 d20 dex` ; détection `jet de DEXTERITÉ` / `(CHAIR)` avec normalisation Unicode (`action-quick-suggestions.ts`). Au clic, tirage aléatoire + message `Je lance un d20 sur ma dextérité : 14 +2 = 16.` (`dice-roll.ts`). Hint UI : les **+2/0/−2** du MJ = trois **issues** narratives ; le **(+X)** sur le jet = bonus de caractéristique (DEX 15 → +2). Si le message action contient un résultat chiffré, `mj-auto.ts` passe `pendingRollRequest` au prompt MJ (`builders/player-action.ts`) pour **résolution obligatoire** de l'issue annoncée.
+- Mode Action : menu « Utiliser… » (sorts/objets/actions de la fiche + **jet de dé** auto si le dernier message MJ demande un lancer — ex. bouton `🎲 d20 dex` ; détection `jet de DEXTERITÉ` / `(CHAIR)` avec normalisation Unicode (`action-quick-suggestions.ts`). Au clic, tirage aléatoire + message `Je lance un d20 sur ma dextérité : 14 +2 (dextérité 15 → +2) = 16.` (`dice-roll.ts`). Hint UI : les **+2/0/−2** du MJ = trois **issues** narratives ; le **(+X)** sur le jet = bonus de caractéristique (DEX 15 → +2, INT 10 → +0). Si le message action contient un résultat chiffré, `mj-auto.ts` passe `pendingRollRequest` au prompt MJ (`builders/player-action.ts`) pour **résolution obligatoire** de l'issue annoncée.
 
 ### Choix de scène cliquables (épreuves D&D 5e)
 
@@ -164,7 +164,7 @@ Les listes markdown (`- …`) du **dernier** récit MJ encore **en vigueur** (2�
 | Pile / tour | 1er clic ouvre le tour ; les autres PJ **choisissent aussi** (autre option, même option = aide), **aident**, **s'opposent** ou **laissent faire** (défaut / timeout). Résolution quand **tout le monde a répondu**, timeout **25 s**, ou **On y va**. Un seul message Action agrégé + un tour MJ |
 | Laisser faire | Pas d'opposition automatique entre PJ. Timeout = laisser faire. L'aide / l'opposition restent optionnelles |
 | Périmé | Dès qu'un tour se résout, **toute** la liste source est consommée (les options non cliquées n'ont pas eu lieu). Un nouveau récit MJ ou une Action hors liste invalide l'ancienne liste. `liveChoiceMessageId` (GET + WS) |
-| Jets | `packages/shared/src/scene-check.ts` — d20 + modificateur de fiche `(score-10)/2` ; 20/1 = saveur, pas d'auto-réussite RAW |
+| Jets | `packages/shared/src/scene-check.ts` — d20 + modificateur D&D `(score-10)/2` (INT 10 → **+0**, pas +10) ; le message affiche `d20(17) +0 (Intelligence 10 → +0)` ; fiche : score **et** bonus `(+0)` ; 20/1 = saveur, pas d'auto-réussite RAW |
 | Aide | Autres PJ : **Aider** (jet, souvent Perception) ; total ≥ 10 → **avantage** à l'acteur (2d20, le plus haut) — l'avantage ne se cumule pas |
 | Opposition | **S'opposer** = jet contesté (Persuasion vs Perspicacité, Discrétion vs Perception, sinon même carac). Mode « opposed » (social/combat) : le **monde** jette aussi `d20 + worldMod` — ce n'est pas une opposition entre PJ |
 | Fenêtre | 1 humain à la table → résolution **immédiate** ; sinon **25 s** |
@@ -1000,7 +1000,7 @@ Résultat : échec (6 < DD 12).
 **Timothy** tente : *« Poursuivre l'inspection... »*
 
 **Épreuve** : Intelligence (Investigation) contre DD 12.
-• **Jet** : d20(6) +0 = **6**
+• **Jet** : d20(6) +0 (Intelligence 10 → +0) = **6**
 
 **→ échec (6 < DD 12)**
 ```

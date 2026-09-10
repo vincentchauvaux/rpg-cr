@@ -13,6 +13,8 @@ export type SceneCheckRoll = {
   playerName: string;
   stance: "actor" | "help" | "oppose";
   ability: StatKey;
+  /** Score brut de fiche (1–20), pour expliquer le modificateur D&D. */
+  abilityScore?: number;
   natural: number;
   naturalAlt?: number;
   modifier: number;
@@ -39,6 +41,9 @@ export type SceneCheckPublic = {
   dc: number;
   actorPlayerId: string;
   actorPlayerName: string;
+  /** Score de la carac testée par l’acteur (pour le libellé « 10 → +0 »). */
+  actorAbilityScore?: number;
+  actorModifier?: number;
   expiresAt: number;
   helpers: Array<{ playerId: string; playerName: string; ability: StatKey }>;
   opposers: Array<{ playerId: string; playerName: string; ability: StatKey }>;
@@ -78,6 +83,18 @@ export type ResolvedSceneCheck = {
 
 function formatMod(mod: number): string {
   return mod >= 0 ? `+${mod}` : `${mod}`;
+}
+
+/** « Intelligence 10 → +0 » — le score n’est pas ajouté tel quel au d20. */
+export function formatAbilityModExplain(
+  abilityLabel: string,
+  score: number | undefined,
+  modifier: number
+): string {
+  if (score == null || !Number.isFinite(score)) {
+    return formatMod(modifier);
+  }
+  return `${formatMod(modifier)} (${abilityLabel} ${score} → ${formatMod(modifier)})`;
 }
 
 function rollD20(rng: () => number): number {
@@ -199,7 +216,7 @@ export function formatSceneCheckActionMessage(resolved: ResolvedSceneCheck): str
     `**${who}** tente : *« ${resolved.choice} »*`,
     "",
     header,
-    `• **Jet** : d20(${kept}) ${formatMod(actor.modifier)} = **${actor.total}**${adv}`,
+    `• **Jet** : d20(${kept}) ${formatAbilityModExplain(resolved.abilityLabel, actor.abilityScore, actor.modifier)} = **${actor.total}**${adv}`,
   ];
 
   for (const h of resolved.helpers) {
@@ -207,12 +224,12 @@ export function formatSceneCheckActionMessage(resolved: ResolvedSceneCheck): str
       ? "✓ avantage accordé"
       : "✗ pas d'avantage";
     lines.push(
-      `• ${h.playerName} aide (${STAT_LABELS[h.ability]}) : ${h.natural} ${formatMod(h.modifier)} = ${h.total} — ${ok}`
+      `• ${h.playerName} aide (${STAT_LABELS[h.ability]}) : ${h.natural} ${formatAbilityModExplain(STAT_LABELS[h.ability], h.abilityScore, h.modifier)} = ${h.total} — ${ok}`
     );
   }
   for (const o of resolved.opposers) {
     lines.push(
-      `• ${o.playerName} s'oppose (${STAT_LABELS[o.ability]}) : ${o.natural} ${formatMod(o.modifier)} = ${o.total}`
+      `• ${o.playerName} s'oppose (${STAT_LABELS[o.ability]}) : ${o.natural} ${formatAbilityModExplain(STAT_LABELS[o.ability], o.abilityScore, o.modifier)} = ${o.total}`
     );
   }
   if (
@@ -273,6 +290,8 @@ export function toSceneCheckPublic(input: {
   spec: SceneCheckSpec;
   actorPlayerId: string;
   actorPlayerName: string;
+  actorAbilityScore?: number;
+  actorModifier?: number;
   expiresAt: number;
   helpers: Array<{ playerId: string; playerName: string; ability: StatKey }>;
   opposers: Array<{ playerId: string; playerName: string; ability: StatKey }>;
@@ -292,6 +311,8 @@ export function toSceneCheckPublic(input: {
     dc: input.spec.dc,
     actorPlayerId: input.actorPlayerId,
     actorPlayerName: input.actorPlayerName,
+    actorAbilityScore: input.actorAbilityScore,
+    actorModifier: input.actorModifier,
     expiresAt: input.expiresAt,
     helpers: input.helpers,
     opposers: input.opposers,
