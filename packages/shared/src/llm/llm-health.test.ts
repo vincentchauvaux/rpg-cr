@@ -8,6 +8,7 @@ import {
   llmLastCallShortLabel,
   buildLlmLastCallFromError,
   classifyLlmFailure,
+  llmRecoveryPlan,
 } from "./llm-health.js";
 
 test("parse usage OpenAI", () => {
@@ -65,4 +66,27 @@ test("quota line FR", () => {
   assert.match(line, /il reste 0 \/ 8000/i);
   assert.match(line, /1400/);
   assert.match(line, /5 s/);
+});
+
+test("plan recovery : TPM → attendre puis micro", () => {
+  const call = buildLlmLastCallFromError(
+    new Error(
+      "LLM 429 : TPM Limit 8000, Used 8000, Requested 1400. Please try again in 12s."
+    )
+  );
+  const plan = llmRecoveryPlan(call);
+  assert.equal(plan?.kind, "wait_reclaim");
+  assert.equal(plan?.contextMode, "micro");
+  assert.ok((plan?.waitMs ?? 0) >= 12_000);
+  assert.match(plan?.label ?? "", /Attendre/);
+});
+
+test("plan recovery : délai → micro immédiat", () => {
+  const plan = llmRecoveryPlan(
+    null,
+    "Délai dépassé (90 s) en appelant « qwen2.5:7b-instruct »"
+  );
+  assert.equal(plan?.kind, "reclaim");
+  assert.equal(plan?.contextMode, "micro");
+  assert.equal(plan?.waitMs, 0);
 });

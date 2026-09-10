@@ -609,6 +609,7 @@ app.post<{
     playerId: string;
     type: string;
     optionalText?: string;
+    recover?: "slim" | "micro";
   };
 }>("/api/rooms/:roomId/mj/prompt", async (req, reply) => {
   const room = getRoomById(req.params.roomId);
@@ -620,6 +621,11 @@ app.post<{
     return reply.status(400).send({ error: "playerId requis" });
   }
 
+  const recover =
+    req.body?.recover === "slim" || req.body?.recover === "micro"
+      ? req.body.recover
+      : undefined;
+
   let result: { ok: true } | { ok: false; error: string };
   if (isMjHostTriggerType(type)) {
     result = requestHostMjTrigger(room.id, playerId, type);
@@ -628,7 +634,8 @@ app.post<{
       room.id,
       playerId,
       type,
-      req.body.optionalText
+      req.body.optionalText,
+      recover
     );
   } else {
     return reply.status(400).send({ error: "Type de sollicitation MJ invalide" });

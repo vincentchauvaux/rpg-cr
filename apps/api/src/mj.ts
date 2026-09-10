@@ -55,6 +55,8 @@ export interface MjTurnOptions {
   omitSpeakingPlayerSheet?: boolean;
   /** Sauter la pré-vérification LM Studio (tests internes). */
   skipLmStudioPreflight?: boolean;
+  /** Forcer un prompt plus court (bouton recovery pastille MJ). */
+  preferredContextMode?: MjContextMode;
 }
 
 function truncateMjBlock(text: string, max: number): string {
@@ -296,6 +298,7 @@ export async function runMjTurn(
   const effective = resolveEffectiveLlmConfig(config);
   const envAi = readEnvAiSettings();
   let mode: import("@rpg-cr/shared").MjContextMode =
+    options.preferredContextMode ??
     initialMjContextModeForConfig(
       effective.providerId,
       effective.modelId,

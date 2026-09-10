@@ -917,7 +917,10 @@ export function RoomView({ code }: Props) {
     }
   }
 
-  async function handleMjPrompt(type: MjPromptType) {
+  async function handleMjPrompt(
+    type: MjPromptType,
+    opts?: { recover?: "slim" | "micro" }
+  ) {
     if (!session || !room || !chatReady) {
       setReclaimError("Rejoignez la table (fiche prête et présentation faite) pour réclamer.");
       return;
@@ -981,7 +984,7 @@ export function RoomView({ code }: Props) {
       setHostMjPrepKind(null);
     }, RECLAIM_NO_START_MS);
     try {
-      await promptMj(room.id, session.playerId, type);
+      await promptMj(room.id, session.playerId, type, undefined, opts?.recover);
       if (process.env.NODE_ENV === "development") {
         console.debug("[Réclamer] POST ok, type=", type);
       }
@@ -1449,6 +1452,10 @@ export function RoomView({ code }: Props) {
               mjBackground={mjBackgroundScrib}
               messages={messages}
               lastCall={lastLlmCall}
+              recoverBusy={mjPromptBusy || mjThinking}
+              onRecover={(plan) => {
+                void handleMjPrompt("reclaim", { recover: plan.contextMode });
+              }}
               refreshKey={room?.llmConfig?.modelId?.length ?? 0}
             />
             <ScribIndicator active={mjBackgroundScrib} />

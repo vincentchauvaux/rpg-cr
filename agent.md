@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-10 (**silence MJ** : quota / jetons restants ; INT 10 = +0)
+> Dernière mise à jour : 2026-09-10 (**pastille MJ** : bouton de relance selon l’erreur)
 
 ## Vision
 
@@ -867,7 +867,7 @@ Quand le MJ ne répond plus, le salon affiche **pourquoi** (plus un simple « MJ
 
 - Parse : `packages/shared/src/llm/llm-health.ts` — `usage` (prompt/réponse), Groq `Limit/Used/Requested`, en-têtes `x-ratelimit-remaining-tokens`.
 - Stockage mémoire par salon + WS `mj_status.lastCall` + GET salon.
-- UI : pastille MJ **cliquable** → détail (restant / demandé / réessayer dans Xs). Le chat système « Le MJ n'a pas pu répondre (…) » reprend les mêmes chiffres.
+- UI : pastille MJ **cliquable** → détail + **bouton de relance adapté** (attendre le TPM puis micro ; délai/contexte → micro immédiat ; crédit → alléger / secours). `POST …/mj/prompt` accepte `recover: slim|micro`.
 - Un **test de connexion OK** (une phrase) n’empêche pas un 429 sur le récit (prompt 8–24k car.).
 - **Clé API (god mode)** : champ `#llm-api-key` — `autoComplete="new-password"` (évite l’avertissement Chrome DOM sur les champs `type=password` hors formulaire de connexion).
 

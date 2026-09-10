@@ -307,3 +307,87 @@ export function appendQuotaToLlmError(
   if (/il reste|quota minute|ce tour en réservait/i.test(base)) return base;
   return `${base} ${line}`;
 }
+
+export type LlmRecoveryContextMode = "slim" | "micro";
+
+export type LlmRecoveryPlan = {
+  /** Attendre le TPM, puis Réclamer ; ou relancer tout de suite. */
+  kind: "wait_reclaim" | "reclaim";
+  label: string;
+  hint: string;
+  waitMs: number;
+  contextMode?: LlmRecoveryContextMode;
+};
+
+/** Action adaptée au silence MJ (bouton dans la pastille). */
+export function llmRecoveryPlan(
+  call: LlmLastCall | null | undefined,
+  fallbackFailure?: string | null
+): LlmRecoveryPlan | null {
+  if (call?.ok) return null;
+  const outcome =
+    call?.outcome && call.outcome !== "ok"
+      ? call.outcome
+      : fallbackFailure
+        ? classifyLlmFailure(fallbackFailure)
+        : null;
+  if (!outcome || outcome === "ok") return null;
+
+  if (outcome === "rate_limit") {
+    const waitMs = Math.max(call?.quota?.retryAfterMs ?? 8_000, 3_000);
+    const sec = Math.max(1, Math.ceil(waitMs / 1000));
+    return {
+      kind: "wait_reclaim",
+      label: `Attendre ${sec} s puis relancer (alléger)`,
+      hint: "Le plafond de jetons à la minute se vide tout seul. On relance ensuite avec un récit plus court.",
+      waitMs,
+      contextMode: "micro",
+    };
+  }
+
+  if (outcome === "credits") {
+    return {
+      kind: "reclaim",
+      label: "Réessayer en allégeant le récit",
+      hint: "On ne peut pas recréditer le compte. Un tour plus court, ou le secours Groq/Ollama, peut passer.",
+      waitMs: 0,
+      contextMode: "micro",
+    };
+  }
+
+  if (outcome === "timeout" || outcome === "context") {
+    return {
+      kind: "reclaim",
+      label: "Relancer avec moins de contexte",
+      hint: "Le modèle a été trop lent ou saturé. On coupe l’historique pour cette relance.",
+      waitMs: 0,
+      contextMode: "micro",
+    };
+  }
+
+  if (outcome === "empty") {
+    return {
+      kind: "reclaim",
+      label: "Relancer le tour",
+      hint: "Réponse vide : on relance avec un prompt un peu plus léger.",
+      waitMs: 0,
+      contextMode: "slim",
+    };
+  }
+
+  if (outcome === "unreachable") {
+    return {
+      kind: "reclaim",
+      label: "Réessayer maintenant",
+      hint: "On retente le même appel — Ollama ou le cloud a peut-être repris.",
+      waitMs: 0,
+    };
+  }
+
+  return {
+    kind: "reclaim",
+    label: "Réessayer",
+    hint: "On relance le MJ comme avec Réclamer.",
+    waitMs: 0,
+  };
+}

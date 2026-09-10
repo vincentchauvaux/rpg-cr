@@ -459,6 +459,7 @@ type ExecuteAutoMjOpts = {
   /** Phase passée à `mjThinkingBegin` quand `narrativeThinkingShown` — doit matcher `mjThinkingEnd`. */
   narrativePhase?: MjNarrativePhase;
   source?: string;
+  preferredContextMode?: "full" | "slim" | "micro";
 };
 
 function endNarrativeMjThinking(roomId: string, execOpts: ExecuteAutoMjOpts): void {
@@ -526,7 +527,7 @@ async function executeAutoMj(
           room.llmConfig!,
           prompt,
           resolveRoomApiKey(room.llmConfig),
-          { speakingPlayerId, responseLocale, omitSpeakingPlayerSheet }
+          { speakingPlayerId, responseLocale, omitSpeakingPlayerSheet, preferredContextMode: execOpts.preferredContextMode }
         );
       recordLlmLastCall(
         roomId,
@@ -676,7 +677,8 @@ export function requestPlayerMjTrigger(
   roomId: string,
   playerId: string,
   type: MjPlayerTriggerType,
-  optionalText?: string
+  optionalText?: string,
+  preferredContextMode?: "slim" | "micro"
 ): { ok: true } | { ok: false; error: string } {
   const room = getRoomById(roomId);
   if (!room?.llmConfig) {
@@ -707,6 +709,7 @@ export function requestPlayerMjTrigger(
     narrativeThinkingShown: true,
     narrativePhase: "turn",
     source: `player:${type}`,
+    preferredContextMode,
   });
   return { ok: true };
 }

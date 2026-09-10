@@ -557,6 +557,10 @@ label {
   max-width: min(100%, 14rem);
 }
 
+.mj-llm-status-wrap--open {
+  max-width: min(100%, 22rem);
+}
+
 .mj-llm-status {
   display: inline-flex;
   align-items: center;
@@ -583,6 +587,36 @@ label {
   background: color-mix(in srgb, var(--panel) 94%, #000);
   border: 1px solid color-mix(in srgb, var(--text-muted) 22%, transparent);
   color: var(--text, inherit);
+}
+
+.mj-llm-status__detail-text,
+.mj-llm-status__hint {
+  margin: 0;
+}
+
+.mj-llm-status__hint {
+  margin-top: 0.4rem;
+  opacity: 0.85;
+  font-size: 0.72rem;
+}
+
+.mj-llm-status__fix {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--accent, #c9a227) 55%, transparent);
+  background: color-mix(in srgb, var(--accent, #c9a227) 18%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mj-llm-status__fix:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .mj-llm-status__dot {
