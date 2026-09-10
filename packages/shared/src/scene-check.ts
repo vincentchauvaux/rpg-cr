@@ -183,8 +183,8 @@ export function formatSceneCheckActionMessage(resolved: ResolvedSceneCheck): str
   const contested =
     resolved.mode === "opposed" || resolved.opposers.length > 0;
   const header = contested
-    ? `Jet D&D 5e — ${resolved.abilityLabel}${skill}, jet contesté.`
-    : `Jet D&D 5e — ${resolved.abilityLabel}${skill} contre DD ${resolved.dc}.`;
+    ? `**Épreuve** : ${resolved.abilityLabel}${skill}, jet contesté.`
+    : `**Épreuve** : ${resolved.abilityLabel}${skill} contre DD ${resolved.dc}.`;
 
   const actor = resolved.actor;
   const kept = actor.natural;
@@ -194,23 +194,25 @@ export function formatSceneCheckActionMessage(resolved: ResolvedSceneCheck): str
       : "";
   const who = actor.playerName || "Je";
 
+  // Format plus narratif et moins technique
   const lines = [
-    `[${who}] tente : « ${resolved.choice} ».`,
+    `**${who}** tente : *« ${resolved.choice} »*`,
+    "",
     header,
-    `[${who}] lance un d20 sur ${resolved.abilityLabel.toLowerCase()} : ${kept} ${formatMod(actor.modifier)} = ${actor.total}${adv}.`,
+    `• **Jet** : d20(${kept}) ${formatMod(actor.modifier)} = **${actor.total}**${adv}`,
   ];
 
   for (const h of resolved.helpers) {
     const ok = helperGrantsAdvantage(h.total)
-      ? "réussite, avantage accordé"
-      : "échec, pas d'avantage";
+      ? "✓ avantage accordé"
+      : "✗ pas d'avantage";
     lines.push(
-      `[${h.playerName}] aide — ${STAT_LABELS[h.ability]} : ${h.natural} ${formatMod(h.modifier)} = ${h.total} (${ok}).`
+      `• ${h.playerName} aide (${STAT_LABELS[h.ability]}) : ${h.natural} ${formatMod(h.modifier)} = ${h.total} — ${ok}`
     );
   }
   for (const o of resolved.opposers) {
     lines.push(
-      `[${o.playerName}] s'oppose — ${STAT_LABELS[o.ability]} : ${o.natural} ${formatMod(o.modifier)} = ${o.total}.`
+      `• ${o.playerName} s'oppose (${STAT_LABELS[o.ability]}) : ${o.natural} ${formatMod(o.modifier)} = ${o.total}`
     );
   }
   if (
@@ -221,10 +223,10 @@ export function formatSceneCheckActionMessage(resolved: ResolvedSceneCheck): str
     resolved.mode === "opposed"
   ) {
     lines.push(
-      `Opposition du monde : ${resolved.worldNatural} ${formatMod(resolved.worldMod)} = ${resolved.worldTotal}.`
+      `• Opposition du monde : ${resolved.worldNatural} ${formatMod(resolved.worldMod)} = ${resolved.worldTotal}`
     );
   }
-  lines.push(`Résultat : ${resolved.outcomeLine}`);
+  lines.push("", `**→ ${resolved.outcomeLine}**`);
   return lines.join("\n");
 }
 

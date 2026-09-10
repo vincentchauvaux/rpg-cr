@@ -922,6 +922,51 @@ L'aide personnelle reste pleinement fonctionnelle dans son onglet dédié du doc
 
 **Fichier modifié** : `apps/web/src/components/RoomView.tsx`
 
+### Format messages scene checks amélioré (choix cliquables)
+
+**Problème** : Les messages générés automatiquement par les choix cliquables avaient un format très technique qui pouvait parfois confondre le MJ ou causer des erreurs d'authentification.
+
+**Solution** : Amélioration du format des messages pour qu'ils soient plus clairs et narratifs :
+
+**Avant** :
+```
+[Timothy] tente : « Poursuivre l'inspection... ».
+Jet D&D 5e — Intelligence (Investigation) contre DD 12.
+[Timothy] lance un d20 sur intelligence : 6 +0 = 6.
+Résultat : échec (6 < DD 12).
+```
+
+**Après** :
+```
+**Timothy** tente : *« Poursuivre l'inspection... »*
+
+**Épreuve** : Intelligence (Investigation) contre DD 12.
+• **Jet** : d20(6) +0 = **6**
+
+**→ échec (6 < DD 12)**
+```
+
+Le nouveau format utilise le markdown pour la lisibilité et un symbole `**→**` clair pour le résultat final.
+
+**Prompt MJ amélioré** : Instructions simplifiées et plus directes :
+- "Le résultat est déjà donné — pars de ce résultat"
+- "Raconte immédiatement les conséquences"
+- "Ne lance pas d'autre dé"
+
+**Note importante sur l'erreur "Missing Authentication header"** : Si vous voyez cette erreur avec les choix cliquables, cela signifie que la clé API OpenRouter n'est pas configurée sur le VPS. Vérifiez :
+
+```bash
+# Sur le VPS
+cat /root/rpg-cr/.env | grep OPENROUTER_API_KEY
+# Doit afficher : OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+Si absente, ajoutez-la dans `/root/rpg-cr/.env` puis redéployez (`bash deploy/deploy.sh`).
+
+**Fichiers modifiés** : 
+- `packages/shared/src/scene-check.ts` (format message)
+- `packages/shared/src/mj/narration/builders/player-action.ts` (prompt)
+
 ## Correctifs 2026-09-09
 
 ### Scroll vers début message MJ (non vers la fin)
