@@ -25,6 +25,9 @@ import {
   usesTightGroqTpm,
   formatCompanionBriefForMj,
   messageLooksLikeCompanionInvite,
+  sceneLooksCrowded,
+  shouldNarrateUnaddressedSay,
+  uniqueListenerNames,
 } from "@rpg-cr/shared";
 import {
   getRoomById,
@@ -144,6 +147,32 @@ function listPresentCompanionLines(roomId: string, playerId: string): string[] |
   return lines.length > 0 ? lines : undefined;
 }
 
+/** PNJ / marionnettes à portée d'oreille (compagnons actifs + noms cités récemment). */
+function listNearbyNpcListeners(roomId: string, playerId: string): string[] {
+  const candidates = buildMentionCandidates(roomId, playerId).filter(
+    (c) => c.kind === "companion" || c.kind === "character"
+  );
+  const recent = listMessages(roomId, 40)
+    .filter((m) => m.kind === "mj" || m.kind === "say" || m.kind === "action")
+    .slice(-12);
+  const blob = recent.map((m) => m.content).join("\n").toLowerCase();
+  const names: string[] = [];
+  for (const c of candidates) {
+    if (c.kind === "companion") {
+      names.push(c.name);
+      continue;
+    }
+    const needle = c.name.trim().toLowerCase();
+    if (needle.length >= 2 && blob.includes(needle)) names.push(c.name);
+  }
+  return uniqueListenerNames(names).slice(0, 8);
+}
+
+function sceneCrowdPresent(roomId: string): boolean {
+  const scene = getSceneState(roomId);
+  return sceneLooksCrowded(scene?.location, scene?.mood);
+}
+
 function buildPlayerActionNarrationContext(
   roomId: string,
   playerId: string,
@@ -164,6 +193,27 @@ function buildPlayerActionNarrationContext(
     pendingRollRequest: playerMessageDeclaresRoll(content)
       ? findPendingRollRequest(roomId)
       : undefined,
+    companionInvite: messageLooksLikeCompanionInvite(content),
+  };
+}
+
+function buildPlayerSayUnaddressedContext(
+  roomId: string,
+  playerId: string,
+  playerName: string,
+  content: string,
+  nearbyListeners: string[],
+  crowdPresent: boolean
+): NarrationContext {
+  const scene = getSceneState(roomId);
+  return {
+    kind: "player_say",
+    playerName,
+    actionText: content,
+    sceneSummary: formatSceneForMj(scene),
+    companionsPresent: listPresentCompanionLines(roomId, playerId),
+    nearbyListeners,
+    crowdPresent,
     companionInvite: messageLooksLikeCompanionInvite(content),
   };
 }
@@ -232,6 +282,23 @@ export function buildChatAutoPrompt(
       actionText: content,
       addressedNpcNames,
     });
+  }
+  if (speakingPlayerId) {
+    const roomId = getPlayerById(speakingPlayerId)?.roomId;
+    if (roomId) {
+      const nearby = listNearbyNpcListeners(roomId, speakingPlayerId);
+      const crowd = sceneCrowdPresent(roomId);
+      return buildNarrationPrompt(
+        buildPlayerSayUnaddressedContext(
+          roomId,
+          speakingPlayerId,
+          playerName,
+          content,
+          nearby,
+          crowd
+        )
+      );
+    }
   }
   return buildNarrationPrompt({
     kind: "player_say",
@@ -797,7 +864,6 @@ export function scheduleAutoMj(
 
 /**
  * Tour MJ auto sur message **Action** — actif même si AUTO_MJ_ON_PLAYER_MESSAGES est false.
- * Les messages Dire sans @PNJ ne déclenchent pas le MJ (Réclamer / indice / hôte inchangés).
  */
 export function scheduleActionMj(
   roomId: string,
@@ -835,8 +901,9 @@ export function scheduleActionMj(
 }
 
 /**
- * Dire + @PNJ (canon ou marionnette) : le PNJ réagit selon son rôle.
- * Un @PJ seul reste du banter (pas de tour MJ).
+ * Dire : @PNJ → réaction de ce PNJ.
+ * Sans @ : le monde autour peut entendre (un seul auditeur répond ; plusieurs peuvent demander à qui ça s'adresse).
+ * Banter entre PJ et messages triviaux : pas de tour.
  */
 export function scheduleSayNpcMj(
   roomId: string,
@@ -856,15 +923,40 @@ export function scheduleSayNpcMj(
   const player = getPlayerById(playerId);
   if (!player) return;
 
-  const npcNames = findMentionedNpcs(
-    trimmed,
-    buildMentionCandidates(roomId, playerId)
-  ).map((c) => c.name);
-  if (!npcNames.length) return;
+  const candidates = buildMentionCandidates(roomId, playerId);
+  const npcNames = findMentionedNpcs(trimmed, candidates).map((c) => c.name);
 
-  const prompt = buildNarrationPrompt(
-    buildPlayerSayNpcNarrationContext(roomId, playerId, playerName, trimmed, npcNames)
-  );
+  let prompt: string;
+  if (npcNames.length) {
+    prompt = buildNarrationPrompt(
+      buildPlayerSayNpcNarrationContext(roomId, playerId, playerName, trimmed, npcNames)
+    );
+  } else {
+    const recentMessages = listMessages(roomId, 40);
+    if (
+      shouldSkipAutoMjForPlayerBanter(trimmed, "say", player, {
+        players: listPlayers(roomId),
+        recentMessages,
+        addressedNpcNames: npcNames,
+      })
+    ) {
+      return;
+    }
+    const nearby = listNearbyNpcListeners(roomId, playerId);
+    const crowd = sceneCrowdPresent(roomId);
+    if (!shouldNarrateUnaddressedSay(nearby, crowd)) return;
+    prompt = buildNarrationPrompt(
+      buildPlayerSayUnaddressedContext(
+        roomId,
+        playerId,
+        playerName,
+        trimmed,
+        nearby,
+        crowd
+      )
+    );
+  }
+
   const skipSceneExtract =
     trimmed.length > 0 && trimmed.length <= SHORT_PLAYER_MESSAGE_MAX_LEN;
 

@@ -44,6 +44,7 @@ export * from "./mj/player-intro-followup-prompt.js";
 export * from "./mj/hero-assistant-prompt.js";
 export * from "./mj/trivial-player-message.js";
 export * from "./mj/player-banter.js";
+export * from "./mj/unaddressed-speech.js";
 export * from "./mj/narration/index.js";
 export * from "./map/procedural.js";
 export * from "./map/world-names.js";

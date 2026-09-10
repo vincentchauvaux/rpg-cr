@@ -49,6 +49,10 @@ export interface NarrationContext {
   companionInvite?: boolean;
   /** PNJ / marionnettes apostrophés avec @ dans un Dire */
   addressedNpcNames?: string[];
+  /** Auditeurs PNJ à portée alors que le Dire n'a apostrophé personne */
+  nearbyListeners?: string[];
+  /** Lieu public : foule / tenancier possible même sans PNJ nommé */
+  crowdPresent?: boolean;
 
   /** Options scène / trame / campagne */
   hasEstablishedScene?: boolean;
