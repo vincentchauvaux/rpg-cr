@@ -30,6 +30,7 @@ const ENV_KEYS = [
   "AI_FALLBACK_PROVIDER",
   "GROQ_API_KEY",
   "GEMINI_API_KEY",
+  "OPENROUTER_API_KEY",
 ] as const;
 
 const LIVE_GROQ = process.env.GROQ_API_KEY?.trim() ?? "";
@@ -435,6 +436,37 @@ test("primary + secours en échec : les deux erreurs sont visibles", async () =>
       return true;
     }
   );
+});
+
+test("OpenRouter sans clé : secours Ollama (pas un quota 0)", async () => {
+  process.env.AI_PROVIDER = "openrouter";
+  process.env.AI_MODEL = "google/gemini-3.8-flash";
+  delete process.env.OPENROUTER_API_KEY;
+  delete process.env.AI_FALLBACK_PROVIDER;
+  const room: LlmRoomConfig = {
+    providerId: "openrouter",
+    modelId: "google/gemini-3.8-flash",
+    baseUrl: "https://openrouter.ai/api/v1",
+    useFallbackLmStudio: false,
+  };
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("openrouter")) {
+      return errorResponse(401, "Missing Authentication header");
+    }
+    if (url.includes("11434")) {
+      return chatResponse("Le tavernier hoche la tête.");
+    }
+    return errorResponse(500, url);
+  };
+
+  const result = await completeChat(room, [{ role: "user", content: "OK" }], {
+    timeoutMs: 5_000,
+    lmStudioBaseUrl: "http://127.0.0.1:11434/v1",
+  });
+  assert.equal(result.usedFallback, true);
+  assert.equal(result.providerId, "ollama");
+  assert.match(result.content, /tavernier/);
 });
 
 test(

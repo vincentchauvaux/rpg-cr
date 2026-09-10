@@ -9,6 +9,7 @@ import {
   buildLlmLastCallFromError,
   classifyLlmFailure,
   llmRecoveryPlan,
+  isLlmAuthError,
 } from "./llm-health.js";
 
 test("parse usage OpenAI", () => {
@@ -89,4 +90,21 @@ test("plan recovery : délai → micro immédiat", () => {
   assert.equal(plan?.kind, "reclaim");
   assert.equal(plan?.contextMode, "micro");
   assert.equal(plan?.waitMs, 0);
+});
+
+test("401 Missing Authentication : auth, pas un quota 0 jeton", () => {
+  const msg =
+    "LLM 401 (google/gemini-3.8-flash) : Missing Authentication header Il reste 0 / 0 jetons cette minute.";
+  assert.equal(classifyLlmFailure(msg), "auth");
+  assert.equal(isLlmAuthError(new Error(msg)), true);
+  const call = buildLlmLastCallFromError(new Error(msg));
+  assert.equal(call.outcome, "auth");
+  assert.equal(call.quota, undefined);
+  assert.equal(llmLastCallShortLabel(call), "MJ : clé manquante");
+  assert.match(formatLlmSilenceDetail(msg), /Clé API absente/);
+  assert.doesNotMatch(formatLlmSilenceDetail(msg), /0 \/ 0 jetons/);
+  const plan = llmRecoveryPlan(call);
+  assert.equal(plan?.preferLocal, true);
+  assert.equal(plan?.contextMode, "micro");
+  assert.match(plan?.label ?? "", /Ollama/);
 });

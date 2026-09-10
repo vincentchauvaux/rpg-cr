@@ -919,7 +919,7 @@ export function RoomView({ code }: Props) {
 
   async function handleMjPrompt(
     type: MjPromptType,
-    opts?: { recover?: "slim" | "micro" }
+    opts?: { recover?: "slim" | "micro" | "local" }
   ) {
     if (!session || !room || !chatReady) {
       setReclaimError("Rejoignez la table (fiche prête et présentation faite) pour réclamer.");
@@ -984,7 +984,14 @@ export function RoomView({ code }: Props) {
       setHostMjPrepKind(null);
     }, RECLAIM_NO_START_MS);
     try {
-      await promptMj(room.id, session.playerId, type, undefined, opts?.recover);
+      await promptMj(
+        room.id,
+        session.playerId,
+        type,
+        undefined,
+        opts?.recover,
+        apiKey || undefined
+      );
       if (process.env.NODE_ENV === "development") {
         console.debug("[Réclamer] POST ok, type=", type);
       }
@@ -1454,7 +1461,9 @@ export function RoomView({ code }: Props) {
               lastCall={lastLlmCall}
               recoverBusy={mjPromptBusy || mjThinking}
               onRecover={(plan) => {
-                void handleMjPrompt("reclaim", { recover: plan.contextMode });
+                void handleMjPrompt("reclaim", {
+                  recover: plan.preferLocal ? "local" : plan.contextMode,
+                });
               }}
               refreshKey={room?.llmConfig?.modelId?.length ?? 0}
             />

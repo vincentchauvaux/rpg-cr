@@ -170,7 +170,7 @@ function scheduleCompanionSheetFill(roomId: string, player: Player): void {
           roomId,
           room.llmConfig!,
           prompt,
-          resolveRoomApiKey(room.llmConfig)
+          resolveRoomApiKey(room.llmConfig, undefined, roomId)
         );
         const generated = parseCharacterSheetJson(content, "companion-sheet");
         const current = getPlayerById(player.id);

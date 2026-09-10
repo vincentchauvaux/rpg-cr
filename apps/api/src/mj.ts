@@ -57,6 +57,8 @@ export interface MjTurnOptions {
   skipLmStudioPreflight?: boolean;
   /** Forcer un prompt plus court (bouton recovery pastille MJ). */
   preferredContextMode?: MjContextMode;
+  /** 401 / pastille : Ollama au lieu de rejouer OpenRouter sans clé. */
+  forceLocalFallback?: boolean;
 }
 
 function truncateMjBlock(text: string, max: number): string {
@@ -245,7 +247,8 @@ async function completeMjWithTimeout(
   config: LlmRoomConfig,
   messages: ChatCompletionMessage[],
   estimatedChars: number,
-  apiKey?: string
+  apiKey?: string,
+  forceLocalFallback?: boolean
 ) {
   const effective = resolveEffectiveLlmConfig(config);
   const timeoutMs = resolveLlmTimeoutMs(effective.providerId, estimatedChars);
@@ -256,6 +259,7 @@ async function completeMjWithTimeout(
     timeoutMs,
     maxTokens,
     taskKind: "narration",
+    forceLocalFallback,
   });
 }
 
@@ -317,7 +321,8 @@ export async function runMjTurn(
       config,
       payload.messages,
       payload.estimatedChars,
-      apiKey
+      apiKey,
+      options.forceLocalFallback
     );
   } catch (firstError) {
     const slimmer = nextSlimmerMjMode(mode);
@@ -354,7 +359,8 @@ export async function runMjTurn(
       config,
       payload.messages,
       payload.estimatedChars,
-      apiKey
+      apiKey,
+      options.forceLocalFallback
     );
   }
 

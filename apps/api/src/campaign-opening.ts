@@ -118,7 +118,7 @@ export async function bootstrapCampaignOpening(
     const llm = resolveEffectiveLlmConfig(room.llmConfig!);
     const planResult = await queueNarrativeLlm(roomId, "campaign-opening-plan", () =>
       completeChat(room.llmConfig!, buildCampaignOpeningPlanMessages(ctx, host.preferredLocale), {
-        apiKey: resolveRoomApiKey(room.llmConfig),
+        apiKey: resolveRoomApiKey(room.llmConfig, undefined, roomId),
         lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
         maxTokens: resolveMjMaxTokens(llm.providerId, llm.modelId),
         taskKind: "tool",
@@ -139,7 +139,7 @@ export async function bootstrapCampaignOpening(
           roomId,
           room.llmConfig!,
           narrativePrompt,
-          resolveRoomApiKey(room.llmConfig),
+          resolveRoomApiKey(room.llmConfig, undefined, roomId),
           { speakingPlayerId: host.id, responseLocale: host.preferredLocale }
         )
     );

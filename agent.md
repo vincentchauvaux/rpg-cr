@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-10 (**pastille MJ** : bouton de relance selon l’erreur)
+> Dernière mise à jour : 2026-09-10 (**401 OpenRouter** : clé session + secours Ollama, plus un faux « 0 jeton »)
 
 ## Vision
 
@@ -865,10 +865,10 @@ Quand le MJ ne répond plus, le salon affiche **pourquoi** (plus un simple « MJ
 | Badge **MJ : délai** | Timeout HTTP (cloud ~90–120 s, Ollama/LM Studio plus long). |
 | **Ollama local** | Pas de « solde de jetons » : le modèle tourne sur le VPS, silence = timeout, crash, ou CPU saturé. |
 
-- Parse : `packages/shared/src/llm/llm-health.ts` — `usage` (prompt/réponse), Groq `Limit/Used/Requested`, en-têtes `x-ratelimit-remaining-tokens`.
+- Parse : `packages/shared/src/llm/llm-health.ts` — `usage` (prompt/réponse), Groq `Limit/Used/Requested`, en-têtes `x-ratelimit-remaining-tokens`. Un **401** n’est **pas** du TPM (pas de « 0 / 0 jetons »).
 - Stockage mémoire par salon + WS `mj_status.lastCall` + GET salon.
-- UI : pastille MJ **cliquable** → détail + **bouton de relance adapté** (attendre le TPM puis micro ; délai/contexte → micro immédiat ; crédit → alléger / secours). `POST …/mj/prompt` accepte `recover: slim|micro`.
-- Un **test de connexion OK** (une phrase) n’empêche pas un 429 sur le récit (prompt 8–24k car.).
+- UI : pastille MJ **cliquable** → détail + **bouton de relance adapté** (attendre le TPM puis micro ; délai/contexte → micro immédiat ; crédit → alléger / secours ; **401 / clé absente → Ollama**). `POST …/mj/prompt` accepte `recover: slim|micro|local`.
+- Un **test de connexion OK** (une phrase) n’empêche pas un 429 sur le récit (prompt 8–24k car.) ni un 401 si la clé n’était que dans le navigateur — le test **mémorise** désormais la clé pour le salon.
 - **Clé API (god mode)** : champ `#llm-api-key` — `autoComplete="new-password"` (évite l’avertissement Chrome DOM sur les champs `type=password` hors formulaire de connexion).
 
 ## LLM local — timeouts, contexte, préflight
@@ -916,6 +916,18 @@ La carte n'est chargée en state client **que** si god mode actif.
 - Pas de traduction de ses propres messages ; sans LLM : clic 🌐 → tooltip « MJ non configuré » (pas d'appel auto au chargement).
 
 ## Correctifs 2026-09-10
+
+### 401 Missing Authentication (test OK, récit KO)
+
+**Problème** : « Tester la connexion » envoie la clé du champ god mode ; Dire / Action / Réclamer / le bouton de la pastille appelaient OpenRouter **sans** cette clé (`Authorization` absent) → `LLM 401 (google/gemini-3.8-flash) : Missing Authentication header`. Le parseur TPM lisait des en-têtes 401 et affichait à tort **« 0 / 0 jetons »**. Relancer rejouait le même 401. Le secours Ollama était refusé parce que l’id `google/gemini-…` est un id cloud.
+
+**Solution** :
+- Après un test (ou un Réclamer avec le champ clé), la clé OpenRouter est **gardée en mémoire** pour le salon (jamais SQLite) et réutilisée par le récit auto
+- 401 = **clé manquante**, pas un quota ; pastille **« Relancer via Ollama (VPS) »** (`recover: local`)
+- Sans clé cloud, `completeChat` bascule sur **Ollama** `qwen2.5:7b-instruct` (même si le modèle de salon est Gemini Flash)
+- Prod durable : `OPENROUTER_API_KEY` dans `.env` VPS (le champ god mode ne survit pas à un redémarrage Docker)
+
+**Fichiers** : `llm-api-key.ts`, `room-llm-session-key.ts`, `providers.ts`, `llm-health.ts`, `mj.ts`, `mj-auto.ts`, `RoomView.tsx`
 
 ### Quitter défile avec la page ; bouton bas du récit
 
@@ -1028,7 +1040,7 @@ Le nouveau format utilise le markdown pour la lisibilité et un symbole `**→**
 - "Raconte immédiatement les conséquences"
 - "Ne lance pas d'autre dé"
 
-**Note importante sur l'erreur "Missing Authentication header"** : Si vous voyez cette erreur avec les choix cliquables, cela signifie que la clé API OpenRouter n'est pas configurée sur le VPS. Vérifiez :
+**Note importante sur l'erreur "Missing Authentication header"** : ce n'est **pas** un quota à 0. Le test god mode envoie la clé du champ ; le récit auto ne l'envoyait pas. Désormais la clé de test est gardée en mémoire pour le salon, et un 401 bascule sur Ollama. Pour que Flash survive un reboot Docker :
 
 ```bash
 # Sur le VPS
@@ -1036,7 +1048,7 @@ cat /root/rpg-cr/.env | grep OPENROUTER_API_KEY
 # Doit afficher : OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
-Si absente, ajoutez-la dans `/root/rpg-cr/.env` puis redéployez (`bash deploy/deploy.sh`).
+Si absente, ajoutez-la dans `/root/rpg-cr/.env` puis `bash deploy/push-deploy.sh`.
 
 **Fichiers modifiés** : 
 - `packages/shared/src/scene-check.ts` (format message)

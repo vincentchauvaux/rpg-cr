@@ -436,7 +436,7 @@ app.post<{
         sourceLocale: req.body.sourceLocale,
         messageId: req.body.messageId,
       },
-      resolveRoomApiKey(room.llmConfig)
+      resolveRoomApiKey(room.llmConfig, undefined, room.id)
     );
     return result;
   } catch (e) {
@@ -508,7 +508,7 @@ app.post<{
   try {
     const result = await testLlmConnection(
       room.llmConfig,
-      resolveRoomApiKey(room.llmConfig, req.body.apiKey)
+      resolveRoomApiKey(room.llmConfig, req.body.apiKey, room.id)
     );
     return result;
   } catch (e) {
@@ -539,7 +539,7 @@ app.post<{
           room.id,
           room.llmConfig!,
           req.body.prompt,
-          resolveRoomApiKey(room.llmConfig, req.body.apiKey)
+          resolveRoomApiKey(room.llmConfig, req.body.apiKey, room.id)
         )
       );
     const msg = saveMessage(room.id, "mj", "MJ", content, "mj", responseLocale);
@@ -559,7 +559,7 @@ app.post<{
     }
     applyCompanionDirectives(room.id, companionDirectives);
     if (shouldAutoExtractFacts(room.llmConfig) && !usesTightGroqTpm(room.llmConfig)) {
-      const apiKey = resolveRoomApiKey(room.llmConfig, req.body.apiKey);
+      const apiKey = resolveRoomApiKey(room.llmConfig, req.body.apiKey, room.id);
       void (async () => {
         mjThinkingBegin(room.id, { kind: "background" });
         try {
@@ -609,7 +609,8 @@ app.post<{
     playerId: string;
     type: string;
     optionalText?: string;
-    recover?: "slim" | "micro";
+    recover?: "slim" | "micro" | "local";
+    apiKey?: string;
   };
 }>("/api/rooms/:roomId/mj/prompt", async (req, reply) => {
   const room = getRoomById(req.params.roomId);
@@ -621,10 +622,15 @@ app.post<{
     return reply.status(400).send({ error: "playerId requis" });
   }
 
+  resolveRoomApiKey(room.llmConfig, req.body?.apiKey, room.id);
+
+  const recoverLocal = req.body?.recover === "local";
   const recover =
     req.body?.recover === "slim" || req.body?.recover === "micro"
       ? req.body.recover
-      : undefined;
+      : recoverLocal
+        ? "micro"
+        : undefined;
 
   let result: { ok: true } | { ok: false; error: string };
   if (isMjHostTriggerType(type)) {
@@ -635,7 +641,8 @@ app.post<{
       playerId,
       type,
       req.body.optionalText,
-      recover
+      recover,
+      recoverLocal
     );
   } else {
     return reply.status(400).send({ error: "Type de sollicitation MJ invalide" });
@@ -1190,7 +1197,7 @@ app.post<{
       field,
       req.body.currentSheet ?? {},
       target.name,
-      resolveRoomApiKey(room.llmConfig),
+      resolveRoomApiKey(room.llmConfig, undefined, room.id),
       actor.preferredLocale
     );
     return { value };
@@ -1220,7 +1227,7 @@ app.post<{
         "Guide-moi pour créer mon personnage : une question sur mon rang, ma famille ou mon secret.",
       "creation",
       room.llmConfig,
-      resolveRoomApiKey(room.llmConfig)
+      resolveRoomApiKey(room.llmConfig, undefined, room.id)
     );
     return { reply: content };
   } catch (e) {
@@ -1260,7 +1267,7 @@ app.post<{
       question,
       mode,
       room.llmConfig,
-      resolveRoomApiKey(room.llmConfig)
+      resolveRoomApiKey(room.llmConfig, undefined, room.id)
     );
   } catch (e) {
     const err = e instanceof Error ? e.message : "Erreur aide personnelle";
@@ -1308,7 +1315,7 @@ app.post<{
       section,
       req.body.currentSheet ?? {},
       target.name,
-      resolveRoomApiKey(room.llmConfig),
+      resolveRoomApiKey(room.llmConfig, undefined, room.id),
       actor.preferredLocale
     );
     return { section, sheet };
@@ -1380,7 +1387,7 @@ app.post<{
       room.llmConfig,
       req.body.currentSheet ?? target.characterSheet ?? {},
       target.name,
-      resolveRoomApiKey(room.llmConfig),
+      resolveRoomApiKey(room.llmConfig, undefined, room.id),
       req.body.hints,
       actor.preferredLocale,
       pushProgress,
@@ -1502,7 +1509,7 @@ app.post<{
     const { facts, messageId } = await extractFromLastMjMessage(
       req.params.roomId,
       room.llmConfig,
-      resolveRoomApiKey(room.llmConfig)
+      resolveRoomApiKey(room.llmConfig, undefined, room.id)
     );
     return { facts, messageId, count: facts.length };
   } catch (e) {
@@ -1568,7 +1575,7 @@ app.post<{
     const { scene, messageId } = await extractSceneFromLastMj(
       req.params.roomId,
       room.llmConfig,
-      resolveRoomApiKey(room.llmConfig)
+      resolveRoomApiKey(room.llmConfig, undefined, room.id)
     );
     if (scene) broadcastScene(req.params.roomId, scene);
     return { scene, messageId };

@@ -298,11 +298,12 @@ export function promptMj(
   playerId: string,
   type: MjPromptType,
   optionalText?: string,
-  recover?: "slim" | "micro"
+  recover?: "slim" | "micro" | "local",
+  apiKey?: string
 ): Promise<{ ok: true; type: string }> {
   return fetchJson(`/api/rooms/${roomId}/mj/prompt`, {
     method: "POST",
-    body: JSON.stringify({ playerId, type, optionalText, recover }),
+    body: JSON.stringify({ playerId, type, optionalText, recover, apiKey }),
   });
 }
 

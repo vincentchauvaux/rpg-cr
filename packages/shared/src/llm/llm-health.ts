@@ -5,6 +5,7 @@ export type LlmCallOutcome =
   | "timeout"
   | "rate_limit"
   | "credits"
+  | "auth"
   | "context"
   | "empty"
   | "unreachable"
@@ -134,9 +135,20 @@ export function parseLlmQuotaFromHeaders(
   return mergeLlmQuota({ limit, used, remaining, retryAfterMs });
 }
 
+const AUTH_FAILURE_RE =
+  /LLM 401|Missing Authentication|invalid.?api.?key|Unauthenticated|OPENROUTER_API_KEY manquante|OPENAI_API_KEY manquante|Clé API manquante|manquante côté serveur/i;
+
+export function isLlmAuthError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return AUTH_FAILURE_RE.test(message);
+}
+
 export function classifyLlmFailure(message: string): LlmCallOutcome {
   if (/Délai dépassé|TimeoutError|timed out|timeout/i.test(message)) {
     return "timeout";
+  }
+  if (AUTH_FAILURE_RE.test(message)) {
+    return "auth";
   }
   if (/LLM 429|rate limit|tokens per minute|\bTPM\b|Please try again in/i.test(message)) {
     return "rate_limit";
@@ -206,6 +218,15 @@ export function formatLlmSilenceDetail(message: string): string {
     return `${head}${extra}${quotaLine ? ` ${quotaLine}` : formatWait(quota?.retryAfterMs)} Puis Réclamer.`;
   }
 
+  if (outcome === "auth") {
+    return (
+      "Clé API absente sur le serveur — ce n'est pas un manque de jetons. " +
+      "Le test god mode peut réussir si la clé n'est que dans le navigateur. " +
+      "Retestez la connexion (la clé est alors gardée en mémoire) ou mettez OPENROUTER_API_KEY dans .env. " +
+      "Le bouton relance le récit via Ollama sur le VPS."
+    );
+  }
+
   if (outcome === "credits") {
     const zero = quota?.remaining === 0;
     return (
@@ -234,6 +255,7 @@ export function llmLastCallShortLabel(call: LlmLastCall): string {
     return "MJ : quota minute";
   }
   if (call.outcome === "credits") return "MJ : crédit 0";
+  if (call.outcome === "auth") return "MJ : clé manquante";
   if (call.outcome === "timeout") return "MJ : délai";
   if (call.outcome === "unreachable") return "MJ : injoignable";
   if (call.outcome === "context") return "MJ : contexte trop long";
@@ -285,7 +307,7 @@ export function buildLlmLastCallFromError(
 ): LlmLastCall {
   const message = error instanceof Error ? error.message : String(error);
   const outcome = classifyLlmFailure(message);
-  const quota = parseLlmQuotaFromText(message);
+  const quota = outcome === "auth" ? undefined : parseLlmQuotaFromText(message);
   const detail = formatLlmSilenceDetail(message);
   return {
     at: input.at ?? Date.now(),
@@ -317,6 +339,8 @@ export type LlmRecoveryPlan = {
   hint: string;
   waitMs: number;
   contextMode?: LlmRecoveryContextMode;
+  /** 401 / clé absente : ne pas rejouer OpenRouter, passer par Ollama. */
+  preferLocal?: boolean;
 };
 
 /** Action adaptée au silence MJ (bouton dans la pastille). */
@@ -342,6 +366,17 @@ export function llmRecoveryPlan(
       hint: "Le plafond de jetons à la minute se vide tout seul. On relance ensuite avec un récit plus court.",
       waitMs,
       contextMode: "micro",
+    };
+  }
+
+  if (outcome === "auth") {
+    return {
+      kind: "reclaim",
+      label: "Relancer via Ollama (VPS)",
+      hint: "La clé OpenRouter n'est pas envoyée au récit (souvent seulement au test). On bascule sur Ollama local plutôt que de rejouer le même 401.",
+      waitMs: 0,
+      contextMode: "micro",
+      preferLocal: true,
     };
   }
 

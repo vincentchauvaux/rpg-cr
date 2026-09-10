@@ -382,7 +382,7 @@ async function maybeExtractFacts(
       messageId,
       mjContent,
       room.llmConfig!,
-      resolveRoomApiKey(room.llmConfig)
+      resolveRoomApiKey(room.llmConfig, undefined, roomId)
     );
   });
 }
@@ -425,7 +425,7 @@ async function maybeExtractScene(
       messageId,
       mjContent,
       room.llmConfig!,
-      resolveRoomApiKey(room.llmConfig)
+      resolveRoomApiKey(room.llmConfig, undefined, roomId)
     );
     if (scene) broadcastScene(roomId, scene);
     else await runLightBootstrap();
@@ -446,7 +446,7 @@ async function maybeExtractArc(
       roomId,
       mjContent,
       room.llmConfig!,
-      resolveRoomApiKey(room.llmConfig)
+      resolveRoomApiKey(room.llmConfig, undefined, roomId)
     );
   });
 }
@@ -460,6 +460,7 @@ type ExecuteAutoMjOpts = {
   narrativePhase?: MjNarrativePhase;
   source?: string;
   preferredContextMode?: "full" | "slim" | "micro";
+  forceLocalFallback?: boolean;
 };
 
 function endNarrativeMjThinking(roomId: string, execOpts: ExecuteAutoMjOpts): void {
@@ -526,8 +527,8 @@ async function executeAutoMj(
           roomId,
           room.llmConfig!,
           prompt,
-          resolveRoomApiKey(room.llmConfig),
-          { speakingPlayerId, responseLocale, omitSpeakingPlayerSheet, preferredContextMode: execOpts.preferredContextMode }
+          resolveRoomApiKey(room.llmConfig, undefined, roomId),
+          { speakingPlayerId, responseLocale, omitSpeakingPlayerSheet, preferredContextMode: execOpts.preferredContextMode, forceLocalFallback: execOpts.forceLocalFallback }
         );
       recordLlmLastCall(
         roomId,
@@ -678,7 +679,8 @@ export function requestPlayerMjTrigger(
   playerId: string,
   type: MjPlayerTriggerType,
   optionalText?: string,
-  preferredContextMode?: "slim" | "micro"
+  preferredContextMode?: "slim" | "micro",
+  forceLocalFallback?: boolean
 ): { ok: true } | { ok: false; error: string } {
   const room = getRoomById(roomId);
   if (!room?.llmConfig) {
@@ -710,6 +712,7 @@ export function requestPlayerMjTrigger(
     narrativePhase: "turn",
     source: `player:${type}`,
     preferredContextMode,
+    forceLocalFallback,
   });
   return { ok: true };
 }
@@ -1153,7 +1156,7 @@ export function scheduleAiPuppetGeneration(roomId: string, player: Player): void
           roomId,
           room.llmConfig!,
           prompt,
-          resolveRoomApiKey(room.llmConfig)
+          resolveRoomApiKey(room.llmConfig, undefined, roomId)
         );
         if (scenePatch) {
           const scene = applySceneUpdate(roomId, scenePatch, null, {

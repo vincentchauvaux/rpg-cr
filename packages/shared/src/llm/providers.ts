@@ -2,6 +2,7 @@ import { getCatalogEntry, isOpenRouterProvider } from "./catalog.js";
 import { estimatePromptChars, resolveLlmTimeoutMs, isLlmRateLimitError, parseLlmRetryAfterMs, resolveMjMaxTokens } from "./context-budget.js";
 import {
   appendQuotaToLlmError,
+  isLlmAuthError,
   parseLlmQuotaFromHeaders,
   parseLlmQuotaFromText,
   parseLlmUsage,
@@ -18,8 +19,9 @@ import {
   inferLocalLlmBackend,
   localLlmBackendLabel,
   isLikelyCloudMarketModelId,
+  DEFAULT_OLLAMA_MODEL,
 } from "./local-llm.js";
-import { normalizeLmStudioV1BaseUrl, resolveLmStudioServerBaseUrl } from "./lmstudio-url.js";
+import { resolveLmStudioServerBaseUrl } from "./lmstudio-url.js";
 import { LLM_TASK_PROFILES, resolveTaskModelId, type LlmTaskKind } from "./task-profile.js";
 import {
   fallbackProviderConfig,
@@ -62,6 +64,8 @@ export interface LlmProviderOptions {
   temperature?: number;
   /** `response_format: json_object` — retry sans le champ si 400 */
   jsonMode?: boolean;
+  /** 401 / bouton pastille : sauter le cloud et parler à Ollama. */
+  forceLocalFallback?: boolean;
 }
 
 type AssistantMessage = {
@@ -173,6 +177,19 @@ export function formatLlmHttpError(
     baseUrl.includes("127.0.0.1") ||
     baseUrl.includes("localhost") ||
     baseUrl.includes("host.docker.internal");
+
+  if (
+    status === 401 ||
+    /missing authentication|invalid api key|unauthenticated/i.test(
+      `${errMsg ?? ""} ${bodyText}`
+    )
+  ) {
+    return (
+      `LLM 401 (${modelId}) : clé API absente ou refusée (Missing Authentication). ` +
+      "Ce n'est pas un quota de jetons. Retestez en god mode (la clé est gardée en mémoire) " +
+      "ou renseignez OPENROUTER_API_KEY dans .env sur le VPS."
+    );
+  }
 
   if (status === 404 || errCode === "model_not_found") {
     if (!isLocalUrl) {
@@ -388,10 +405,13 @@ async function openAiCompatibleChatOnce(
         false
       );
     }
-    const quota = mergeLlmQuota(
-      parseLlmQuotaFromHeaders(res.headers),
-      parseLlmQuotaFromText(bodyText)
-    );
+    const quota =
+      res.status === 401
+        ? undefined
+        : mergeLlmQuota(
+            parseLlmQuotaFromHeaders(res.headers),
+            parseLlmQuotaFromText(bodyText)
+          );
     return {
       ok: false,
       empty: false,
@@ -568,6 +588,40 @@ function resolveLmStudioFallbackModelId(
   return id;
 }
 
+function buildLocalFallbackConfig(
+  originalConfig: LlmRoomConfig,
+  lmStudioBaseUrl?: string
+): LlmRoomConfig | null {
+  const base = resolveLmStudioServerBaseUrl(
+    originalConfig,
+    lmStudioBaseUrl ?? process.env.LM_STUDIO_BASE_URL
+  );
+  const backend = inferLocalLlmBackend(base);
+  if (backend === "ollama") {
+    return {
+      ...originalConfig,
+      providerId: "ollama",
+      modelId: DEFAULT_OLLAMA_MODEL,
+      toolModelId: undefined,
+      baseUrl: base,
+      useFallbackLmStudio: false,
+    };
+  }
+  const modelId = resolveLmStudioFallbackModelId(
+    originalConfig.modelId,
+    originalConfig
+  );
+  if (!modelId) return null;
+  return {
+    ...originalConfig,
+    providerId: "lmstudio",
+    modelId,
+    toolModelId: undefined,
+    baseUrl: base,
+    useFallbackLmStudio: false,
+  };
+}
+
 type ChatRunOptions = {
   timeoutMs: number;
   retryOnEmpty: boolean;
@@ -606,7 +660,11 @@ async function completeAgainstConfig(
     ? resolveServerAiApiKey(config.providerId)
     : resolveServerAiApiKey(config.providerId, requestApiKey);
 
-  if (usesServerOnlyApiKey(config.providerId) && !apiKey) {
+  if (
+    !isLocalLlmProvider(config.providerId) &&
+    (usesServerOnlyApiKey(config.providerId) || entry.requiresApiKey) &&
+    !apiKey
+  ) {
     throw new Error(missingServerApiKeyError(config.providerId));
   }
 
@@ -672,6 +730,47 @@ export async function completeChat(
     jsonMode,
   };
 
+  const runLocalFallback = async (
+    priorError: unknown,
+    priorProvider?: string
+  ): Promise<LlmCompletionResult> => {
+    const localCfg = buildLocalFallbackConfig(config, options.lmStudioBaseUrl);
+    if (!localCfg) {
+      if (priorProvider) {
+        throw formatChainedLlmFailure(priorError, priorProvider, new Error("aucun LLM local"));
+      }
+      throw priorError;
+    }
+    try {
+      const localMax = resolveMjMaxTokens(localCfg.providerId, localCfg.modelId);
+      const result = await completeAgainstConfig(
+        localCfg,
+        messages,
+        options,
+        {
+          ...chatOptions,
+          maxTokens: Math.min(chatOptions.maxTokens, localMax),
+          retryOnEmpty: true,
+          retryOnTimeout: true,
+          timeoutMs: resolveLlmTimeoutMs(localCfg.providerId, estimatedChars),
+        }
+      );
+      return { ...result, usedFallback: true };
+    } catch (localError) {
+      throw formatChainedLlmFailure(
+        priorError,
+        localCfg.providerId,
+        localError
+      );
+    }
+  };
+
+  if (options.forceLocalFallback) {
+    return runLocalFallback(
+      new Error("Relance demandée via LLM local (Ollama / LM Studio).")
+    );
+  }
+
   let primaryError: unknown;
   try {
     const result = await completeAgainstConfig(
@@ -718,7 +817,14 @@ export async function completeChat(
     }
   }
 
-  if (!config.useFallbackLmStudio || isLocalLlmProvider(effective.providerId)) {
+  const authFail =
+    isLlmAuthError(primaryError) ||
+    (namedFallbackError != null && isLlmAuthError(namedFallbackError));
+  const allowLocal =
+    !isLocalLlmProvider(effective.providerId) &&
+    (authFail || Boolean(config.useFallbackLmStudio));
+
+  if (!allowLocal) {
     if (namedFallback && namedFallbackError) {
       throw formatChainedLlmFailure(
         primaryError,
@@ -729,35 +835,18 @@ export async function completeChat(
     throw primaryError;
   }
 
-  const fallbackModelId = resolveLmStudioFallbackModelId(
-    resolveTaskModelId(effective, taskKind),
-    config
+  const prior =
+    namedFallback && namedFallbackError
+      ? formatChainedLlmFailure(
+          primaryError,
+          namedFallback.providerId,
+          namedFallbackError
+        )
+      : primaryError;
+  return runLocalFallback(
+    prior,
+    namedFallback?.providerId
   );
-  if (!fallbackModelId) {
-    throw primaryError;
-  }
-
-  const fallbackBase = normalizeLmStudioV1BaseUrl(
-    options.lmStudioBaseUrl ?? "http://127.0.0.1:1234/v1"
-  );
-  const payload = await openAiCompatibleChat(
-    fallbackBase,
-    undefined,
-    fallbackModelId,
-    messages,
-    {
-      ...chatOptions,
-      retryOnEmpty: true,
-      retryOnTimeout: true,
-      extraHeaders: {},
-    }
-  );
-  return {
-    ...payload,
-    providerId: "lmstudio",
-    modelId: fallbackModelId,
-    usedFallback: true,
-  };
 }
 
 /** Alias récit — `completeChat` avec kind narration. */

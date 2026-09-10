@@ -96,7 +96,7 @@ export async function introducePlayerInStory(
   } else {
     content = await generateSelfIntroduction(
       player,
-      resolveRoomApiKey(getRoomById(player.roomId)?.llmConfig)
+      resolveRoomApiKey(getRoomById(player.roomId)?.llmConfig, undefined, player.roomId)
     );
   }
 
