@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-09 (Dire + @PNJ : réaction in-character ; **scroll début message MJ** ; **choix cliquables persistants** ; **cohérence spatiale renforcée** ; **sync auto graines Google**)
+> Dernière mise à jour : 2026-09-10 (**DD adapté difficulté action** ; **interface chat libérée** ; sync auto graines Google ; scroll début message MJ ; choix cliquables persistants ; cohérence spatiale)
 
 ## Vision
 
@@ -134,7 +134,7 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 - **Rôle** : conseiller intime du PJ (pas le MJ public de table) — réponses privées, **non** diffusées dans le fil de récit.
 - **API** : `POST /api/players/:playerId/hero-assistant` — `{ actorPlayerId, question, mode?: "creation" | "play" }` ; le joueur ne peut interroger que **sa propre** fiche.
 - **Contexte** : fiche complète ; en jeu (`play`) : canon établi + **12** derniers messages publics du salon ; prompt `hero-assistant-prompt.ts` — n’invente pas ; si info inconnue, indique **comment la obtenir en jeu**.
-- **UI** : `HeroAssistantPanel` — wizard (étape fiche) + sous le compositeur chat en partie (`mode=play`, tous les joueurs avec fiche prête) ; **réduit par défaut** (bouton « Afficher ») ; **Entrée** envoie ; mentions **@** comme le chat ; bordure animée pendant la réponse ; markdown sur les réponses.
+- **UI** : `HeroAssistantPanel` — wizard (étape fiche) + **onglet Aide du dock** en partie (`mode=play`, tous les joueurs avec fiche prête) ; **réduit par défaut** (bouton « Afficher ») ; **Entrée** envoie ; mentions **@** comme le chat ; bordure animée pendant la réponse ; markdown sur les réponses. **Plus d'affichage inline** sous le chat (libère l'espace de saisie).
 - **Legacy** : `POST …/character/ask-mj` délègue au même moteur (`mode=creation`).
 
 ### Continuité narrative / canon (anti-invention MJ)
@@ -875,6 +875,52 @@ La carte n'est chargée en state client **que** si god mode actif.
 - **MJ** : répond dans la langue du joueur qui a déclenché le tour (`preferredLocale` du dernier locuteur debounce).
 - **Fiche PJ (IA)** : `generate-field` / `generate-section` / `generate-all` / `ask-mj` utilisent la locale de l'**acteur** (`actorPlayerId`), pas celle de la cible.
 - Pas de traduction de ses propres messages ; sans LLM : clic 🌐 → tooltip « MJ non configuré » (pas d'appel auto au chargement).
+
+## Correctifs 2026-09-10
+
+### DD adapté à la difficulté de l'action
+
+**Problème** : Les jets de caractéristique utilisaient toujours le même DD (généralement 12) basé uniquement sur la tension de scène, sans tenir compte de la difficulté intrinsèque de l'action décrite par le MJ.
+
+**Solution** : Ajout d'une fonction `detectDifficultyModifier` qui analyse le texte du choix et détecte les mots-clés indiquant la difficulté :
+
+- **Très difficile** (+3 au DD) : "très difficile", "extrêmement difficile", "quasi impossible", "presque impossible", "hautement dangereux"
+- **Difficile** (+2 au DD) : "difficile", "compliqué", "risqué", "dangereux", "périlleux", "délicat", "ardu"
+- **Un peu difficile** (+1 au DD) : "un peu difficile", "légèrement difficile", "pas évident", "pas simple", "assez compliqué"
+- **Facile** (-2 au DD) : "facile", "simple", "aisé", "évident", "sans problème"
+- **Très facile** (-3 au DD) : "très facile", "extrêmement facile", "trivial", "enfantin"
+
+Le DD final est calculé ainsi : `DD = baseDc (selon tension) + modificateur difficulté`, avec un minimum de 8 et un maximum de 20.
+
+**Fichier modifié** : `packages/shared/src/scene-choice.ts`
+
+```typescript
+function detectDifficultyModifier(text: string): number {
+  // Détecte "difficile", "compliqué", "risqué", etc.
+  // et retourne un modificateur de -3 à +3
+}
+
+export function inferSceneCheck(choice: string, tension = 0): SceneCheckSpec {
+  const { dc: baseDc, worldMod } = tensionToDcAndWorldMod(tension);
+  const difficultyMod = detectDifficultyModifier(choice);
+  const dc = Math.max(8, Math.min(20, baseDc + difficultyMod));
+  // ...
+}
+```
+
+### Interface chat comprimée par l'aide personnelle
+
+**Problème** : L'aide personnelle du héros s'affichait inline sous le compositeur de chat, comprimant l'espace de saisie même quand elle était repliée. Cela rendait la zone de texte minuscule sur mobile.
+
+**Solution** : Suppression de l'affichage inline de l'aide personnelle. Elle reste accessible via l'**onglet "Aide"** du dock de navigation en bas/haut de l'écran. Cela libère complètement l'espace du chat pour la saisie.
+
+**Changement** :
+- Avant : `showAssistantInline = isMainView && Boolean(session && hasLlmConfig && me && chatReady && !chatLogExpanded)`
+- Après : `showAssistantInline = false` (désactivé définitivement)
+
+L'aide personnelle reste pleinement fonctionnelle dans son onglet dédié du dock.
+
+**Fichier modifié** : `apps/web/src/components/RoomView.tsx`
 
 ## Correctifs 2026-09-09
 

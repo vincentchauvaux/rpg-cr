@@ -1197,9 +1197,9 @@ export function RoomView({ code }: Props) {
   const showSheetSection = roomSideTab === "sheet" && showCharacterSheet;
   const showSettingsSection = roomSideTab === "settings";
   const showAssistantFocused = roomSideTab === "assistant";
-  const showAssistantInline =
-    isMainView &&
-    Boolean(session && hasLlmConfig && me && chatReady && !chatLogExpanded);
+  // Supprimé : affichage inline de l'aide personnelle pour libérer l'espace chat
+  // L'aide reste accessible via l'onglet "Aide" du dock
+  const showAssistantInline = false;
   const isAdminGod = isAdmin && adminOpen;
   const visibleMessages = filterMessagesForViewer(messages, isAdminGod);
   const liveChoiceMessage = useMemo(

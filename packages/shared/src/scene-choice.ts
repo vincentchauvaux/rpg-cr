@@ -96,6 +96,38 @@ function tensionToDcAndWorldMod(tension: number): { dc: number; worldMod: number
   return { dc: 10, worldMod: 1 };
 }
 
+/** Détecte les indices de difficulté dans le texte et ajuste le DD. */
+function detectDifficultyModifier(text: string): number {
+  const normalized = normalizeForMatch(text);
+  
+  // Très difficile : +3 au DD
+  if (/\b(très difficile|extrêmement difficile|quasi impossible|presque impossible|hautement dangereux)\b/iu.test(text)) {
+    return 3;
+  }
+  
+  // Difficile : +2 au DD
+  if (/\b(difficile|compliqué|risqué|dangereux|périlleux|délicat|ardu)\b/iu.test(text)) {
+    return 2;
+  }
+  
+  // Un peu difficile : +1 au DD
+  if (/\b(un peu difficile|légèrement difficile|pas évident|pas simple|assez compliqué)\b/iu.test(text)) {
+    return 1;
+  }
+  
+  // Facile : -2 au DD
+  if (/\b(facile|simple|aisé|évident|sans problème)\b/iu.test(text)) {
+    return -2;
+  }
+  
+  // Très facile : -3 au DD
+  if (/\b(très facile|extrêmement facile|trivial|enfantin)\b/iu.test(text)) {
+    return -3;
+  }
+  
+  return 0;
+}
+
 type AbilityHint = {
   ability: StatKey;
   skillHint: string;
@@ -203,7 +235,9 @@ export function inferSceneCheck(
   choice: string,
   tension = 0
 ): SceneCheckSpec {
-  const { dc, worldMod } = tensionToDcAndWorldMod(tension);
+  const { dc: baseDc, worldMod } = tensionToDcAndWorldMod(tension);
+  const difficultyMod = detectDifficultyModifier(choice);
+  const dc = Math.max(8, Math.min(20, baseDc + difficultyMod));
   const normalized = normalizeForMatch(choice);
 
   for (const hint of ABILITY_HINTS) {
