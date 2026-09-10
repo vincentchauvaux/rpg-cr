@@ -8,6 +8,8 @@ import {
   DEFAULT_GROQ_MODEL,
   DEFAULT_GROQ_TOOL_MODEL,
   GROQ_CHAT_MODEL_CANDIDATES,
+  initialMjContextModeForConfig,
+  isLlmQuotaOrCreditError,
   isLlmTimeoutError,
   parseLlmRetryAfterMs,
   resolveMjMaxTokens,
@@ -339,6 +341,100 @@ test("AI_FALLBACK_PROVIDER=gemini après échec Groq", async () => {
   assert.equal(result.providerId, "gemini");
   assert.equal(result.usedFallback, true);
   assert.equal(result.content, "OK fallback");
+});
+
+test("OpenRouter : outils = même modèle que le récit (pas gpt-4o-mini silencieux)", () => {
+  const effective = applyEnvAiOverride(localRoom, {
+    provider: "openrouter",
+    model: "google/gemini-3.8-flash",
+    fallbackProvider: "groq",
+  });
+  assert.equal(effective.providerId, "openrouter");
+  assert.equal(effective.modelId, "google/gemini-3.8-flash");
+  assert.equal(effective.toolModelId, "google/gemini-3.8-flash");
+});
+
+test("si Groq est le secours, le MJ part déjà en prompt slim", () => {
+  assert.equal(
+    initialMjContextModeForConfig("openrouter", "google/gemini-3.8-flash", "groq"),
+    "slim"
+  );
+  assert.equal(
+    initialMjContextModeForConfig("groq", "openai/gpt-oss-20b"),
+    "slim"
+  );
+});
+
+test("quota / plafond de clé détecté (test court ≠ récit MJ)", () => {
+  assert.equal(
+    isLlmQuotaOrCreditError(
+      new Error("LLM 403 (google/gemini-3.8-flash) : Key limit exceeded")
+    ),
+    true
+  );
+  assert.equal(
+    isLlmQuotaOrCreditError(new Error("LLM 429 rate limit TPM")),
+    false
+  );
+});
+
+test("secours Groq : max_tokens plafonné (TPM)", async () => {
+  process.env.GEMINI_API_KEY = "test-gemini-key-unit";
+  process.env.GROQ_API_KEY = "test-groq-key-unit";
+  process.env.AI_PROVIDER = "gemini";
+  process.env.AI_FALLBACK_PROVIDER = "groq";
+  process.env.AI_MODEL = DEFAULT_GEMINI_MODEL;
+  let groqMax = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes("generativelanguage.googleapis.com")) {
+      return errorResponse(403, "Key limit exceeded");
+    }
+    if (url.includes("api.groq.com")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { max_tokens?: number };
+      groqMax = body.max_tokens ?? 0;
+      return chatResponse("OK groq slim");
+    }
+    throw new Error(`URL inattendue: ${url}`);
+  };
+
+  const result = await completeChat(
+    { ...localRoom, useFallbackLmStudio: false },
+    [{ role: "user", content: "OK" }],
+    { taskKind: "narration", maxTokens: 2048 }
+  );
+  assert.equal(result.providerId, "groq");
+  assert.equal(result.usedFallback, true);
+  assert.ok(groqMax > 0 && groqMax <= 1536, `max_tokens Groq trop haut: ${groqMax}`);
+});
+
+test("primary + secours en échec : les deux erreurs sont visibles", async () => {
+  process.env.GEMINI_API_KEY = "test-gemini-key-unit";
+  process.env.GROQ_API_KEY = "test-groq-key-unit";
+  process.env.AI_PROVIDER = "gemini";
+  process.env.AI_FALLBACK_PROVIDER = "groq";
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("generativelanguage.googleapis.com")) {
+      return errorResponse(403, "Key limit exceeded");
+    }
+    return errorResponse(429, "Rate limit reached tokens per minute. Please try again in 0.05s.");
+  };
+
+  await assert.rejects(
+    () =>
+      completeChat(
+        { ...localRoom, useFallbackLmStudio: false },
+        [{ role: "user", content: "OK" }]
+      ),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /403|Key limit/i);
+      assert.match(error.message, /secours groq/i);
+      assert.match(error.message, /429|rate limit/i);
+      return true;
+    }
+  );
 });
 
 test(

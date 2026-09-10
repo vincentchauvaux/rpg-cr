@@ -161,7 +161,7 @@ export function applyEnvAiOverride(
     ...config,
     providerId: provider,
     modelId: model,
-    toolModelId: defaultToolModelId(entry) || config.toolModelId,
+    toolModelId: settings.toolModel?.trim() || model,
     baseUrl: entry?.defaultBaseUrl ?? config.baseUrl,
   };
 }

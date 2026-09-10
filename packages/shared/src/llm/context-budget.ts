@@ -90,6 +90,14 @@ export function isLlmRateLimitError(error: unknown): boolean {
   );
 }
 
+/** Crédit / plafond de clé / géo — le ping court peut encore passer. */
+export function isLlmQuotaOrCreditError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /LLM 402|LLM 403|key limit|credit|quota exceeded|insufficient.?credits|payment required|User location is not supported/i.test(
+    error.message
+  );
+}
+
 /** Groq inclut `max_tokens` dans le TPM : attendre le délai annoncé (ex. 8.52s). */
 export function parseLlmRetryAfterMs(message: string, fallbackMs = 8_000): number {
   const m =

@@ -586,6 +586,17 @@ async function completeAgainstConfig(
   return { content, providerId: config.providerId, modelId };
 }
 
+function formatChainedLlmFailure(
+  primary: unknown,
+  fallbackProvider: string,
+  fallbackError: unknown
+): Error {
+  const first = primary instanceof Error ? primary.message : String(primary);
+  const second =
+    fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+  return new Error(`${first} — puis secours ${fallbackProvider} : ${second}`);
+}
+
 export async function completeChat(
   config: LlmRoomConfig,
   messages: ChatCompletionMessage[],
@@ -643,7 +654,15 @@ export async function completeChat(
     envAi.fallbackProvider ?? "",
     effective
   );
+  let namedFallbackError: unknown;
   if (namedFallback) {
+    const fallbackMax =
+      namedFallback.providerId === "groq"
+        ? Math.min(
+            chatOptions.maxTokens,
+            resolveMjMaxTokens("groq", namedFallback.modelId)
+          )
+        : chatOptions.maxTokens;
     try {
       const result = await completeAgainstConfig(
         namedFallback,
@@ -651,18 +670,26 @@ export async function completeChat(
         options,
         {
           ...chatOptions,
-          retryOnEmpty: false,
+          maxTokens: fallbackMax,
+          retryOnEmpty: isReasoningChatModelId(namedFallback.modelId),
           retryOnTimeout: false,
         },
         options.apiKey
       );
       return { ...result, usedFallback: true };
-    } catch {
-      /* dernier recours : LM Studio / Ollama local */
+    } catch (error) {
+      namedFallbackError = error;
     }
   }
 
   if (!config.useFallbackLmStudio || isLocalLlmProvider(effective.providerId)) {
+    if (namedFallback && namedFallbackError) {
+      throw formatChainedLlmFailure(
+        primaryError,
+        namedFallback.providerId,
+        namedFallbackError
+      );
+    }
     throw primaryError;
   }
 

@@ -78,11 +78,13 @@ export function initialMjContextModeForModel(modelId: string): "full" | "slim" |
   return "full";
 }
 
-/** Groq free : prompt slim pour rester sous ~8–12k TPM. */
+/** Groq free : prompt slim. Idem si Groq est le secours (OpenRouter/Gemini peuvent tomber dessus). */
 export function initialMjContextModeForConfig(
   providerId: string,
-  modelId: string
+  modelId: string,
+  fallbackProvider?: string | null
 ): "full" | "slim" | "micro" {
-  if (providerId === "groq") return "slim";
+  const fallback = fallbackProvider?.trim().toLowerCase();
+  if (providerId === "groq" || fallback === "groq") return "slim";
   return initialMjContextModeForModel(modelId);
 }

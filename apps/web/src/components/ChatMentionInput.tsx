@@ -6,7 +6,10 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ChangeEvent,
   type KeyboardEvent,
+  type MouseEvent,
+  type SyntheticEvent,
 } from "react";
 import {
   applyMentionSelection,
@@ -27,6 +30,8 @@ function mentionMetaLine(c: MentionCandidate): string {
   }
 }
 
+const TEXTAREA_MAX_PX = 192;
+
 interface Props {
   value: string;
   onChange: (value: string) => void;
@@ -35,6 +40,9 @@ interface Props {
   disabled?: boolean;
   placeholder?: string;
   className?: string;
+  /** Zone de jeu : plusieurs lignes, hauteur mini réservée. */
+  multiline?: boolean;
+  rows?: number;
 }
 
 export function ChatMentionInput({
@@ -45,8 +53,10 @@ export function ChatMentionInput({
   disabled,
   placeholder,
   className,
+  multiline = false,
+  rows = 4,
 }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLUListElement>(null);
   const [cursor, setCursor] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -72,9 +82,20 @@ export function ChatMentionInput({
     []
   );
 
+  const autosize = useCallback(() => {
+    const el = inputRef.current;
+    if (!multiline || !el || el.tagName !== "TEXTAREA") return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_PX)}px`;
+  }, [multiline]);
+
   useLayoutEffect(() => {
     syncMentionState(value, cursor);
   }, [value, cursor, syncMentionState]);
+
+  useLayoutEffect(() => {
+    autosize();
+  }, [value, disabled, autosize]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -110,7 +131,9 @@ export function ChatMentionInput({
     syncMentionState(text, pos);
   }
 
-  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+  function handleKeyDown(
+    e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) {
     if (menuOpen && filtered.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -133,14 +156,41 @@ export function ChatMentionInput({
         return;
       }
     }
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       onSubmit();
     }
   }
 
+  const fieldClassName = [className, multiline ? "chat-compose-input" : null]
+    .filter(Boolean)
+    .join(" ");
+
+  const sharedProps = {
+    ref: inputRef as never,
+    value,
+    onChange: (
+      e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    ) => handleChange(e.target.value),
+    onKeyDown: handleKeyDown,
+    onSelect: (e: SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const t = e.target as HTMLInputElement | HTMLTextAreaElement;
+      setCursor(t.selectionStart ?? 0);
+    },
+    onClick: (e: MouseEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const t = e.target as HTMLInputElement | HTMLTextAreaElement;
+      setCursor(t.selectionStart ?? 0);
+    },
+    disabled,
+    placeholder,
+    className: fieldClassName,
+    "aria-autocomplete": "list" as const,
+    "aria-expanded": menuOpen && filtered.length > 0,
+    "aria-controls": menuOpen ? "chat-mention-listbox" : undefined,
+  };
+
   return (
-    <div className="chat-mention-field">
+    <div className={multiline ? "chat-mention-field chat-mention-field--compose" : "chat-mention-field"}>
       {menuOpen && filtered.length > 0 ? (
         <ul
           ref={menuRef}
@@ -179,26 +229,15 @@ export function ChatMentionInput({
           Aucun personnage pour « @{query} »
         </p>
       ) : null}
-      <input
-        ref={inputRef}
-        value={value}
-        onChange={(e) => handleChange(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onSelect={(e) => {
-          const t = e.target as HTMLInputElement;
-          setCursor(t.selectionStart ?? 0);
-        }}
-        onClick={(e) => {
-          const t = e.target as HTMLInputElement;
-          setCursor(t.selectionStart ?? 0);
-        }}
-        disabled={disabled}
-        placeholder={placeholder}
-        className={className}
-        aria-autocomplete="list"
-        aria-expanded={menuOpen && filtered.length > 0}
-        aria-controls={menuOpen ? "chat-mention-listbox" : undefined}
-      />
+      {multiline ? (
+        <textarea
+          {...sharedProps}
+          rows={rows}
+          enterKeyHint="send"
+        />
+      ) : (
+        <input {...sharedProps} />
+      )}
     </div>
   );
 }

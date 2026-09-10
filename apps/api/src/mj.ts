@@ -10,10 +10,14 @@ import {
   initialMjContextModeForConfig,
   isContextLengthLlmError,
   isLlmTimeoutError,
+  isLlmRateLimitError,
+  isLlmQuotaOrCreditError,
   isReasoningChatModelId,
   formatSmallContextModelHint,
   mjContextLimits,
+  parseLlmRetryAfterMs,
   preflightLmStudioForMj,
+  readEnvAiSettings,
   resolveEffectiveLlmConfig,
   resolveMjMaxTokens,
   resolveLlmTimeoutMs,
@@ -241,6 +245,18 @@ async function completeMjWithTimeout(
   });
 }
 
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function nextSlimmerMjMode(
+  mode: import("@rpg-cr/shared").MjContextMode
+): import("@rpg-cr/shared").MjContextMode | null {
+  if (mode === "full") return "slim";
+  if (mode === "slim") return "micro";
+  return null;
+}
+
 export async function runMjTurn(
   roomId: string,
   config: LlmRoomConfig,
@@ -261,8 +277,13 @@ export async function runMjTurn(
   }
 
   const effective = resolveEffectiveLlmConfig(config);
+  const envAi = readEnvAiSettings();
   let mode: import("@rpg-cr/shared").MjContextMode =
-    initialMjContextModeForConfig(effective.providerId, effective.modelId);
+    initialMjContextModeForConfig(
+      effective.providerId,
+      effective.modelId,
+      envAi.fallbackProvider
+    );
   let payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
   devLogMjContext(
     mode,
@@ -279,44 +300,42 @@ export async function runMjTurn(
       apiKey
     );
   } catch (firstError) {
-    if (isContextLengthLlmError(firstError) && mode !== "micro") {
-      mode = "micro";
-      payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
-      devLogMjContext(
-        mode,
-        payload.estimatedChars,
-        resolveLlmTimeoutMs(config.providerId, payload.estimatedChars),
-        "retry after context overflow"
-      );
-      result = await completeMjWithTimeout(
-        config,
-        payload.messages,
-        payload.estimatedChars,
-        apiKey
-      );
-    } else if (isContextLengthLlmError(firstError)) {
+    const slimmer = nextSlimmerMjMode(mode);
+    const canShrinkForQuota =
+      slimmer != null &&
+      (isContextLengthLlmError(firstError) ||
+        isLlmTimeoutError(firstError) ||
+        isLlmRateLimitError(firstError) ||
+        isLlmQuotaOrCreditError(firstError));
+
+    if (isContextLengthLlmError(firstError) && !slimmer) {
       throw new Error(
         `Contexte trop long pour « ${config.modelId} ». ${formatSmallContextModelHint(config.modelId)}`
       );
-    } else if (isLlmTimeoutError(firstError) && mode === "full") {
-      mode = "slim";
-      payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
-      devLogMjContext(
-        mode,
-        payload.estimatedChars,
-        resolveLlmTimeoutMs(config.providerId, payload.estimatedChars),
-        "retry after timeout"
-      );
+    }
 
-      result = await completeMjWithTimeout(
-        config,
-        payload.messages,
-        payload.estimatedChars,
-        apiKey
-      );
-    } else {
+    if (!canShrinkForQuota || !slimmer) {
       throw firstError;
     }
+
+    if (isLlmRateLimitError(firstError) && firstError instanceof Error) {
+      await sleepMs(Math.min(parseLlmRetryAfterMs(firstError.message), 12_000));
+    }
+
+    mode = slimmer;
+    payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
+    devLogMjContext(
+      mode,
+      payload.estimatedChars,
+      resolveLlmTimeoutMs(effective.providerId, payload.estimatedChars),
+      "retry with smaller prompt"
+    );
+    result = await completeMjWithTimeout(
+      config,
+      payload.messages,
+      payload.estimatedChars,
+      apiKey
+    );
   }
 
   const prepared = prepareMjResponse(result.content);
@@ -345,13 +364,14 @@ export async function testLlmConnection(
   ];
 
   const estimatedChars = estimatePromptChars(messages);
+  const effective = resolveEffectiveLlmConfig(config);
   const result = await completeChat(config, messages, {
     apiKey,
     lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-    timeoutMs: resolveLlmTimeoutMs(config.providerId, estimatedChars),
-    maxTokens: isReasoningChatModelId(config.modelId) ? 128 : 24,
+    timeoutMs: resolveLlmTimeoutMs(effective.providerId, estimatedChars),
+    maxTokens: isReasoningChatModelId(effective.modelId) ? 128 : 48,
     retryOnEmpty: true,
-    taskKind: "tool",
+    taskKind: "narration",
   });
 
   return {

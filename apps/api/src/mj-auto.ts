@@ -717,6 +717,19 @@ function formatMjFailureDetail(err: unknown): string {
       `${msg} Si le modèle est READY dans LM Studio, réessayez **Réclamer** (une seconde tentative allège le contexte).`
     );
   }
+  if (/key limit|LLM 402|insufficient.?credits|payment required/i.test(msg)) {
+    return (
+      "Le récit MJ est plus lourd que le test de connexion (une phrase). " +
+      "Le fournisseur cloud a refusé le tour (crédit ou plafond de clé). " +
+      "Vérifiez OpenRouter / la clé serveur, attendez une minute, puis Réclamer."
+    );
+  }
+  if (/LLM 429|rate limit|tokens per minute|\bTPM\b/i.test(msg)) {
+    return (
+      "Le MJ a saturé le quota à la minute (Groq compte aussi les tokens du prompt). " +
+      "Attendez ~10 s puis Réclamer — le test court n'utilise pas le même budget."
+    );
+  }
   return msg;
 }
 

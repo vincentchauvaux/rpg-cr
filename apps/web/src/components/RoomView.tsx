@@ -1603,6 +1603,7 @@ export function RoomView({ code }: Props) {
             </div>
           ) : (
             <>
+            <div className="chat-composer">
               <div className="speech-mode-row" role="group" aria-label="Mode d'envoi">
                 <button
                   type="button"
@@ -1651,6 +1652,8 @@ export function RoomView({ code }: Props) {
 
               <div className="chat-form">
                 <ChatMentionInput
+                  multiline
+                  rows={4}
                   value={input}
                   onChange={setInput}
                   onSubmit={sendChat}
@@ -1659,9 +1662,11 @@ export function RoomView({ code }: Props) {
                   placeholder={
                     needsCharacter
                       ? "Création du personnage requise…"
-                      : speechMode === "say"
-                        ? "Votre parole au conseil… (@ pour mentionner)"
-                        : "Décrivez le geste… (@ pour mentionner)"
+                      : mjPromptBusy
+                        ? "Le MJ prépare la suite de la scène…"
+                        : speechMode === "say"
+                          ? "Votre parole, une question, un aparté… (@ pour un PNJ)"
+                          : "Décrivez le geste, le regard, le risque… (@ pour mentionner)"
                   }
                   className={speechMode === "action" ? "input-action" : "input-say"}
                 />
@@ -1722,16 +1727,13 @@ export function RoomView({ code }: Props) {
                     </button>
                   )}
                 </div>
-                {reclaimError ? (
-                  <p
-                    className="reclaim-error"
-                    role="alert"
-                    style={{ color: "var(--danger)", margin: "0.5rem 0 0", fontSize: "0.9rem" }}
-                  >
-                    {reclaimError}
-                  </p>
-                ) : null}
               </div>
+              {reclaimError ? (
+                <p className="reclaim-error" role="alert">
+                  {reclaimError}
+                </p>
+              ) : null}
+            </div>
 
               {showAssistantInline && (
                 <HeroAssistantPanel

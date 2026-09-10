@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-10 (**DD adapté difficulté action** ; **interface chat libérée** ; sync auto graines Google ; scroll début message MJ ; choix cliquables persistants ; cohérence spatiale)
+> Dernière mise à jour : 2026-09-10 (**zone de saisie 4 lignes** ; **test LLM = modèle du récit** ; DD adapté difficulté action ; interface chat libérée ; sync auto graines Google)
 
 ## Vision
 
@@ -613,7 +613,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Désactivé** (même flag) : `schedulePlayerIntroFollowUpMj`, `tryIntegrateHumanPlayerInStory`.
 - **Toujours actifs** : `requestPlayerMjTrigger` / `requestHostMjTrigger` (Réclamer, indice, préambule, récap), `scheduleCampaignOpening`, `scheduleCircleMj`, `scheduleAiPuppetGeneration`, routes god mode / `promptMj` HTTP.
 - Réactiver le MJ auto sur **Dire** : `AUTO_MJ_ON_PLAYER_MESSAGES = true` (heuristiques triviaux + banter dans `scheduleAutoMj` ; les actions passent par `scheduleActionMj` ou `scheduleAutoMj` selon le flag, sans double tour).
-- **UI statut MJ** : voyant compact `MjLlmStatusIndicator` (à côté scène) — prêt / vérification / en cours / erreur / injoignable ; poll `GET /api/llm/tunnel-status` ; WS `{ type: "mj_status", thinking, background?, phase? }` — `thinking` = récit narratif : bordure animée sur `.chat-log-wrap--mj-thinking` + ligne `.chat-mj-status` sous le fil (préambule, récap, reclaim inclus) ; `background` = `ScribIndicator` (plume, pas de bordure chat). Envoi / Réclamer bloqués pendant `thinking` narratif (pas pendant `background`). Overlay plein écran : **génération fiche** uniquement (`AiGenerationOverlay` dans `CharacterSheetFillAllButton`). Serveur : `mjThinkingBegin` / `mjThinkingEnd` (`ws-hub.ts`) ; `executeAutoMj` appelle `mjThinkingEnd` **après** `broadcastMessage` (message ou erreur système), pas dans un `finally` qui précéderait le WS `message`. File d'attente si salon `busy` émet quand même `mjThinkingBegin` avant le retry. Client : feedback optimiste au clic Réclamer (`mjPromptPendingRef` + `setMjThinking` + libellé « Réclamer… ») ; tant que `mjPromptPendingRef`, tout `mj_status` avec `thinking: false` est **ignoré** pour l'overlay narratif (seul un message `mj` ou système « Le MJ n'a pas pu répondre… » / erreur HTTP / garde-fou 3 min termine l'attente) ; `refresh` après reconnexion compare les messages depuis le décompte au clic. Garde-fou 3 min si `thinking` bloqué.
+- **UI statut MJ** : voyant compact `MjLlmStatusIndicator` (à côté scène) — prêt / vérification / en cours / erreur / injoignable ; poll `GET /api/llm/tunnel-status` ; WS `{ type: "mj_status", thinking, background?, phase? }` — `thinking` = récit narratif : bordure animée sur `.chat-log-wrap--mj-thinking` + ligne `.chat-mj-status` sous le fil (préambule, récap, reclaim inclus) ; `background` = `ScribIndicator` (plume, pas de bordure chat). Envoi / Réclamer bloqués pendant `thinking` narratif (pas pendant `background`). Overlay plein écran : **génération fiche** uniquement (`AiGenerationOverlay` dans `CharacterSheetFillAllButton`). **Compositeur** : textarea 4 lignes (`.chat-composer`), pas un champ d'une ligne. Serveur : `mjThinkingBegin` / `mjThinkingEnd` (`ws-hub.ts`) ; `executeAutoMj` appelle `mjThinkingEnd` **après** `broadcastMessage` (message ou erreur système), pas dans un `finally` qui précéderait le WS `message`. File d'attente si salon `busy` émet quand même `mjThinkingBegin` avant le retry. Client : feedback optimiste au clic Réclamer (`mjPromptPendingRef` + `setMjThinking` + libellé « Réclamer… ») ; tant que `mjPromptPendingRef`, tout `mj_status` avec `thinking: false` est **ignoré** pour l'overlay narratif (seul un message `mj` ou système « Le MJ n'a pas pu répondre… » / erreur HTTP / garde-fou 3 min termine l'attente) ; `refresh` après reconnexion compare les messages depuis le décompte au clic. Garde-fou 3 min si `thinking` bloqué.
 - **Erreur** : `broadcastMjFailure` dans le chat (tous les joueurs) + bannière / `reclaimError` côté client ; `console.error` serveur avec `source` (`player:reclaim`, `action`, `host:preamble`, …).
 - **Sanitisation réponses** : `prepareMjResponse()` / `formatMjMessageForDisplay()` — retire blocs `<!--scene:…-->` / `<!--arc:…-->` (y compris **tronqués** sans `-->`), parse JSON par accolades équilibrées, variantes `**[MJ] <!--scene:…` ; préfixe écho `[MJ]` / `[VJ]` / `[DIRE]` ; `collapseTrailingPhraseLoop` (fin « Il reste. Il reste. … »). Messages déjà en base : filtre à l'affichage.
 - **Ton MJ** : `system-prompt.ts` — calibration intensité (scène calme = prose sobre, 1–3 ¶ ; pas de pathos ni répétitions) ; builders Réclamer / préambule / ouverture alignés.
@@ -829,7 +829,7 @@ Deux canaux distincts, opt-in séparés, déclenchés uniquement sur événement
 
 - Bordures **vertes** / **rouges** (`--valid` / `--invalid`) au blur ou à la soumission.
 - Section **Connexion MJ (LLM)** : repliée avec titre vert + ✓ après enregistrement réussi ; clic pour rouvrir.
-- **Test LLM** : endpoint `POST /api/rooms/:roomId/llm/test` (god mode) — mini completion `max_tokens` 24 (128 si modèle *reasoning* `gpt-oss` / o-series) ; rejet HTTP **400** si modèle embedding ou **VL** ; liste modèles chat : `GET /api/llm/lmstudio/models?baseUrl=…` (VL filtrés) → appelle **`GET {baseUrl}/models`** avec base normalisée **`/v1`** obligatoire ; messages d'erreur test adaptés au backend (Ollama vs LM Studio via `formatLlmTestError` + `resolveLocalLlmBackend`) ; changement de provider local réinitialise le modèle par défaut (`qwen2.5:7b-instruct` pour Ollama). Cloud : second select **Modèle outils** (`toolModelId`) ; local : même modèle, sampling déterministe. Env prod : **OpenRouter `google/gemini-3.8-flash`** (Gemini Google direct est souvent refusé depuis l’IP OVH) ; Groq `gpt-oss-20b` en secours.
+- **Test LLM** : endpoint `POST /api/rooms/:roomId/llm/test` (god mode) — mini completion **sur le modèle de récit** (`taskKind: narration`, `max_tokens` 48 / 128 si *reasoning*) ; ce n'est **pas** le modèle outils. Un test OK ne garantit pas un tour MJ (prompt beaucoup plus long, quota TPM / crédit). Rejet HTTP **400** si modèle embedding ou **VL** ; liste modèles chat : `GET /api/llm/lmstudio/models?baseUrl=…` (VL filtrés) → appelle **`GET {baseUrl}/models`** avec base normalisée **`/v1`** obligatoire ; messages d'erreur test adaptés au backend (Ollama vs LM Studio via `formatLlmTestError` + `resolveLocalLlmBackend`) ; changement de provider local réinitialise le modèle par défaut (`qwen2.5:7b-instruct` pour Ollama). Cloud : second select **Modèle outils** (`toolModelId`) ; local : même modèle, sampling déterministe. Env prod : **OpenRouter `google/gemini-3.8-flash`** (Gemini Google direct est souvent refusé depuis l’IP OVH) ; Groq `gpt-oss-20b` en secours. **OpenRouter** : sans `AI_TOOL_MODEL`, les outils utilisent **le même id** que le récit (plus de `gpt-4o-mini` silencieux qui faisait passer le test alors que le MJ Flash échouait).
 - **Clé API (god mode)** : champ `#llm-api-key` — `autoComplete="new-password"` (évite l’avertissement Chrome DOM sur les champs `type=password` hors formulaire de connexion).
 
 ## LLM local — timeouts, contexte, préflight
@@ -877,6 +877,26 @@ La carte n'est chargée en state client **que** si god mode actif.
 - Pas de traduction de ses propres messages ; sans LLM : clic 🌐 → tooltip « MJ non configuré » (pas d'appel auto au chargement).
 
 ## Correctifs 2026-09-10
+
+### Zone de saisie trop petite après Réclamer (mobile)
+
+**Problème** : le compositeur était un `<input>` d'une ligne. Après Réclamer, le récit + dock + clavier iOS laissaient une lanière illisible. Déplacer l'aide personnelle n'agrandissait pas le champ.
+
+**Solution** : `ChatMentionInput` en **textarea** 4 lignes (min ~7 rem sur téléphone), hauteur réservée même pendant « Le MJ prépare la suite… ». Entrée envoie, Maj+Entrée pour un saut de ligne. Le journal de récit cède de la hauteur (`max-height: 38dvh`) pour que la plume du joueur reste visible au-dessus du dock.
+
+**Fichiers** : `ChatMentionInput.tsx`, `RoomView.tsx`, `globals.css`
+
+### Test LLM OK, MJ en erreur
+
+**Cause** : le test appelait le **modèle outils** (`gpt-4o-mini` via OpenRouter) avec une phrase ; le récit appelle **Gemini Flash** (ou Groq) avec 8–24k caractères. Ping OK ≠ table jouable. En secours Groq, `max_tokens` restait à 2048 → 429 TPM.
+
+**Solution** :
+- Test = `taskKind: narration` (même modèle que le MJ)
+- OpenRouter : outils = même id que le récit sauf `AI_TOOL_MODEL`
+- Si Groq est le secours, prompt MJ **slim** dès le premier tour ; `max_tokens` Groq plafonné
+- Retry slim/micro sur 429 / crédit / timeout ; message d'échec qui explique le décalage test vs récit
+
+**Fichiers** : `mj.ts`, `mj-auto.ts`, `providers.ts`, `env-ai.ts`, `model-context-tier.ts`, `context-budget.ts`
 
 ### DD adapté à la difficulté de l'action
 
