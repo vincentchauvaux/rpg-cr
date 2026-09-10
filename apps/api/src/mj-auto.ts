@@ -15,6 +15,7 @@ import {
   findMentionedNpcs,
   isTrivialPlayerMessage,
   shouldSkipAutoMjForPlayerBanter,
+  messageAddressesMjOrWorld,
   buildNarrationPrompt,
   type NarrationContext,
   isCompanionNarrativelyActive,
@@ -197,6 +198,35 @@ function buildPlayerActionNarrationContext(
   };
 }
 
+function lastMjExcerpt(roomId: string): string | undefined {
+  const messages = listMessages(roomId, 30);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.kind !== "mj") continue;
+    const text = stripMjMetadataComments(m.content).trim();
+    if (!text) continue;
+    return text.slice(0, 700);
+  }
+  return undefined;
+}
+
+function buildPlayerTableAskContext(
+  roomId: string,
+  playerId: string,
+  playerName: string,
+  content: string
+): NarrationContext {
+  const scene = getSceneState(roomId);
+  return {
+    kind: "player_table_ask",
+    playerName,
+    actionText: content,
+    sceneSummary: formatSceneForMj(scene),
+    recentChatSummary: lastMjExcerpt(roomId),
+    companionsPresent: listPresentCompanionLines(roomId, playerId),
+  };
+}
+
 function buildPlayerSayUnaddressedContext(
   roomId: string,
   playerId: string,
@@ -286,6 +316,11 @@ export function buildChatAutoPrompt(
   if (speakingPlayerId) {
     const roomId = getPlayerById(speakingPlayerId)?.roomId;
     if (roomId) {
+      if (messageAddressesMjOrWorld(content)) {
+        return buildNarrationPrompt(
+          buildPlayerTableAskContext(roomId, speakingPlayerId, playerName, content)
+        );
+      }
       const nearby = listNearbyNpcListeners(roomId, speakingPlayerId);
       const crowd = sceneCrowdPresent(roomId);
       return buildNarrationPrompt(
@@ -902,7 +937,8 @@ export function scheduleActionMj(
 
 /**
  * Dire : @PNJ → réaction de ce PNJ.
- * Sans @ : le monde autour peut entendre (un seul auditeur répond ; plusieurs peuvent demander à qui ça s'adresse).
+ * Question table (« on est où ? ») → un seul lieu, depuis la scène.
+ * Sans @ : le monde autour peut entendre.
  * Banter entre PJ et messages triviaux : pas de tour.
  */
 export function scheduleSayNpcMj(
@@ -927,10 +963,18 @@ export function scheduleSayNpcMj(
   const npcNames = findMentionedNpcs(trimmed, candidates).map((c) => c.name);
 
   let prompt: string;
+  let skipSceneExtract =
+    trimmed.length > 0 && trimmed.length <= SHORT_PLAYER_MESSAGE_MAX_LEN;
+
   if (npcNames.length) {
     prompt = buildNarrationPrompt(
       buildPlayerSayNpcNarrationContext(roomId, playerId, playerName, trimmed, npcNames)
     );
+  } else if (messageAddressesMjOrWorld(trimmed)) {
+    prompt = buildNarrationPrompt(
+      buildPlayerTableAskContext(roomId, playerId, playerName, trimmed)
+    );
+    skipSceneExtract = true;
   } else {
     const recentMessages = listMessages(roomId, 40);
     if (
@@ -956,9 +1000,6 @@ export function scheduleSayNpcMj(
       )
     );
   }
-
-  const skipSceneExtract =
-    trimmed.length > 0 && trimmed.length <= SHORT_PLAYER_MESSAGE_MAX_LEN;
 
   if (!actionMjThinkingRooms.has(roomId)) {
     actionMjThinkingRooms.add(roomId);

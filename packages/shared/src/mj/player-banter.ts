@@ -16,6 +16,21 @@ const MJ_TITLE_RE = /\bma[iî]tre du jeu\b/iu;
 const WORLD_QUESTION_RE =
   /\b(qu[''']?est-ce que (?:je |on )?(?:vois|entends|sais|dois)|que (?:vois|entends|se passe)|y a-t-il|est-ce que (?:la|le|un[e]?|des)\b|combien de|où (?:est|se trouve)|que fait(?:-| )il|qu[''']observe)\b/iu;
 
+/** « On est où ? » — orientation table, pas une parole pour les PNJ.
+ *  Pas de `\\b` après « où » : en JS, ù n'est pas un caractère de mot. */
+export const TABLE_ORIENTATION_RE =
+  /on est où|où est[- ]on|où sommes[- ]nous|on en est où|c['']est où|où ça|on se trouve où|where are we|quel est cet endroit/iu;
+
+export function messageAsksTableOrientation(content: string): boolean {
+  const t = content.trim();
+  if (!t) return false;
+  if (TABLE_ORIENTATION_RE.test(t)) return true;
+  if (/\?/.test(t) && /où/i.test(t) && /\b(?:on|nous|je|suis|sommes)\b/i.test(t)) {
+    return true;
+  }
+  return false;
+}
+
 export type PlayerBanterPlayer = Pick<
   Player,
   "id" | "kind" | "characterStatus" | "introducedInStory"
@@ -43,6 +58,7 @@ export function messageAddressesMjOrWorld(content: string): boolean {
   const t = content.trim();
   if (!t) return false;
   if (MJ_MENTION_RE.test(t) || MJ_TITLE_RE.test(t)) return true;
+  if (messageAsksTableOrientation(t)) return true;
   if (WORLD_QUESTION_RE.test(t)) return true;
   if (/\?/.test(t)) {
     const pcDirected =

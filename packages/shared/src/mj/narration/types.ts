@@ -5,6 +5,7 @@ export type NarrationKind =
   | "player_action"
   | "player_say"
   | "player_say_npc"
+  | "player_table_ask"
   | "reclaim_continue"
   | "player_start"
   | "player_continue"

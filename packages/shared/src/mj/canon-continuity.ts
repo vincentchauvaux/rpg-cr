@@ -20,10 +20,13 @@ export const MJ_CANON_CONTINUITY_RULES = `## Continuité narrative (priorité ha
 - Si peu d'événement : **2–4 phrases** + une question, plutôt qu'un second tableau identique.
 
 ## Cohérence spatiale et temporelle (obligatoire)
+- **Un seul lieu à la fois.** Interdit de coller deux décors dans le même récit (taverne **et** cabane, ville **et** porte close) comme si le groupe y était simultanément.
+- Si les derniers messages disent que vous êtes **devant une porte / une cabane / dehors**, vous n'êtes **pas** « autour de la taverne » — sauf retour explicite dans ce lieu.
 - **Positions des personnages** : si un PJ ou PNJ est explicitement sorti, parti, entré ou déplacé dans les messages récents, **respecte ce fait**. Ne le remets pas à l'ancien lieu sans justification.
 - Exemple : si « le bard te suit dehors » a été narré, il n'est **plus** à l'auberge — ne dis pas « le bard reste à l'auberge » au message suivant.
-- **Lieu de scène** : le contexte indique où se déroule l'action en cours. Si les PJ ont quitté un lieu (taverne, forêt, salle), ne les y replace pas sans qu'ils y retournent explicitement.
+- **Lieu de scène** : le contexte « Scène actuelle » est la référence. Si les derniers messages la contredisent (déplacement narré), **les messages récents gagnent**.
 - **Actions récentes** : les 3-5 derniers messages établissent l'état actuel (qui est où, qui fait quoi). Ne contredis pas ces faits sans événement narratif qui le justifie (téléportation, flashback explicite, etc.).
+- Question « on est où / où en est-on » : **réponds d'abord par le lieu actuel**, 2–4 phrases, sans recycler le dernier paragraphe MJ, sans liste de choix inventée.
 
 ${MJ_PLAYER_VOICE_RULES}`;
 

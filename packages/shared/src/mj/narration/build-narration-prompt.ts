@@ -3,6 +3,7 @@ import { narrationCanonContinuityFooter } from "../canon-continuity.js";
 import { buildPlayerActionNarration } from "./builders/player-action.js";
 import { buildPlayerSayNarration } from "./builders/player-say.js";
 import { buildPlayerSayNpcNarration } from "./builders/player-say-npc.js";
+import { buildPlayerTableAskNarration } from "./builders/player-table-ask.js";
 import {
   buildPlayerStartNarration,
   buildPlayerContinueNarration,
@@ -31,6 +32,8 @@ function buildNarrationPromptBody(ctx: NarrationContext): string {
       return buildPlayerSayNarration(ctx);
     case "player_say_npc":
       return buildPlayerSayNpcNarration(ctx);
+    case "player_table_ask":
+      return buildPlayerTableAskNarration(ctx);
     case "player_start":
       return buildPlayerStartNarration(ctx);
     case "player_continue":

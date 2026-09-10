@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-10 (**Dire sans @** : le monde autour peut répondre ; compagnons de route)
+> Dernière mise à jour : 2026-09-10 (**« on est où »** = un seul lieu ; Dire sans @)
 
 ## Vision
 
@@ -608,7 +608,8 @@ Module réutilisable : `NarrationKind` + `NarrationContext` + `buildNarrationPro
 | Kind | Déclenchement |
 |------|----------------|
 | `player_action` | WS message `kind: action` → `scheduleActionMj` (debounce 4 s) |
-| `player_say` | WS `say` sans @ s'il y a auditeurs/foule → `scheduleSayNpcMj` (`player_say`) ; aussi `AUTO_MJ_ON_PLAYER_MESSAGES` |
+| `player_say` | WS `say` sans @, parole in-world + auditeurs/foule → `scheduleSayNpcMj` |
+| `player_table_ask` | WS `say` sans @, question table (« on est où ? ») → un seul lieu |
 | `player_say_npc` | WS `say` + `@PNJ` (canon / marionnette, pas un autre PJ) → `scheduleSayNpcMj` |
 | `reclaim_continue` | Joueur **Réclamer** (`POST …/mj/prompt` type `reclaim`) |
 | `player_start` / `player_continue` | Commencer / Continuer (joueur) |
@@ -627,7 +628,10 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Supprimé** : textarea « Consigne pour le MJ » + bouton « Faire parler le MJ » (redondant avec Dire/Action).
 - **Dire** : `AUTO_MJ_ON_PLAYER_MESSAGES = false` → `scheduleAutoMj` no-op ; pas de MJ sur banter **entre PJ**. Exceptions `scheduleSayNpcMj` :
   - `@` vers un **PNJ** / marionnette → ce PNJ réagit (peut ignorer, grogner, mentir). Un `@` vers un autre PJ ne déclenche rien.
-  - **Sans @** : s'il y a des auditeurs (compagnons, PNJ cités récemment) ou un lieu public (taverne, rue…) — un seul interlocuteur peut **répondre** ; plusieurs peuvent demander **à qui** le PJ parle. Seul au milieu de nulle part : pas de tour. Accusés triviaux (`ok`, `merci`) ignorés.
+  - **Sans @** :
+    - question table (`on est où ?`, `qu'est-ce que je vois ?`) → `player_table_ask` : **un seul lieu** (scène + dernier récit), pas de collage taverne+cabane, pas de foule.
+    - parole in-world s'il y a des auditeurs ou un lieu public — un seul interlocuteur peut **répondre** ; plusieurs peuvent demander **à qui** le PJ parle.
+    - Seul au milieu de nulle part : pas de tour. Accusés triviaux (`ok`, `merci`) ignorés.
 - **Action** : `scheduleActionMj` **actif** même si `AUTO_MJ_ON_PLAYER_MESSAGES` est false ; trivial (`isTrivialPlayerMessage`) ignoré ; WS `kind: action` obligatoire côté client (`speechMode`) ; `mjThinkingBegin` au debounce + `executeAutoMj` avec `NarrationKind.player_action` ; handler WS `apps/api/src/index.ts` appelle `scheduleActionMj` / `scheduleSayNpcMj` puis `scheduleAutoMj` (second no-op).
 - **Désactivé** (même flag) : `schedulePlayerIntroFollowUpMj`, `tryIntegrateHumanPlayerInStory`.
 - **Toujours actifs** : `requestPlayerMjTrigger` / `requestHostMjTrigger` (Réclamer, indice, préambule, récap), `scheduleCampaignOpening`, `scheduleCircleMj`, `scheduleAiPuppetGeneration`, routes god mode / `promptMj` HTTP.
