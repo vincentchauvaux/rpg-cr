@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-10 (**401 OpenRouter** : clé session + secours Ollama, plus un faux « 0 jeton »)
+> Dernière mise à jour : 2026-09-12 (**ouverture** : le PJ n'est pas un PNJ ; fiche sergent/hommes ; pas de jet sur « ceinture »)
 
 ## Vision
 
@@ -914,6 +914,16 @@ La carte n'est chargée en state client **que** si god mode actif.
 - **MJ** : répond dans la langue du joueur qui a déclenché le tour (`preferredLocale` du dernier locuteur debounce).
 - **Fiche PJ (IA)** : `generate-field` / `generate-section` / `generate-all` / `ask-mj` utilisent la locale de l'**acteur** (`actorPlayerId`), pas celle de la cible.
 - Pas de traduction de ses propres messages ; sans LLM : clic 🌐 → tooltip « MJ non configuré » (pas d'appel auto au chargement).
+
+## Correctifs 2026-09-12
+
+### Ouverture peu convaincante (Timmy sergent, menu « Que feras-tu ? »)
+
+**Problème** : l'Acte I tenait en une question + des choix « Rejoins Timmy… ». Le MJ niait le rang et les hommes (fiche non injectée : `servants` / background absents). Cliquer « chercher dans ta ceinture » lançait un jet de **Force contesté** (`ceintur` dans le parseur). Le MJ inventait fusil, éclat magique et « autres compagnons ».
+
+**Solution** : fiche MJ = rang + suite + histoire ; ouverture à la 2e personne (jamais « rejoins le PJ ») ; ouverture trop courte → retry puis récit de secours ; questions « où sont mes hommes » = orientation table ; choix sûrs (ceinture, rejoindre, demander) **sans d20**.
+
+**Fichiers** : `character-sheet.ts`, `campaign-opening-prompt.ts`, `campaign-opening.ts`, `scene-choice.ts`, `scene-check.ts`, `player-table-ask.ts`, `system-prompt.ts`
 
 ## Correctifs 2026-09-10
 

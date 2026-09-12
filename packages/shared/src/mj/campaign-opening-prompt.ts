@@ -177,12 +177,58 @@ export function buildCampaignOpeningNarrativePrompt(
     npcBlock +
     `\n\n## Consignes de rédaction\n` +
     `- Rédige **4–6 paragraphes** en français : hook et enjeu clairs, **ton sobre** (évite le pathos gratuit et les métaphores en rafale) ; un incident déclencheur léger ou une menace voisine.\n` +
-    `- **Présente l'hôte** « ${ctx.hostName} » à la **2e personne** (tu / vous) selon sa fiche (rang, background, alignement) — entrée organique, sans révéler tous ses secrets. C'est un PJ, pas un PNJ.\n` +
+    `- **Présente l'hôte** « ${ctx.hostName} » à la **2e personne** (tu / vous) selon sa fiche (rang, background, hommes / suite, alignement) — il **est déjà dans la scène**, ce n'est pas un PNJ à rejoindre. **Interdit** : « Rejoins ${ctx.hostName} », « Que feras-tu ? » tout seul sans décor.\n` +
+    `- Si la fiche a un rang (sergent…) et des hommes, **place-les** : ils sont avec lui ou à portée, pas « tu es seul sans compagnons ».\n` +
     `- ${legacyWorldNamesGuard("fr")}\n` +
     `- Ancre le récit aux royaumes et lieux de la carte (voir contexte plan) ; ne répète pas les clichés ruines/forteresse/brume lourde sauf si le brief l'exige.\n` +
     `- Pas de mécanique, pas de tutoriel, pas de « Thinking Process ».\n` +
-    `- Termine par une question ou 2–3 pistes d'action.\n` +
+    `- Termine par une question **ou** 2–3 pistes d'action **du point de vue du PJ** (inspecter, parler à un homme, fouiller) — jamais « rejoindre » le PJ lui-même.\n` +
     `- Ajoute \`<!--scene:{"location":"…","mood":"…","tension":N}\` et \`<!--arc:{"mainPlot":"…","currentBeat":"…"}\` en fin de message si pertinent.\n\n` +
     formatCharacterSheetForMj(ctx.hostName, ctx.hostSheet)
+  );
+}
+
+function stripOpeningComments(text: string): string {
+  return text.replace(/<!--[\s\S]*?-->/g, "").replace(/\s+/g, " ").trim();
+}
+
+/** Ouverture trop courte / menu vide (« Que feras-tu ? ») — à jeter. */
+export function isCampaignOpeningTooThin(content: string): boolean {
+  const t = stripOpeningComments(content);
+  if (t.length < 280) return true;
+  if (/^que feras[- ]tu/i.test(t) && t.length < 900) return true;
+  return false;
+}
+
+/** Récit de secours si le LLM ne pose pas le monde. */
+export function renderFallbackOpeningNarrative(
+  plan: CampaignOpeningPlan,
+  ctx: CampaignOpeningContext
+): string {
+  const sheet = ctx.hostSheet;
+  const rank = sheet.rank?.trim();
+  const men = sheet.servants?.trim();
+  const background = sheet.background?.trim();
+  const who = rank
+    ? `Tu es ${ctx.hostName}, ${rank}.`
+    : `Tu es ${ctx.hostName}.`;
+  const suite = men
+    ? ` Tes hommes sont avec toi : ${men}.`
+    : "";
+  const past = background ? ` ${background.slice(0, 280)}` : "";
+  const npc = plan.optionalNpc
+    ? `\n\n${plan.optionalNpc.name} (${plan.optionalNpc.role}) est là : ${plan.optionalNpc.hook}`
+    : "";
+
+  return (
+    `${who}${suite}${past}\n\n` +
+    `${plan.startingSituation}\n\n` +
+    `${plan.openingScene}\n\n` +
+    `Autour de toi : **${plan.scene.location}**. ${plan.scene.mood}.\n\n` +
+    `${plan.worldSummary}\n\n` +
+    `Enjeu : ${plan.mainPlot}${npc}\n\n` +
+    `Que fais-tu ?\n` +
+    `<!--scene:{"location":${JSON.stringify(plan.scene.location)},"mood":${JSON.stringify(plan.scene.mood)},"tension":${plan.scene.tension}}-->\n` +
+    `<!--arc:{"mainPlot":${JSON.stringify(plan.mainPlot)},"currentBeat":${JSON.stringify(plan.openingScene.slice(0, 200))}}-->`
   );
 }

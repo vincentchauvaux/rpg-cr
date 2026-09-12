@@ -317,7 +317,17 @@ export function formatCharacterSheetForMj(name: string, sheet: CharacterSheet): 
   if (s.companionLoyalty != null || s.companionStance) {
     lines.push(`- Loyauté compagnon : ${formatCompanionLoyaltyHint(s)}`);
   }
-  if (s.rank) lines.push(`- Rang : ${s.rank}`);
+  if (s.rank) lines.push(`- Rang : ${s.rank} (canon — pas un titre inventé)`);
+  if (s.background?.trim()) {
+    lines.push(`- Histoire : ${s.background.trim().slice(0, 420)}`);
+  }
+  if (s.ambition?.trim()) lines.push(`- Ambition / but : ${s.ambition.trim().slice(0, 240)}`);
+  if (s.servants?.trim()) {
+    lines.push(
+      `- Hommes / suite (présents avec ${name} sauf si le récit les a éloignés) : ${s.servants.trim()}`
+    );
+  }
+  if (s.habitat?.trim()) lines.push(`- Habitat : ${s.habitat.trim().slice(0, 160)}`);
   const statLine = formatStatsLine(s.stats);
   if (statLine) lines.push(`- Caractéristiques : ${statLine}`);
   if (s.equipment?.trim()) lines.push(`- Équipement : ${s.equipment.trim()}`);

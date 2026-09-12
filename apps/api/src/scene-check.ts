@@ -9,6 +9,7 @@ import {
   helpAbilityFor,
   helperGrantsAdvantage,
   inferSceneCheck,
+  isAutomaticSceneChoice,
   isSceneCheckActionContent,
   matchChoice,
   opposeAbilityFor,
@@ -324,6 +325,21 @@ export function startSceneCheck(input: {
   const choice = matchChoice(choices, input.choice);
   if (!choice) {
     throw new SceneCheckHttpError(400, "Choix introuvable dans le récit du MJ");
+  }
+
+  if (isAutomaticSceneChoice(choice)) {
+    const text = `*${actor.name}* agit : « ${choice} »`;
+    const msg = saveMessage(
+      input.roomId,
+      actor.id,
+      actor.name,
+      text,
+      "action",
+      actor.preferredLocale
+    );
+    broadcastMessage(input.roomId, msg);
+    scheduleActionMj(input.roomId, actor.id, actor.name, text);
+    return null;
   }
 
   const tension = getSceneState(input.roomId)?.tension ?? 0;

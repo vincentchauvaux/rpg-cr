@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   extractMjChoices,
   inferSceneCheck,
+  isAutomaticSceneChoice,
   matchChoice,
 } from "./scene-choice.js";
 import {
@@ -60,6 +61,27 @@ test("inferSceneCheck : enquête → INT, exploration → SAG, social → CHA co
   assert.equal(persuade.ability, "charisme");
   assert.equal(persuade.mode, "opposed");
   assert.equal(persuade.dc, 15);
+});
+
+test("chercher dans sa ceinture n'est pas un jet de Force contesté", () => {
+  const belt = inferSceneCheck(
+    "Chercher un outil de crochetage dans ta ceinture.",
+    0
+  );
+  assert.notEqual(belt.skillHint, "Athlétisme");
+  assert.equal(belt.mode, "dc");
+  assert.equal(
+    isAutomaticSceneChoice("Chercher un outil de crochetage dans ta ceinture."),
+    true
+  );
+  assert.equal(
+    isAutomaticSceneChoice("Rejoins Timmy pour enquêter sur les dégâts du camp"),
+    true
+  );
+  assert.equal(
+    isAutomaticSceneChoice("Inspecter la boîte pour découvrir son contenu"),
+    false
+  );
 });
 
 test("resolveSceneCheckOutcome : DD, contesté, égalité", () => {

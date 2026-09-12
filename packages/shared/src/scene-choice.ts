@@ -175,7 +175,7 @@ const ABILITY_HINTS: AbilityHint[] = [
     ability: "force",
     skillHint: "Athlétisme",
     opposed: true,
-    re: /\b(attaqu|frapp|lutt|enfonc|forcer|soulev|porter|ceintur|assomm)/iu,
+    re: /\b(attaqu|frapp|lutt|enfonc|forcer la|soulev|assomm|smash|fracass)\b/iu,
   },
   {
     ability: "force",
@@ -259,4 +259,30 @@ export function inferSceneCheck(
     dc,
     worldMod,
   };
+}
+
+/**
+ * Gestes sûrs / questions / fouille de sa propre ceinture : pas de d20.
+ * (Sinon « ceinture » ou « rejoins Timmy pour enquêter » devenaient des épreuves absurdes.)
+ */
+export function isAutomaticSceneChoice(choice: string): boolean {
+  const raw = choice.trim();
+  if (!raw) return true;
+  const t = normalizeForMatch(raw);
+
+  if (/^(demande|demander|parle|parler|discuter|signale|signaler)\b/iu.test(raw)) {
+    return true;
+  }
+  if (/\b(rejoins?|rejoint)\b/iu.test(t)) return true;
+  if (/\b(attendre|moment seul|prendre un moment|réfléchir|quel est mon but)\b/iu.test(t)) {
+    return true;
+  }
+  if (/\b(ramasse|ramasser|garde la|garder la)\b/iu.test(t)) return true;
+  if (/\b(ceinture|poches?|inventaire|équipement)\b/iu.test(t)) return true;
+  if (
+    /\b(regarder ce que|ce que j['’]?ai gagn|ce que j['’]?ai obtenu)\b/iu.test(t)
+  ) {
+    return true;
+  }
+  return false;
 }

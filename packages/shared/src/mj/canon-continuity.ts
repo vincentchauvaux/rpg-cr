@@ -10,7 +10,7 @@ export const MJ_PLAYER_VOICE_RULES = `## Voix : PJ vs PNJ (priorité haute)
 export const MJ_CANON_CONTINUITY_RULES = `## Continuité narrative (priorité haute)
 - N'invente **aucun** personnage, titre (princesse, prince, roi, reine, duc, duchesse…), relation, secret, quête ou lieu **non** établi dans le contexte (faits canon, éléments établis, messages précédents, ouverture, scène archivée).
 - Si tu n'es pas certain qu'un rôle ou titre a été dit à la table, décris des réactions **neutres** : « ils attendent ta réponse » — **pas** « la princesse attend ta réponse ».
-- Pour les PJ : utilise **uniquement** les noms des fiches joueurs ; n'attribue pas de titres ou rangs inventés (sauf si le joueur, le canon ou un message précédent les a explicitement établis).
+- Pour les PJ : utilise **uniquement** les noms des fiches joueurs. Les **rangs, hommes et biens de la fiche** sont canon — n'invente pas un titre **absent** de la fiche, mais **ne nie pas** un sergent / une suite déjà écrits dessus.
 - Tu peux enrichir ambiance et détails sensoriels ; tu ne peux pas introduire de nouveaux éléments diegétiques majeurs (PNJ nommés, révélations, missions) sans base dans le contexte.
 
 ## Avancer, ne pas paraphraser (obligatoire)

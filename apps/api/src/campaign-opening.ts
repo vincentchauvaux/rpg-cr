@@ -3,7 +3,9 @@ import {
   buildCampaignOpeningNarrativePrompt,
   buildCampaignOpeningPlanMessages,
   completeChat,
+  isCampaignOpeningTooThin,
   parseCampaignOpeningPlan,
+  renderFallbackOpeningNarrative,
   resolveEffectiveLlmConfig,
   resolveMjMaxTokens,
   type CampaignOpeningPlan,
@@ -131,18 +133,30 @@ export async function bootstrapCampaignOpening(
       fallbackPlan(worldSeed, map?.countries.join(", ") ?? "");
 
     const narrativePrompt = buildCampaignOpeningNarrativePrompt(plan, ctx);
-    const { content, scenePatch, arcPatch } = await queueNarrativeLlm(
-      roomId,
-      "campaign-opening-narrative",
-      () =>
-        runMjTurn(
-          roomId,
-          room.llmConfig!,
-          narrativePrompt,
-          resolveRoomApiKey(room.llmConfig, undefined, roomId),
-          { speakingPlayerId: host.id, responseLocale: host.preferredLocale }
-        )
-    );
+    const runOpening = () =>
+      runMjTurn(
+        roomId,
+        room.llmConfig!,
+        narrativePrompt,
+        resolveRoomApiKey(room.llmConfig, undefined, roomId),
+        { speakingPlayerId: host.id, responseLocale: host.preferredLocale }
+      );
+
+    let opening = await queueNarrativeLlm(roomId, "campaign-opening-narrative", runOpening);
+    if (isCampaignOpeningTooThin(opening.content)) {
+      opening = await queueNarrativeLlm(
+        roomId,
+        "campaign-opening-narrative-retry",
+        runOpening
+      );
+    }
+    if (isCampaignOpeningTooThin(opening.content)) {
+      opening = {
+        ...opening,
+        content: renderFallbackOpeningNarrative(plan, ctx),
+      };
+    }
+    const { content, scenePatch, arcPatch } = opening;
 
     const mjMsg = saveMessage(roomId, "mj", "MJ", content, "mj", host.preferredLocale);
     broadcastMessage(roomId, mjMsg);

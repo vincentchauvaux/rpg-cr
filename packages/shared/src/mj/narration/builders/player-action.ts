@@ -26,7 +26,8 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
         (isRound
           ? `4. **Tour de table** : narre **un beat unique** avec toutes les actions déclarées simultanément. Les "Options non retenues" **n'ont pas eu lieu** — ne les mentionne pas.\n`
           : `4. Ne redemande pas de jet ; concentre-toi sur les conséquences narratives.\n`) +
-        `5. Vouvoie/tutoie les PJ — ce sont des **héros**, pas des PNJ du décor.\n`
+        `5. Vouvoie/tutoie les PJ — ce sont des **héros**, pas des PNJ du décor.\n` +
+        `6. Narre **l'action cliquée** (fouiller sa ceinture, crocheter, frapper). Un échec n'est pas un tentacule ni un bras de fer abstrait avec « le monde ».\n`
       : declaresRoll && ctx.pendingRollRequest?.trim()
       ? `\n### Jet de dés — résolution obligatoire\n` +
         `Le joueur annonce un **résultat chiffré**. Ta demande précédente :\n` +
@@ -64,7 +65,9 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
     `- **N'explique pas deux fois** la même situation : ne reformule pas le dernier récit MJ ; narre seulement la **conséquence** de cette action.\n` +
     `- Ne rédige **pas** un chapitre entier sauf si l'action le justifie clairement.\n` +
     `- Résous partiellement ou totalement selon le contexte ; propose un **jet de dés** si l'issue est incertaine et qu'aucun total n'a déjà été annoncé ; si les dés de table ont parlé, **ne redemande pas** de jet.\n` +
-    `- Tiens compte des compagnons présents et de la scène archivée ; ce que tu établis devient **canon**.\n` +
+    `- Tiens compte des compagnons présents, de la **fiche** (rang, hommes, inventaire) et de la scène archivée ; ce que tu établis devient **canon**.\n` +
+    `- N'invente **pas** d'arme, d'outil ou de magie absents de la fiche (pas de fusil, pas d'éclat sorti de nulle part). Une table à un seul PJ : pas de « autres compagnons » fantômes.\n` +
+    `- Si un contenant vient d'être ouvert, le tour « regarder / ce que j'ai gagné » décrit **son contenu**, pas un autre objet déjà en main.\n` +
     `- Pas de tutoriel ni de mécanique hors jeu ; ton immersif en français.` +
     (invite ? COMPANION_INVITE_MJ_HINT : COMPANION_ONGOING_MJ_HINT) +
     rollBlock +

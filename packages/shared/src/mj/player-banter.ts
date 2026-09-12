@@ -21,11 +21,18 @@ const WORLD_QUESTION_RE =
 export const TABLE_ORIENTATION_RE =
   /on est où|où est[- ]on|où sommes[- ]nous|on en est où|c['']est où|où ça|on se trouve où|where are we|quel est cet endroit/iu;
 
+const TABLE_IDENTITY_RE =
+  /qui (suis|es)[- ]je|quels? sont mes (hommes|gens|compagnons)|où sont mes (hommes|gens)|je suis sergent|quel est mon (but|r[oô]le|rang)|qui a monté (cette|la) tente|si j['’]ai des compagnons/iu;
+
 export function messageAsksTableOrientation(content: string): boolean {
   const t = content.trim();
   if (!t) return false;
   if (TABLE_ORIENTATION_RE.test(t)) return true;
+  if (TABLE_IDENTITY_RE.test(t)) return true;
   if (/\?/.test(t) && /où/i.test(t) && /\b(?:on|nous|je|suis|sommes)\b/i.test(t)) {
+    return true;
+  }
+  if (/\?/.test(t) && /\b(mes hommes|mon rang|mon but|compagnons)\b/iu.test(t)) {
     return true;
   }
   return false;

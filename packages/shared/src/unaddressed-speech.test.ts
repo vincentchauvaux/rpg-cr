@@ -67,3 +67,13 @@ test("Donc on est où là = question table, pas parole de taverne", () => {
   assert.match(prompt, /Un seul lieu/);
   assert.doesNotMatch(prompt, /tenancier/);
 });
+
+test("où sont mes hommes / qui suis-je = orientation table", () => {
+  assert.equal(
+    messageAsksTableOrientation(
+      "je peux savoir qui a monté cette tente ? Si j'ai des compagnons et si je suis sergent, où sont mes hommes ?"
+    ),
+    true
+  );
+  assert.equal(messageAsksTableOrientation("quel est mon but ?"), true);
+});
