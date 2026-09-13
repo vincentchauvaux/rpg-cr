@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  buildCampaignOpeningRewritePrompt,
   isCampaignOpeningTooThin,
+  isCampaignOpeningUnplayable,
+  namesReferToSamePerson,
+  openingTreatsHostAsNpc,
+  parseCampaignOpeningPlan,
   renderFallbackOpeningNarrative,
   type CampaignOpeningPlan,
 } from "./campaign-opening-prompt.js";
@@ -42,4 +47,70 @@ test("secours d'ouverture : le PJ n'est pas un PNJ à rejoindre", () => {
   assert.match(text, /Tu es Timmy, Sergent/);
   assert.match(text, /huit gardes/);
   assert.doesNotMatch(text, /Rejoins Timmy/i);
+});
+
+const THORIN_NPC_OPENING = `
+La rivière qui serpente au bord du campement des Ombres se reflète dans les feux de camp.
+Au centre de ce petit havre, Thorin Brume‑Fine, cuirassé et couronné de l'emblème de la Garde de l'Aube, se tient debout, son regard fixé sur la lueur rougeoyante des braises.
+
+« Vous êtes arrivés à l'heure, » dit-il, la voix grave mais calme. « J'ai besoin d'une équipe fiable. »
+
+Le chevalier hoche la tête, puis se tourne vers vous. « Vous avez le choix : vous pouvez suivre Thorin jusqu'au bord de la rivière. »
+
+Thorin vous regarde, son regard déterminé comme le métal.
+
+Que choisissez-vous d'abord ?
+Inspecter la rive et repérer les traces de passage des brigands.
+`.repeat(1);
+
+test("ouverture injouable : l'hôte est narré comme un PNJ recruteur", () => {
+  assert.equal(openingTreatsHostAsNpc(THORIN_NPC_OPENING, "Thorin Brume-Fine"), true);
+  assert.equal(isCampaignOpeningUnplayable(THORIN_NPC_OPENING, "Thorin Brume-Fine"), true);
+  assert.equal(
+    openingTreatsHostAsNpc(
+      "Tu es Thorin Brume-Fine. Tes hommes attendent. Un éclaireur revient de la rive. Que fais-tu ?",
+      "Thorin Brume-Fine"
+    ),
+    false
+  );
+});
+
+test("même personne malgré prénom seul ou tiret unicode", () => {
+  assert.equal(namesReferToSamePerson("Thorin Brume-Fine", "Thorin Brume‑Fine"), true);
+  assert.equal(namesReferToSamePerson("Thorin Brume-Fine", "Thorin"), true);
+  assert.equal(namesReferToSamePerson("Thorin", "Mira"), false);
+});
+
+test("plan JSON : le PNJ d'ouverture ne peut pas être l'hôte", () => {
+  const raw = JSON.stringify({
+    worldSummary: "Un camp au bord de la rivière.",
+    mainPlot: "Récupérer le grimoire volé.",
+    startingSituation: "Tu tiens le camp.",
+    openingScene: "Les brigands fuient vers la rive.",
+    scene: { location: "Campement des Ombres", mood: "braises", tension: -30 },
+    optionalNpc: { name: "Thorin Brume-Fine", role: "chevalier", hook: "recrute" },
+  });
+  const plan = parseCampaignOpeningPlan(raw, "Thorin Brume-Fine");
+  assert.ok(plan);
+  assert.equal(plan!.optionalNpc, undefined);
+});
+
+test("réécriture d'ouverture : le prompt cite le texte raté", () => {
+  const plan: CampaignOpeningPlan = {
+    worldSummary: "Les marches tiennent la passe.",
+    mainPlot: "Retrouver la relique.",
+    startingSituation: "Le camp a brûlé.",
+    openingScene: "Devant la tente.",
+    scene: { location: "Camp", mood: "cendres", tension: -20 },
+  };
+  const prompt = buildCampaignOpeningRewritePrompt(THORIN_NPC_OPENING, plan, {
+    roomName: "Test",
+    worldSeed: "abc",
+    map: null,
+    hostName: "Thorin Brume-Fine",
+    hostSheet: { rank: "Chevalier" },
+  });
+  assert.match(prompt, /RÉÉCRITURE OBLIGATOIRE/);
+  assert.match(prompt, /suivre Thorin/);
+  assert.match(prompt, /2e personne/);
 });

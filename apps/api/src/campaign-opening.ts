@@ -2,8 +2,9 @@ import type { Player } from "@rpg-cr/shared";
 import {
   buildCampaignOpeningNarrativePrompt,
   buildCampaignOpeningPlanMessages,
+  buildCampaignOpeningRewritePrompt,
   completeChat,
-  isCampaignOpeningTooThin,
+  isCampaignOpeningUnplayable,
   parseCampaignOpeningPlan,
   renderFallbackOpeningNarrative,
   resolveEffectiveLlmConfig,
@@ -71,9 +72,9 @@ function fallbackPlan(worldSeed: string, mapCountries: string): CampaignOpeningP
     mainPlot:
       "Les héros doivent démêler une menace locale avant qu'elle n'engloutisse les marchés et les routes — l'échec laisserait la région à feu et à sang.",
     startingSituation:
-      "Les personnages se croisent au carrefour d'une route commerciale, attirés par rumeurs contradictoires.",
+      "Tu te trouves au carrefour d'une route commerciale, attiré par des rumeurs contradictoires.",
     openingScene:
-      "Une altercation ou une offre inattendue force un choix immédiat sans quitter le lieu d'accueil.",
+      "Une altercation ou une offre inattendue te force un choix immédiat, sans quitter le lieu d'accueil.",
     scene: {
       location,
       mood: "poussière dorée, voix tendues, odeur d'épices",
@@ -129,28 +130,35 @@ export async function bootstrapCampaignOpening(
     );
 
     const plan =
-      parseCampaignOpeningPlan(planResult.content) ??
+      parseCampaignOpeningPlan(planResult.content, host.name) ??
       fallbackPlan(worldSeed, map?.countries.join(", ") ?? "");
 
     const narrativePrompt = buildCampaignOpeningNarrativePrompt(plan, ctx);
-    const runOpening = () =>
+    const runOpening = (userPrompt: string) =>
       runMjTurn(
         roomId,
         room.llmConfig!,
-        narrativePrompt,
+        userPrompt,
         resolveRoomApiKey(room.llmConfig, undefined, roomId),
         { speakingPlayerId: host.id, responseLocale: host.preferredLocale }
       );
 
-    let opening = await queueNarrativeLlm(roomId, "campaign-opening-narrative", runOpening);
-    if (isCampaignOpeningTooThin(opening.content)) {
+    let opening = await queueNarrativeLlm(roomId, "campaign-opening-narrative", () =>
+      runOpening(narrativePrompt)
+    );
+    if (isCampaignOpeningUnplayable(opening.content, host.name)) {
+      const rewritePrompt = buildCampaignOpeningRewritePrompt(
+        opening.content,
+        plan,
+        ctx
+      );
       opening = await queueNarrativeLlm(
         roomId,
         "campaign-opening-narrative-retry",
-        runOpening
+        () => runOpening(rewritePrompt)
       );
     }
-    if (isCampaignOpeningTooThin(opening.content)) {
+    if (isCampaignOpeningUnplayable(opening.content, host.name)) {
       opening = {
         ...opening,
         content: renderFallbackOpeningNarrative(plan, ctx),

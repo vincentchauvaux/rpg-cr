@@ -1134,7 +1134,9 @@ app.post<{
     updated.roomId,
     "system",
     "Système",
-    `${updated.name} a scellé sa fiche — présentez-vous pour rejoindre l'aventure.`,
+    updated.role === "admin" && updated.kind === "human"
+      ? `${updated.name} a scellé sa fiche.`
+      : `${updated.name} a scellé sa fiche — présentez-vous pour rejoindre l'aventure.`,
     "system"
   );
   broadcastMessage(updated.roomId, sys);

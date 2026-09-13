@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-12 (**ouverture** : le PJ n'est pas un PNJ ; fiche sergent/hommes ; pas de jet sur « ceinture »)
+> Dernière mise à jour : 2026-09-13 (**ouverture** : rejet si le PJ est narré comme un PNJ recruteur ; réécriture 2e personne)
 
 ## Vision
 
@@ -551,6 +551,8 @@ Pas de bouton « ajouter un compagnon » : le PJ **demande au PNJ** (Dire `@PNJ`
 - **Noms de royaumes** : générés de façon déterministe par `world_seed` / `map_seed` dans `packages/shared/src/map/world-names.ts` → stockés dans `rooms.map_json` (`countries`, `territories`, POI). Plus de liste figée Aldermar / Brumes / Khar-Vos pour les **nouveaux** salons.
 - **Déclenchement unique** quand l'**hôte** (admin humain) finalise sa fiche (`POST …/character/finalize`) ou passe `ready` + `story_locked` : `scheduleCampaignOpening` → `bootstrapCampaignOpening` (`apps/api/src/campaign-opening.ts`).
 - Deux appels LLM : plan JSON (`packages/shared/src/mj/campaign-opening-prompt.ts`) puis récit MJ long (Acte I, hook, enjeu) intégrant la fiche hôte — **pas** de second message d'intégration pour l'hôte. Le prompt d'ouverture injecte les pays / territoires / POI de la carte et interdit les noms legacy sauf s'ils sont déjà dans `map_json` (anciennes parties).
+- **Voix PJ** : 2e personne obligatoire ; `optionalNpc` ≠ nom d'hôte ; `isCampaignOpeningUnplayable` jette un Acte I trop court **ou** qui traite l'hôte en PNJ (« se tient », « dit-il », « suivez Thorin »). Retry = `buildCampaignOpeningRewritePrompt` (pas le même prompt), puis `renderFallbackOpeningNarrative`.
+- Finalisation **hôte** : « X a scellé sa fiche. » (sans « présentez-vous ») ; les autres PJ gardent l'invite à se présenter.
 - WS `mj_status` phase `opening` → placeholder barre de chat « Le MJ prépare le monde… » ; message système discret au démarrage.
 - **Resync client** : `GET /api/rooms/:code` expose `mjStatus` (refcount serveur) ; `RoomView.refresh` réapplique l'état MJ si WS manqué ; heuristique messages (« Le MJ prépare le monde… » sans récit MJ ni échec) → statut occupé ; si échec ouverture déjà dans le fil → **clear** du spinner bloqué (WS `message` + refresh).
 - **Échec ouverture visible joueurs** : message `L'ouverture de campagne a échoué…` n'est plus filtré comme message technique admin ; pendant l'ouverture, panneau « Se présenter » remplacé par attente.
@@ -564,7 +566,7 @@ Pas de bouton « ajouter un compagnon » : le PJ **demande au PNJ** (Dire `@PNJ`
   - `POST /api/players/:id/introduce` (`player-introduce.ts`) — **manual** (texte → `say`) ou **auto** (LLM, `room.llmConfig` requis) ;
   - `bootstrapCampaignOpening` : **hôte admin** seulement (pas les autres PJ `ready`) ;
   - pas de marquage sur scellement fiche, join salon, ni messages système.
-- Finalisation fiche : système « X a scellé sa fiche — présentez-vous pour rejoindre l'aventure » ; `RoomView` : panneau **Se présenter** / **Présentation automatique** tant que `ready && !introducedInStory` (`canHumanParticipateInChat` bloque Dire/Action/WS).
+- Finalisation fiche : système « X a scellé sa fiche — présentez-vous… » pour les **invités** ; l'**hôte** n'a que « X a scellé sa fiche. » (l'ouverture le place déjà). `RoomView` : panneau **Se présenter** / **Présentation automatique** tant que `ready && !introducedInStory` (`canHumanParticipateInChat` bloque Dire/Action/WS).
 - **Manuel** : le MJ ne complète pas la présentation (même pour « salut » seul) — voir `player-intro-followup-prompt.ts` + section prompt système.
 - **Accusés de réception** (`: bien`, `ok`, `merci`, `👍`, etc.) : filtrés par `isTrivialPlayerMessage` sur **Action** (pas de tour MJ) et sur Dire si `AUTO_MJ_ON_PLAYER_MESSAGES` est réactivé.
 - **Banter entre PJ** : heuristique `shouldSkipAutoMjForPlayerBanter` (`packages/shared/src/mj/player-banter.ts`) — s'applique au Dire auto uniquement (pas aux actions).
@@ -914,6 +916,16 @@ La carte n'est chargée en state client **que** si god mode actif.
 - **MJ** : répond dans la langue du joueur qui a déclenché le tour (`preferredLocale` du dernier locuteur debounce).
 - **Fiche PJ (IA)** : `generate-field` / `generate-section` / `generate-all` / `ask-mj` utilisent la locale de l'**acteur** (`actorPlayerId`), pas celle de la cible.
 - Pas de traduction de ses propres messages ; sans LLM : clic 🌐 → tooltip « MJ non configuré » (pas d'appel auto au chargement).
+
+## Correctifs 2026-09-13
+
+### Ouverture : le PJ hôte narré comme un PNJ (Thorin Brume-Fine)
+
+**Problème** : l'Acte I était assez long, mais Thorin parlait à « vous », se tenait près du feu, et les choix proposaient de « suivre Thorin ». Les consignes 2e personne + retry du même prompt ne suffisaient pas.
+
+**Solution** : détecteur `openingTreatsHostAsNpc` (nom flexible + prénom) ; retry = réécriture ciblée ; sinon récit de secours à la 2e personne ; le plan JSON ne peut plus coller l'hôte en `optionalNpc`.
+
+**Fichiers** : `campaign-opening-prompt.ts` (+ tests), `campaign-opening.ts`, `index.ts` (message de scellement hôte), `canon-continuity.ts`
 
 ## Correctifs 2026-09-12
 
