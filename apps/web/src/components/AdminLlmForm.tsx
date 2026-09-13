@@ -13,6 +13,12 @@ import {
   defaultNarrationModelId,
   defaultToolModelId,
   usesServerOnlyApiKey,
+  MJ_PROSE_DEFAULT,
+  MJ_PROSE_MAX,
+  MJ_PROSE_MIN,
+  mjProseHint,
+  mjProseLabel,
+  normalizeMjProse,
 } from "@rpg-cr/shared";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { SettingsToggle } from "@/components/SettingsToggle";
@@ -543,6 +549,32 @@ export function AdminLlmForm({
             )}
           </div>
         )}
+
+        <div className="settings-slider-block">
+          <label htmlFor="llm-mj-prose">Style du récit MJ</label>
+          <p className="settings-slider-value">
+            {mjProseLabel(llmForm.mjProse)}{" "}
+            <span className="muted">({normalizeMjProse(llmForm.mjProse)}/100)</span>
+          </p>
+          <input
+            id="llm-mj-prose"
+            type="range"
+            className="settings-slider"
+            min={MJ_PROSE_MIN}
+            max={MJ_PROSE_MAX}
+            step={1}
+            value={normalizeMjProse(llmForm.mjProse ?? MJ_PROSE_DEFAULT)}
+            onChange={(e) =>
+              setLlmForm((f) => ({ ...f, mjProse: Number(e.target.value) }))
+            }
+          />
+          <div className="settings-slider-labels muted">
+            <span>Droit au but</span>
+            <span>Sobre</span>
+            <span>Romancé</span>
+          </div>
+          <p className="settings-slider-hint muted">{mjProseHint(llmForm.mjProse)}</p>
+        </div>
 
         <SettingsToggle
           id="llm-auto-extract-facts"

@@ -47,6 +47,7 @@ export function buildCharacterStoryPhaseMessages(
       role: "system",
       content:
         "Tu es le MJ d'une campagne médiéval-fantasy. Invente l'identité narrative du personnage : alignement, rang, historique, famille, secret, ambition. " +
+        "Respecte les indications du joueur. N'invente pas un secret sur le père, une destinée ou un compagnon nommé si ce n'est pas demandé. " +
         "Cohérence et concision. Réponds UNIQUEMENT avec un objet JSON valide.\n" +
         buildGenerationLocaleRules(preferredLocale),
     },

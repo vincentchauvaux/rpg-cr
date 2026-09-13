@@ -233,7 +233,7 @@ function buildMjTurnMessages(
     worldContext,
     userPrompt,
     config.systemPromptOverride,
-    { compactSystem: limits.compactSystem }
+    { compactSystem: limits.compactSystem, mjProse: config.mjProse }
   );
 
   return {

@@ -6,6 +6,7 @@ import { AlignmentGrid } from "@/components/AlignmentGrid";
 import {
   characterSheetsEqual,
   formatCompanionLoyaltyHint,
+  formatCreationBriefAsHints,
   getCharacterFieldLabels,
   isQuestCompanion,
   isStoryLocked,
@@ -283,6 +284,9 @@ export function CharacterSheetPanel({
             currentSheet={editing ? draft : current.characterSheet}
             llmEnabled={llmEnabled}
             disabled={busy || generatingAll}
+            hints={formatCreationBriefAsHints(
+              (editing ? draft : current.characterSheet).creationBrief
+            ) || undefined}
             onBusyChange={setGeneratingAll}
             onProgress={(_percent, partial) => {
               setDraft(buildDraft(normalizeCharacterSheet(partial)));

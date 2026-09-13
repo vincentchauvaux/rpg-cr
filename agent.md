@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-13 (**ouverture** : rejet si le PJ est narré comme un PNJ recruteur ; réécriture 2e personne)
+> Dernière mise à jour : 2026-09-13 (**MJ** : process simplifié — une source de style, une source d'Acte I)
 
 ## Vision
 
@@ -24,7 +24,7 @@ Application SaaS de salons JDR rejoinables, avec MJ IA (LLM marché + fallback L
 3. **WebSocket** — `/ws?roomId&playerId&playerName`, broadcast messages, joueurs, scène, **épreuves de table** (`scene_check`) ; ping/pong ; reconnexion client + resync API
 4. **Interface** — accueil créer/rejoindre, page `/salon/[code]`, QR + lien, switch god mode (admin) ; **favicon** dé D20 or (`apps/web/src/app/icon.svg` + `apple-icon.tsx`)
    - **Création salon** : noms salon/hôte proposés aléatoirement (utilisables sans saisie) ; clic efface pour taper ; bouton 🎲 par champ + « Tout relancer » ; `markHostLlmSetupPending(roomId)` à la création
-   - **Onboarding hôte (graine)** : après création/reprise salon, tant que la fiche n'est pas `ready` — `HostSetupWizard` (**étape 1/2**) bloque le chat et le wizard PJ : `AdminLlmForm` (`collapseOnSave={false}`, `configPersisted={hasLlmConfig}`) — **un seul** bouton **Tester la connexion** (dans le formulaire, pas de doublon sous le wizard) ; enregistrement `PUT /api/rooms/:id/llm` puis **test** `POST …/llm/test` obligatoire avant « Continuer » ; `localStorage` `rpg-cr-host-llm-setup:{roomId}=done` + `CharacterCreationWizard` (**étape 2/2**). Joueurs non-hôte : inchangés. Pendant l'étape 1, le formulaire LLM du god mode est masqué (évite doublon).
+   - **Onboarding hôte (graine)** : après création/reprise salon, tant que la fiche n'est pas `ready` — `HostSetupWizard` (**étape 1/3**) bloque le chat : `AdminLlmForm` (LLM + **curseur Style du récit MJ**) ; test obligatoire ; puis **QCM de départ** (`CharacterBriefForm`, étape 2/3) ; puis `CharacterCreationWizard` fiche (**étape 3/3**). Joueurs non-hôte : QCM puis fiche (pas d'étape LLM). Pendant l'étape 1, le formulaire LLM du god mode est masqué (évite doublon).
    - **God mode** : panneau admin = `localStorage` `rpg-cr-admin-panel:{playerId}` via `useSyncExternalStore` — **jamais** resync depuis refresh/WS/DB ; PATCH serveur fire-and-forget au toggle. Switch **sans titre dupliqué** (le titre d’onglet « Administration » suffit) pour éviter le débordement « God mo… » sur mobile.
    - **Layout salon** (`room-shell` + `room-layout`) : **une colonne** centrée ; **dock** (`RoomDockNav`) — sticky **haut** (bureau), fixe **bas** (mobile ≤640px) : **Fiche** + **Cercle** | **Accueil** (chat + scène + aide inline) | **Aide** + **Réglages** ; chaque onglet n’affiche **que** son panneau (plus de fiche/compagnons/réglages empilés sous Accueil). Masqué en plein écran récit / onboarding LLM. `sessionStorage` `rpg-cr-room-tab:{roomId}` (ancien `scene` → `main`). **Mentions @** : `ChatMentionInput` dans le **chat** et l’**aide personnelle** (`HeroAssistantPanel`) — joueurs à la table + PNJ du canon ; sous-titre **Lieu · …** (rencontre déduite des messages / scène, pas « Récit »). API `GET …/mention-suggestions`. **Compagnons** : `.companions-block` — `margin-top` 1rem (bureau) / 0,75rem (≤640px).
    - **En-tête salon** (`RoomView`) : titre + **code seul** (sans préfixe « Code : ») — clic copie le code (`navigator.clipboard`) + retour visuel « Copié ! » + `aria-live` ; bouton **Sauvegarder et quitter** : libellé complet au bureau, **icône seule** en mobile **dans l’en-tête** (pas `position: fixed` — il défile avec la page). **Bas du récit** : bouton `↓` sur le journal si on n’est plus collé en bas (après un long message MJ ou lecture d’historique).
@@ -551,7 +551,9 @@ Pas de bouton « ajouter un compagnon » : le PJ **demande au PNJ** (Dire `@PNJ`
 - **Noms de royaumes** : générés de façon déterministe par `world_seed` / `map_seed` dans `packages/shared/src/map/world-names.ts` → stockés dans `rooms.map_json` (`countries`, `territories`, POI). Plus de liste figée Aldermar / Brumes / Khar-Vos pour les **nouveaux** salons.
 - **Déclenchement unique** quand l'**hôte** (admin humain) finalise sa fiche (`POST …/character/finalize`) ou passe `ready` + `story_locked` : `scheduleCampaignOpening` → `bootstrapCampaignOpening` (`apps/api/src/campaign-opening.ts`).
 - Deux appels LLM : plan JSON (`packages/shared/src/mj/campaign-opening-prompt.ts`) puis récit MJ long (Acte I, hook, enjeu) intégrant la fiche hôte — **pas** de second message d'intégration pour l'hôte. Le prompt d'ouverture injecte les pays / territoires / POI de la carte et interdit les noms legacy sauf s'ils sont déjà dans `map_json` (anciennes parties).
-- **Voix PJ** : 2e personne obligatoire ; `optionalNpc` ≠ nom d'hôte ; `isCampaignOpeningUnplayable` jette un Acte I trop court **ou** qui traite l'hôte en PNJ (« se tient », « dit-il », « suivez Thorin »). Retry = `buildCampaignOpeningRewritePrompt` (pas le même prompt), puis `renderFallbackOpeningNarrative`.
+- **Voix PJ** : 2e personne ; `isCampaignOpeningUnplayable` (trop court, trop romancé, trop de lieux, hôte=PNJ, Sir/Dame hors fiche, secret du père). Retry = réécriture courte, puis récit de secours. Style salon = **une** injection (`formatMjProseRules` dans le system MJ). Contraintes d'Acte I = `openingHardRules` (plan + récit). Footer canon = une fois via `buildNarrationPrompt`.
+- **Style** : `llm_config.mjProse` (0–100, défaut 20) — curseur admin « Droit au but / Sobre / Romancé » injecté dans tous les tours MJ (`formatMjProseRules`).
+- **Brief de départ** : QCM `creationBrief` (qui / en ce moment / passé) avant la fiche ; préremplit rang/habitat/suite ; contraint l'ouverture à **un lieu** calé sur le choix.
 - Finalisation **hôte** : « X a scellé sa fiche. » (sans « présentez-vous ») ; les autres PJ gardent l'invite à se présenter.
 - WS `mj_status` phase `opening` → placeholder barre de chat « Le MJ prépare le monde… » ; message système discret au démarrage.
 - **Resync client** : `GET /api/rooms/:code` expose `mjStatus` (refcount serveur) ; `RoomView.refresh` réapplique l'état MJ si WS manqué ; heuristique messages (« Le MJ prépare le monde… » sans récit MJ ni échec) → statut occupé ; si échec ouverture déjà dans le fil → **clear** du spinner bloqué (WS `message` + refresh).
@@ -641,7 +643,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **UI statut MJ** : voyant compact `MjLlmStatusIndicator` (à côté scène) — prêt / vérification / en cours / erreur / injoignable ; poll `GET /api/llm/tunnel-status` ; WS `{ type: "mj_status", thinking, background?, phase? }` — `thinking` = récit narratif : bordure animée sur `.chat-log-wrap--mj-thinking` + ligne `.chat-mj-status` sous le fil (préambule, récap, reclaim inclus) ; `background` = `ScribIndicator` (plume, pas de bordure chat). Envoi / Réclamer bloqués pendant `thinking` narratif (pas pendant `background`). Overlay plein écran : **génération fiche** uniquement (`AiGenerationOverlay` dans `CharacterSheetFillAllButton`). **Compositeur** : textarea 4 lignes (`.chat-composer`), pas un champ d'une ligne. Serveur : `mjThinkingBegin` / `mjThinkingEnd` (`ws-hub.ts`) ; `executeAutoMj` appelle `mjThinkingEnd` **après** `broadcastMessage` (message ou erreur système), pas dans un `finally` qui précéderait le WS `message`. File d'attente si salon `busy` émet quand même `mjThinkingBegin` avant le retry. Client : feedback optimiste au clic Réclamer (`mjPromptPendingRef` + `setMjThinking` + libellé « Réclamer… ») ; tant que `mjPromptPendingRef`, tout `mj_status` avec `thinking: false` est **ignoré** pour l'overlay narratif (seul un message `mj` ou système « Le MJ n'a pas pu répondre… » / erreur HTTP / garde-fou 3 min termine l'attente) ; `refresh` après reconnexion compare les messages depuis le décompte au clic. Garde-fou 3 min si `thinking` bloqué.
 - **Erreur** : `broadcastMjFailure` dans le chat (tous les joueurs) + bannière / `reclaimError` côté client ; `console.error` serveur avec `source` (`player:reclaim`, `action`, `host:preamble`, …).
 - **Sanitisation réponses** : `prepareMjResponse()` / `formatMjMessageForDisplay()` — retire blocs `<!--scene:…-->` / `<!--arc:…-->` / `<!--companion:…-->` (y compris **tronqués** sans `-->`), parse JSON par accolades équilibrées, variantes `**[MJ] <!--scene:…` ; préfixe écho `[MJ]` / `[VJ]` / `[DIRE]` ; `collapseTrailingPhraseLoop` (fin « Il reste. Il reste. … »). Messages déjà en base : filtre à l'affichage.
-- **Ton MJ** : `system-prompt.ts` — calibration intensité (scène calme = prose sobre, 1–3 ¶ ; pas de pathos ni répétitions) ; builders Réclamer / préambule / ouverture alignés.
+- **Ton MJ** : curseur salon `mjProse` (défaut droit au but) + `system-prompt.ts` (scène calme = peu de phrases) ; builders Réclamer / préambule / ouverture alignés.
 - **Tag `[VJ]` (voix joueur)** : réservé au format historique des messages PJ — le MJ ne doit **pas** le produire. Si fuite modèle : `transformVjSegmentsForDisplay()` convertit les segments en citation markdown (`> *…*`, guillemets en italique). Consignes dans `system-prompt.ts` (pas de monologue PJ inventé).
 - **Affichage MJ** : `ChatMessageRow` + `MjMessageMarkdown` (`react-markdown`, pas de HTML brut) — paragraphes, `**gras**`, `##` titres, listes `-`. Styles `.chat-msg-mj` dans `globals.css`. Prompt MJ : paragraphes courts + markdown léger.
 - **Plein écran récit** : bouton unique ⛶/⊟ en haut à droite de `.chat-log-wrap` (`RoomView`, `aria-label` « Fermer » en étendu) — `.chat-panel--log-expanded` = overlay `100dvh` en **colonne flex** ; `sessionStorage` `rpg-cr-chat-expanded:{roomId}`. Scrollbar du fil (`.chat-log`) : piste sombre, curseur or/bronze (`globals.css`), discrète sur mobile jusqu’au scroll.
@@ -918,6 +920,16 @@ La carte n'est chargée en state client **que** si god mode actif.
 - Pas de traduction de ses propres messages ; sans LLM : clic 🌐 → tooltip « MJ non configuré » (pas d'appel auto au chargement).
 
 ## Correctifs 2026-09-13
+
+### Style MJ + brief de départ (Sera, Sir Aldric, trop de murmures)
+
+**Problème** : l'Acte I enfilait plusieurs lieux, un lyrisme vide (« comme si les murs parlaient », « un cœur qui bat »), un PNJ nommé hors fiche (Sir Aldric) et un secret sur le père jamais choisi.
+
+**Solution** :
+- Curseur **Style du récit MJ** + QCM de départ
+- Process simplifié : style injecté **une fois** (system) ; Acte I via `openingHardRules` ; footer canon **une fois** (`buildNarrationPrompt`) ; plus de PNJ d'ouverture JSON ; « Commencer » n'ouvre plus un second préambule
+
+**Fichiers** : `mj-prose.ts`, `character-brief.ts`, `AdminLlmForm.tsx`, `CharacterBriefForm.tsx`, `campaign-opening-prompt.ts`, `system-prompt.ts`, builders narration
 
 ### Ouverture : le PJ hôte narré comme un PNJ (Thorin Brume-Fine)
 

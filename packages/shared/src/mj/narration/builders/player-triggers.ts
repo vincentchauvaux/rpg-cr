@@ -1,4 +1,3 @@
-import { narrationCanonContinuityFooter } from "../../canon-continuity.js";
 import type { NarrationContext } from "../types.js";
 import { COMPANION_ONGOING_MJ_HINT } from "../../../companion-pact.js";
 
@@ -31,20 +30,17 @@ export function buildPlayerStartNarration(ctx: NarrationContext): string {
       `[REPRISE / CONTINUER] ${name} demande au MJ de poursuivre l'aventure.\n\n` +
       "L'ouverture de campagne a déjà été jouée : **ne refais pas** une introduction complète. " +
       "Enchaîne la scène en cours, rappelle brièvement l'enjeu (1 phrase), puis fais avancer le fil (2–4 paragraphes)." +
-      extra +
-      narrationCanonContinuityFooter()
+      extra
     );
   }
 
   return (
     `[DÉMARRAGE DE CAMPAGNE] ${name} invite le MJ à ouvrir l'aventure.\n\n` +
-    "Pose une **introduction** forte : lieu concret, atmosphère, tension initiale, et **trame principale** (objectif, conflit, enjeu). " +
-    "Varie le cadre (évite ruines/forteresse par défaut). Intègre la carte et les fiches des personnages présents. " +
-    "Accroche narrative (2–4 paragraphes), pas de mécanique ni de tutoriel. Ce que tu établis devient canon." +
+    "L'Acte I auto n'a pas encore été joué : ouvre **comme une ouverture de campagne**, pas un second préambule. " +
+    "Un lieu, 2e personne, incident concret, pas de PNJ nommé hors fiche, pas de roman." +
     scene +
     arc +
-    extra +
-    narrationCanonContinuityFooter()
+    extra
   );
 }
 
@@ -55,8 +51,7 @@ export function buildPlayerContinueNarration(ctx: NarrationContext): string {
     "Poursuis le fil narratif et la **trame principale** sans répéter ni paraphraser ce qui vient d'être dit. " +
     "Fais évoluer un PNJ ou l'environnement si pertinent (1–3 paragraphes). **Conserve** lieu, ambiance et tension archivés sauf événement majeur ; pas de bloc `<!--scene:…-->` si rien ne change." +
     COMPANION_ONGOING_MJ_HINT +
-    optionalBlock(ctx) +
-    narrationCanonContinuityFooter()
+    optionalBlock(ctx)
   );
 }
 
@@ -66,8 +61,7 @@ export function buildHintNarration(ctx: NarrationContext): string {
     `[INDICE DISCRET] ${name} sollicite une aide narrative légère.\n\n` +
     "Donne un indice subtil lié à la trame ou à la scène : détail d'environnement, intuition d'un PNJ, ou piste indirecte — sans spoiler brutal ni solution complète. " +
     "1–2 paragraphes maximum, ton immersif." +
-    optionalBlock(ctx) +
-    narrationCanonContinuityFooter()
+    optionalBlock(ctx)
   );
 }
 
@@ -81,7 +75,6 @@ export function buildReclaimContinueNarration(ctx: NarrationContext): string {
     "- Si des compagnons ou PNJ sont présents **sans rôle établi**, décris regards, tension ou attente **sans** leur inventer un titre (princesse, roi, etc.)." +
     COMPANION_ONGOING_MJ_HINT +
     sceneHint(ctx) +
-    optionalBlock(ctx) +
-    narrationCanonContinuityFooter()
+    optionalBlock(ctx)
   );
 }

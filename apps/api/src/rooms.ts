@@ -6,6 +6,7 @@ import {
   normalizeCharacterSheet,
   EMPTY_CHARACTER_SHEET,
   DEFAULT_LOCALE,
+  withNormalizedMjProse,
   type CharacterSheet,
   type CharacterStatus,
   type CircleStatus,
@@ -196,7 +197,7 @@ function rowToRoom(row: Record<string, unknown>): Room {
     lastPreambleAt: (row.last_preamble_at as string) || null,
     lastRecapAt: (row.last_recap_at as string) || null,
     llmConfig: row.llm_config
-      ? (JSON.parse(row.llm_config as string) as LlmRoomConfig)
+      ? withNormalizedMjProse(JSON.parse(row.llm_config as string) as LlmRoomConfig)
       : null,
   };
 }
@@ -499,7 +500,7 @@ export function setGodMode(playerId: string, enabled: boolean): Player | null {
 
 export function setLlmConfig(roomId: string, config: LlmRoomConfig): void {
   db.prepare(`UPDATE rooms SET llm_config = ? WHERE id = ?`).run(
-    JSON.stringify(config),
+    JSON.stringify(withNormalizedMjProse(config)),
     roomId
   );
 }

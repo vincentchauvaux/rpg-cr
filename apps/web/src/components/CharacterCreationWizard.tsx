@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import type { AlignmentId, CharacterSheet, CharacterSheetFieldKey, Player } from "@rpg-cr/shared";
+import type { AlignmentId, CharacterCreationBrief, CharacterSheet, CharacterSheetFieldKey, Player } from "@rpg-cr/shared";
 import {
+  applyCreationBriefToSheet,
+  formatCreationBriefAsHints,
   getCharacterFieldLabels,
+  isCharacterCreationBriefComplete,
   mergeCharacterSheet,
   normalizeCharacterSheet,
 } from "@rpg-cr/shared";
+import { CharacterBriefForm } from "@/components/CharacterBriefForm";
 import { AlignmentGrid } from "@/components/AlignmentGrid";
 import { patchCharacter, finalizeCharacter } from "@/lib/api";
 import { HeroAssistantPanel } from "@/components/HeroAssistantPanel";
@@ -124,11 +128,45 @@ export function CharacterCreationWizard({
     ? "char-wizard-overlay char-wizard-overlay--section"
     : "char-wizard-overlay";
 
+  async function handleBriefConfirm(brief: CharacterCreationBrief) {
+    setBusy(true);
+    try {
+      const next = applyCreationBriefToSheet(sheet, brief);
+      setSheet(next);
+      const { player: updated } = await patchCharacter(player.id, actorPlayerId, {
+        characterStatus: "creating",
+        characterSheet: next,
+      });
+      setSheet(normalizeCharacterSheet(updated.characterSheet));
+      setPlayerState(updated);
+      onPlayerUpdate(updated);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!isCharacterCreationBriefComplete(sheet.creationBrief)) {
+    return (
+      <div className={overlayClass} role="dialog" aria-modal="true">
+        <div className="char-wizard panel">
+          <CharacterBriefForm
+            initial={sheet.creationBrief}
+            hostStepLabel={isHostAdmin ? "Étape 2 sur 3 — Départ" : undefined}
+            busy={busy}
+            onConfirm={handleBriefConfirm}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={overlayClass} role="dialog" aria-modal="true">
       <div className="char-wizard panel">
         {isHostAdmin && (
-          <p className="host-setup-step muted">Étape 2 sur 2 — Personnage</p>
+          <p className="host-setup-step muted">Étape 3 sur 3 — Personnage</p>
         )}
         <h2>Création du personnage</h2>
         <p className="muted">
@@ -218,6 +256,7 @@ export function CharacterCreationWizard({
             currentSheet={sheet}
             llmEnabled={llmEnabled}
             disabled={busy}
+            hints={formatCreationBriefAsHints(sheet.creationBrief) || undefined}
             onBusyChange={setGeneratingAll}
             onProgress={(_percent, partial) => setSheet(normalizeCharacterSheet(partial))}
             onGenerated={(next) =>

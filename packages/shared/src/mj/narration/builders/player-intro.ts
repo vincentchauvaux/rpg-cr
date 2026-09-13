@@ -1,4 +1,3 @@
-import { narrationCanonContinuityFooter } from "../../canon-continuity.js";
 import type { NarrationContext } from "../types.js";
 
 export function buildPlayerIntroManualNarration(ctx: NarrationContext): string {
@@ -20,8 +19,7 @@ export function buildPlayerIntroManualNarration(ctx: NarrationContext): string {
     "- l'inviter **une fois**, sobrement, à en dire plus quand il voudra — sans inventer le contenu.\n" +
     "Voix : adresse-toi à **toute la table** à la 2e personne. Les PJ déjà présents restent des héros (« vous »), **pas** des PNJ que tu décrirais au nouveau venu." +
     briefHint +
-    "\n\nNe modifie pas lieu ni tension sauf événement majeur explicite." +
-    narrationCanonContinuityFooter()
+    "\n\nNe modifie pas lieu ni tension sauf événement majeur explicite."
   );
 }
 
@@ -34,7 +32,6 @@ export function buildPlayerIntroAutoNarration(ctx: NarrationContext): string {
     `« ${name} » s'est présenté avec le texte suivant : « ${quoted} »\n\n` +
     "Accueille-le brièvement dans la scène (1–2 paragraphes). **Ne répète pas** ni n'allonge sa présentation. " +
     "N'ajoute pas de biographie tirée de la fiche qu'il n'a pas dite à voix haute. " +
-    "2e personne pour tous les PJ ; ceux déjà à la table ne deviennent pas des PNJ." +
-    narrationCanonContinuityFooter()
+    "2e personne pour tous les PJ ; ceux déjà à la table ne deviennent pas des PNJ."
   );
 }

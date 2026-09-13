@@ -58,12 +58,12 @@ export function HostSetupWizard({
       aria-labelledby="host-setup-title"
     >
       <div className="char-wizard panel host-setup-wizard">
-        <p className="host-setup-step muted">Étape 1 sur 2 — Administration</p>
+        <p className="host-setup-step muted">Étape 1 sur 3 — Administration</p>
         <h2 id="host-setup-title">Configurer le MJ (LLM)</h2>
         <p className="muted">
           Salon <strong>{roomCode}</strong> — avant de créer votre personnage,
-          connectez Ollama (VPS), LM Studio ou un fournisseur cloud. Les autres
-          joueurs utiliseront cette configuration.
+          connectez Ollama (VPS), LM Studio ou un fournisseur cloud. Réglez aussi le
+          curseur <strong>Style du récit MJ</strong> (droit au but ↔ romancé).
         </p>
 
         {showTunnelBanner && <LmStudioTunnelBanner refreshKey={llmTested ? 1 : 0} />}
@@ -91,12 +91,12 @@ export function HostSetupWizard({
             disabled={!canContinue}
             title={
               canContinue
-                ? "Passer à la création du personnage"
+                ? "Passer au brief de départ"
                 : "Testez la connexion MJ avec succès avant de continuer"
             }
             onClick={onContinue}
           >
-            Continuer — créer mon personnage
+            Continuer — qui êtes-vous ?
           </button>
         </div>
         {!hasLlmConfig && (
@@ -112,7 +112,7 @@ export function HostSetupWizard({
         )}
         {canContinue && (
           <p className="host-setup-hint muted" style={{ borderLeftColor: "var(--valid)" }}>
-            Connexion validée — vous pouvez passer à l&apos;étape 2 (fiche personnage).
+            Connexion validée — vous pouvez passer au brief de départ (étape 2).
           </p>
         )}
       </div>

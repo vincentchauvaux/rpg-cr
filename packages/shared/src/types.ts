@@ -94,6 +94,8 @@ export interface CharacterSheet {
   usableItems?: CharacterUsableItem[];
   /** Compétences entraînables — clé = identifiant stable (ex. erudition, natation). */
   skills?: Record<string, SkillProgress>;
+  /** QCM de départ (avant fiche) — oriente l'ouverture et le préremplissage. */
+  creationBrief?: import("./character-brief.js").CharacterCreationBrief;
 }
 
 export const EMPTY_CHARACTER_SHEET: CharacterSheet = {};
@@ -204,6 +206,11 @@ export interface LlmRoomConfig {
   useFallbackLmStudio: boolean;
   /** Extraction auto des faits canon après chaque réponse MJ (défaut true) */
   autoExtractFacts?: boolean;
+  /**
+   * Style du récit MJ : 0 = droit au but, 100 = romancé (défaut 20).
+   * Curseur administration / onboarding hôte.
+   */
+  mjProse?: number;
 }
 
 /** Fait narratif établi par le MJ — devient canon */

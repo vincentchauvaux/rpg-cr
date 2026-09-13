@@ -1,4 +1,3 @@
-import { narrationCanonContinuityFooter } from "../../canon-continuity.js";
 import type { NarrationContext } from "../types.js";
 
 export function buildHostPreambleNarration(ctx: NarrationContext): string {
@@ -16,15 +15,14 @@ export function buildHostPreambleNarration(ctx: NarrationContext): string {
     `## Interdictions\n` +
     `- Ne marque **pas** les joueurs comme « déjà présentés en histoire » : les PJ pourront encore faire leur **auto-présentation** à la table.\n` +
     `- Pas de tutoriel, pas de jets, pas de « Thinking Process ».\n` +
-    `- **4–6 paragraphes** en français, ton **accessible** (pas de surenchère lyrique) : faits, lieux, personnages, enjeu — une touche d'atmosphère suffit. Puis 1–2 questions ou pistes d'action.\n\n` +
+    `- Longueur : suis le curseur **Style du récit** du salon. Puis 1–2 questions ou pistes d'action.\n\n` +
     `## Contexte salon « ${ctx.roomName ?? "—"} »\n` +
     `Graine narrative : \`${ctx.worldSeed ?? "—"}\`\n\n` +
     `### Scène archivée\n${ctx.sceneSummary?.trim() || "_Aucune scène archivée._"}\n\n` +
     `### Trame\n${ctx.trameSummary?.trim() || "_Trame non posée._"}\n\n` +
     `### Personnages prêts\n${ctx.readyPlayersBlock?.trim() || "_Aucun PJ prêt._"}\n\n` +
     `### Journal récent\n${ctx.journalSummary?.trim() || "_—_"}` +
-    lore +
-    narrationCanonContinuityFooter()
+    lore
   );
 }
 
@@ -48,7 +46,6 @@ export function buildHostRecapNarration(ctx: NarrationContext): string {
     `### Journal\n${ctx.journalSummary?.trim() || "_—_"}\n\n` +
     `### Derniers échanges (table)\n${ctx.recentChatSummary?.trim() || "_Peu de messages._"}\n\n` +
     `### Personnages à la table\n${ctx.readyPlayersBlock?.trim() || "_—_"}` +
-    lore +
-    narrationCanonContinuityFooter()
+    lore
   );
 }

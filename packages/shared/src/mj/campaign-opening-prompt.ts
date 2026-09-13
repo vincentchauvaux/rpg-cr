@@ -3,12 +3,11 @@ import { formatAlignmentLabel } from "../alignment.js";
 import { formatCharacterSheetForMj } from "../character-sheet.js";
 import { buildGenerationLocaleRules, localeLabel, normalizeLocale } from "../locale.js";
 import { legacyWorldNamesGuard } from "../map/world-names.js";
-
-export interface CampaignOpeningNpc {
-  name: string;
-  role: string;
-  hook: string;
-}
+import {
+  mjProseBand,
+  openingTooManyPlaces,
+  openingTooOrnate,
+} from "./mj-prose.js";
 
 export interface CampaignOpeningPlan {
   worldSummary: string;
@@ -20,7 +19,6 @@ export interface CampaignOpeningPlan {
     mood: string;
     tension: number;
   };
-  optionalNpc?: CampaignOpeningNpc;
 }
 
 export interface CampaignOpeningContext {
@@ -29,6 +27,7 @@ export interface CampaignOpeningContext {
   map: ProceduralMap | null;
   hostName: string;
   hostSheet: CharacterSheet;
+  mjProse?: number;
 }
 
 function mapSummary(map: ProceduralMap | null, worldSeed: string): string {
@@ -56,13 +55,21 @@ function mapSummary(map: ProceduralMap | null, worldSeed: string): string {
   ].join("\n");
 }
 
-const ANTI_REPEAT_RULES = `
-## Interdictions (campagne NOUVELLE)
-- ${legacyWorldNamesGuard("fr")}
-- Ne pas réutiliser les intros typiques « ruines », « forteresse en ruine », « brume lourde sur des pierres effondrées » sauf si la carte ou la graine l'imposent clairement.
-- Varier le genre de départ : marché portuaire, caravane, tribunal, atelier d'artisan, conclave, frontière, sanctuaire vivant, etc.
-- Cette campagne est **unique** à la graine fournie — invente un monde et un hook originaux en t'appuyant sur les royaumes et POI de la carte ci-dessous.
-`.trim();
+/** Règles d'Acte I — une seule copie, plan + récit. */
+function openingHardRules(host: string, location?: string): string {
+  const lieu = location?.trim()
+    ? `**Un seul lieu** : ${location.trim()}.`
+    : "**Un seul lieu**, calé sur le brief / la fiche.";
+  return [
+    `${lieu} Pas d'enfilade ruelle + chapelle + pièce.`,
+    `« ${host} » est le JOUEUR (tu / tes). Interdit : 3e personne, réplique de ${host}, « suivez ${host} ».`,
+    "Pas de PNJ nommé hors fiche. Figurant anonyme OK.",
+    "Pas de secret familial, destin ou prophétie hors fiche.",
+    "Hook petit et concret (bruit, message, altercation).",
+  ]
+    .map((line) => `- ${line}`)
+    .join("\n");
+}
 
 export function buildCampaignOpeningPlanMessages(
   ctx: CampaignOpeningContext,
@@ -76,35 +83,32 @@ export function buildCampaignOpeningPlanMessages(
     : "non précisé";
   const loc = normalizeLocale(preferredLocale);
   const langNote = localeLabel(loc);
+  const styleNote =
+    mjProseBand(ctx.mjProse) === "lush"
+      ? "JSON un peu plus atmosphérique autorisé."
+      : "JSON factuel, sans poésie.";
 
   return [
     {
       role: "system",
       content: `Tu es concepteur de campagnes D&D 5e (narration uniquement, pas de jets de dés).
-Tu prépares l'**Acte I — mise en place** : monde, situation de départ, intrigue principale, scène d'ouverture.
+Tu prépares l'**Acte I** en JSON. ${styleNote}
 
-${ANTI_REPEAT_RULES}
-
-Structure scénaristique attendue :
-- **Hook** : accroche immédiate pour les joueurs
-- **Incident déclencheur** : ce qui met l'aventure en mouvement
-- **Enjeu** : ce qui est en jeu si les PJ échouent
+${legacyWorldNamesGuard("fr")}
+${openingHardRules(ctx.hostName)}
 
 ${buildGenerationLocaleRules(preferredLocale)}
 
 Réponds UNIQUEMENT avec un objet JSON valide (${langNote}) :
 {
-  "worldSummary": "2–3 phrases : setting unique à cette graine",
-  "mainPlot": "Objectif, conflit central, enjeu (2 phrases)",
-    "startingSituation": "Ce que vit le PJ hôte au début (2e personne implicite), pourquoi IL est là (1–2 phrases)",
-    "openingScene": "Première scène : le PJ hôte est déjà sur place (1–2 phrases). Pas un briefing qu'il donne à « vous ».",
-  "scene": { "location": "lieu concret", "mood": "ambiance sensorielle", "tension": -50 },
-  "optionalNpc": { "name": "…", "role": "…", "hook": "…" }
+  "worldSummary": "2 phrases max : le pays",
+  "mainPlot": "Enjeu local (2 phrases)",
+  "startingSituation": "Où est le PJ et ce qu'il fait (1 phrase)",
+  "openingScene": "Un incident dans CE lieu (1 phrase)",
+  "scene": { "location": "UN lieu concret", "mood": "1 détail", "tension": -20 }
 }
 
-tension : entier −100 (périlleux) à +100 (serein).
-optionalNpc : un PNJ **distinct** de l'hôte (jamais le même nom que le PJ). Omets la clé si aucun n'est pertinent.
-**Voix** : l'hôte « ${ctx.hostName} » est un **personnage joueur**. startingSituation et openingScene se vivent **à sa place** (il agit, il voit) — ce n'est pas un chevalier PNJ qui recrute une équipe.`,
+tension : entier −100 à +100.`,
     },
     {
       role: "user",
@@ -118,10 +122,7 @@ optionalNpc : un PNJ **distinct** de l'hôte (jamais le même nom que le PJ). Om
   ];
 }
 
-export function parseCampaignOpeningPlan(
-  raw: string,
-  hostName?: string
-): CampaignOpeningPlan | null {
+export function parseCampaignOpeningPlan(raw: string): CampaignOpeningPlan | null {
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
@@ -135,18 +136,6 @@ export function parseCampaignOpeningPlan(
     const startingSituation = String(o.startingSituation ?? "").trim();
     const openingScene = String(o.openingScene ?? "").trim();
     if (!worldSummary || !mainPlot || !location) return null;
-    let optionalNpc: CampaignOpeningNpc | undefined;
-    const npcRaw = o.optionalNpc as Record<string, unknown> | undefined;
-    if (npcRaw && String(npcRaw.name ?? "").trim()) {
-      const npcName = String(npcRaw.name).trim();
-      if (!hostName || !namesReferToSamePerson(npcName, hostName)) {
-        optionalNpc = {
-          name: npcName,
-          role: String(npcRaw.role ?? "").trim(),
-          hook: String(npcRaw.hook ?? "").trim(),
-        };
-      }
-    }
     return {
       worldSummary,
       mainPlot,
@@ -157,7 +146,6 @@ export function parseCampaignOpeningPlan(
         mood: mood || "—",
         tension: Number.isFinite(tension) ? tension : -15,
       },
-      ...(optionalNpc ? { optionalNpc } : {}),
     };
   } catch {
     return null;
@@ -169,38 +157,21 @@ export function buildCampaignOpeningNarrativePrompt(
   ctx: CampaignOpeningContext
 ): string {
   const host = ctx.hostName.trim();
-  const npcBlock =
-    plan.optionalNpc &&
-    plan.optionalNpc.name.trim().toLowerCase() !== host.toLowerCase()
-      ? `\nPNJ d'ouverture (pas le PJ) : **${plan.optionalNpc.name}** (${plan.optionalNpc.role}) — ${plan.optionalNpc.hook}`
-      : "";
-
   return (
     `[OUVERTURE DE CAMPAGNE — Acte I]\n\n` +
-    `Tu ouvres une **nouvelle** campagne D&D 5e. Graine : \`${ctx.worldSeed}\`.\n\n` +
-    `## Qui est qui (non négociable)\n` +
-    `- **« ${host} » est le personnage JOUEUR**, le seul héros à la table pour l'instant. Ce n'est **pas** un PNJ, pas un recruteur, pas un chevalier qui briefe « vous ».\n` +
-    `- Écris **uniquement à la 2e personne** : « Tu es ${host}. Tu… Tes hommes… Que fais-tu ? »\n` +
-    `- **Interdit** : raconter ${host} à la 3e personne (« ${host} se tient », « dit-il », « se tourne vers vous »).\n` +
-    `- **Interdit** : une réplique de ${host} (il n'a encore rien dit à la table). Les PNJ peuvent parler ; lui, non.\n` +
-    `- **Interdit** : « suivez ${host} », « rejoignez ${host} », « ${host} a besoin d'une équipe ».\n` +
-    `- Exemple **correct** : « Tu es ${host}. Le camp sent la forge. Tes hommes attendent tes ordres. Un éclaireur revient : les brigands tiennent la rive. Que fais-tu ? »\n` +
-    `- Exemple **interdit** : « ${host} se tient près du feu et vous dit : vous êtes arrivés, suivez-moi. »\n\n` +
-    `## Brief scénariste (à incarner, ne pas lister)\n` +
-    `- **Monde** : ${plan.worldSummary}\n` +
-    `- **Intrigue principale** : ${plan.mainPlot}\n` +
-    `- **Situation de départ** : ${plan.startingSituation}\n` +
-    `- **Scène** : ${plan.openingScene}\n` +
-    `- Lieu : ${plan.scene.location} | Ambiance : ${plan.scene.mood} | Tension : ${plan.scene.tension}` +
-    npcBlock +
-    `\n\n## Consignes de rédaction\n` +
-    `- **4–6 paragraphes** en français, ton sobre ; un incident déclencheur.\n` +
-    `- Si la fiche a un rang et des hommes, **ils sont avec toi** (tu donnes des ordres, tu n'es pas seul).\n` +
+    `Graine : \`${ctx.worldSeed}\`.\n\n` +
+    `## Table\n` +
+    openingHardRules(host, plan.scene.location) +
+    `\n- Si la fiche a des hommes, ils sont avec toi (sans les nommer si la fiche ne les nomme pas).\n` +
     `- ${legacyWorldNamesGuard("fr")}\n` +
-    `- Ancre le récit aux lieux de la carte ; pas de cliché ruines/forteresse/brume par défaut.\n` +
-    `- Pas de mécanique, pas de tutoriel, pas de « Thinking Process ».\n` +
-    `- Termine par une question **ou** 2–3 pistes **que TU peux faire** (inspecter la rive, parler au forgeron, poster tes hommes) — jamais « suivre ${host} ».\n` +
-    `- Ajoute \`<!--scene:{"location":"…","mood":"…","tension":N}\` et \`<!--arc:{"mainPlot":"…","currentBeat":"…"}\` en fin de message si pertinent.\n\n` +
+    `- Termine par une question ou 2–3 pistes **dans ce lieu**.\n` +
+    `- Blocs optionnels : \`<!--scene:{"location":"…","mood":"…","tension":N}-->\` et \`<!--arc:{"mainPlot":"…","currentBeat":"…"}\`.\n\n` +
+    `## À incarner\n` +
+    `- Monde : ${plan.worldSummary}\n` +
+    `- Intrigue : ${plan.mainPlot}\n` +
+    `- Situation : ${plan.startingSituation}\n` +
+    `- Scène : ${plan.openingScene}\n` +
+    `- Lieu : ${plan.scene.location} | ${plan.scene.mood} | tension ${plan.scene.tension}\n\n` +
     formatCharacterSheetForMj(host, ctx.hostSheet)
   );
 }
@@ -210,13 +181,10 @@ export function buildCampaignOpeningRewritePrompt(
   plan: CampaignOpeningPlan,
   ctx: CampaignOpeningContext
 ): string {
-  const excerpt = failedContent.replace(/<!--[\s\S]*?-->/g, "").trim().slice(0, 900);
+  const excerpt = failedContent.replace(/<!--[\s\S]*?-->/g, "").trim().slice(0, 700);
   return (
-    `[OUVERTURE — RÉÉCRITURE OBLIGATOIRE]\n\n` +
-    `Le texte suivant est **injouable** : il traite « ${ctx.hostName} » comme un PNJ qui recrute une équipe.\n\n` +
+    `[OUVERTURE — RÉÉCRITURE]\nLe texte ci-dessous est injouable. Réécris l'Acte I en respectant la table.\n\n` +
     `---\n${excerpt}\n---\n\n` +
-    `Réécris **entièrement** l'Acte I. ${ctx.hostName} = le joueur, **tu / tes**. Aucune réplique de ${ctx.hostName}. ` +
-    `Aucune phrase du type « suivez ${ctx.hostName} » ou « ${ctx.hostName} se tient / dit-il ».\n\n` +
     buildCampaignOpeningNarrativePrompt(plan, ctx)
   );
 }
@@ -290,19 +258,78 @@ export function openingTreatsHostAsNpc(content: string, hostName: string): boole
   return false;
 }
 
-/** Ouverture trop courte, menu vide, ou PJ traité comme PNJ. */
-export function isCampaignOpeningUnplayable(
-  content: string,
-  hostName: string
-): boolean {
-  return isCampaignOpeningTooThin(content) || openingTreatsHostAsNpc(content, hostName);
+const TITLED_NPC_RE =
+  /\b(?:Sir|Sire|Dame|Lord|Lady|Maître|Maitre|Capitaine)\s+([A-ZÉÈÀÂÎÔÛ][\p{L}'’-]+)/gu;
+
+function sheetCanonBlob(hostName: string, sheet?: CharacterSheet): string {
+  if (!sheet) return hostName;
+  return [
+    hostName,
+    sheet.rank,
+    sheet.servants,
+    sheet.background,
+    sheet.family,
+    sheet.companionBond,
+    sheet.notes,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
-/** Ouverture trop courte / menu vide (« Que feras-tu ? ») — à jeter. */
+/** PNJ titré (Sir Aldric…) absent de la fiche. */
+export function openingInventedNamedNpc(
+  content: string,
+  hostName: string,
+  sheet?: CharacterSheet
+): boolean {
+  const t = stripOpeningComments(content);
+  const canon = normalizePersonName(sheetCanonBlob(hostName, sheet));
+  TITLED_NPC_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = TITLED_NPC_RE.exec(t)) !== null) {
+    const given = match[1] ?? "";
+    if (!given) continue;
+    if (namesReferToSamePerson(given, hostName)) continue;
+    if (canon.includes(normalizePersonName(given))) continue;
+    return true;
+  }
+  return false;
+}
+
+/** Secret familial inventé alors que la fiche n'en parle pas. */
+export function openingInventedFamilySecret(
+  content: string,
+  sheet?: CharacterSheet
+): boolean {
+  const t = stripOpeningComments(content);
+  if (!/vérité sur (ton|votre) père|secret (de ta|de votre) famille|destin[ée]? se cache/i.test(t)) {
+    return false;
+  }
+  const known = `${sheet?.secret ?? ""} ${sheet?.family ?? ""} ${sheet?.background ?? ""}`;
+  if (/père|pere|famille|destin/i.test(known)) return false;
+  return true;
+}
+
+/** Ouverture trop courte, menu vide, PJ=PNJ, PNJ inventé, trop de lieux, ou trop romancé. */
+export function isCampaignOpeningUnplayable(
+  content: string,
+  hostName: string,
+  opts?: { sheet?: CharacterSheet; mjProse?: number }
+): boolean {
+  if (isCampaignOpeningTooThin(content)) return true;
+  if (openingTreatsHostAsNpc(content, hostName)) return true;
+  if (openingInventedNamedNpc(content, hostName, opts?.sheet)) return true;
+  if (openingInventedFamilySecret(content, opts?.sheet)) return true;
+  if (openingTooManyPlaces(content, opts?.mjProse)) return true;
+  if (openingTooOrnate(content, opts?.mjProse)) return true;
+  return false;
+}
+
+/** Menu vide ou texte trop court pour poser une scène. */
 export function isCampaignOpeningTooThin(content: string): boolean {
   const t = stripOpeningComments(content);
-  if (t.length < 280) return true;
-  if (/^que feras[- ]tu/i.test(t) && t.length < 900) return true;
+  if (t.length < 80) return true;
+  if (/^que feras[- ]tu/i.test(t) && t.length < 400) return true;
   return false;
 }
 
@@ -322,9 +349,6 @@ export function renderFallbackOpeningNarrative(
     ? ` Tes hommes sont avec toi : ${men}.`
     : "";
   const past = background ? ` ${background.slice(0, 280)}` : "";
-  const npc = plan.optionalNpc
-    ? `\n\n${plan.optionalNpc.name} (${plan.optionalNpc.role}) est là : ${plan.optionalNpc.hook}`
-    : "";
 
   return (
     `${who}${suite}${past}\n\n` +
@@ -332,7 +356,7 @@ export function renderFallbackOpeningNarrative(
     `${plan.openingScene}\n\n` +
     `Autour de toi : **${plan.scene.location}**. ${plan.scene.mood}.\n\n` +
     `${plan.worldSummary}\n\n` +
-    `Enjeu : ${plan.mainPlot}${npc}\n\n` +
+    `Enjeu : ${plan.mainPlot}\n\n` +
     `Que fais-tu ?\n` +
     `<!--scene:{"location":${JSON.stringify(plan.scene.location)},"mood":${JSON.stringify(plan.scene.mood)},"tension":${plan.scene.tension}}-->\n` +
     `<!--arc:{"mainPlot":${JSON.stringify(plan.mainPlot)},"currentBeat":${JSON.stringify(plan.openingScene.slice(0, 200))}}-->`

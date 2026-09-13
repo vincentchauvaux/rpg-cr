@@ -7,6 +7,7 @@ import {
   isStoryLocked,
   mergeCharacterSheet,
   normalizeCharacterSheet,
+  sheetHasStructuredContent,
 } from "@rpg-cr/shared";
 import {
   cancelCharacterAllGeneration,
@@ -31,7 +32,8 @@ export function shouldShowFillAllButton(
   sheet: CharacterSheet
 ): boolean {
   if (!canRunFillAllGeneration(player)) return false;
-  if (isCharacterSheetFilled(sheet)) return false;
+  if (isCharacterSheetFilled(sheet) && sheetHasStructuredContent(sheet)) return false;
+  if (isCharacterSheetFilled(sheet) && !sheet.creationBrief) return false;
   return true;
 }
 
@@ -49,6 +51,8 @@ interface Props {
   disabled?: boolean;
   className?: string;
   onBusyChange?: (busy: boolean) => void;
+  /** Indications QCM / joueur transmises au fill-all. */
+  hints?: string;
 }
 
 type OverlayState = null | "loading" | { error: string; locked?: boolean };
@@ -110,6 +114,7 @@ export function CharacterSheetFillAllButton({
   disabled = false,
   className,
   onBusyChange,
+  hints,
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [overlay, setOverlay] = useState<OverlayState>(null);
@@ -195,7 +200,7 @@ export function CharacterSheetFillAllButton({
       actorPlayerId,
       player.roomId,
       snapshot,
-      undefined,
+      hints,
       fetchAbortRef.current?.signal
     );
     startProgressPoll();

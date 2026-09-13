@@ -65,19 +65,16 @@ function findHostPlayer(roomId: string, preferredId?: string): Player | null {
 function fallbackPlan(worldSeed: string, mapCountries: string): CampaignOpeningPlan {
   const firstRealm = mapCountries.split(",")[0]?.trim();
   const location = firstRealm
-    ? `Carrefour aux confins du ${firstRealm}`
-    : `Carrefour de la graine ${worldSeed.slice(0, 8)}`;
+    ? `Carrefour du ${firstRealm}`
+    : `Carrefour (${worldSeed.slice(0, 8)})`;
   return {
-    worldSummary: `Un monde méconnu prend forme sous la graine ${worldSeed}, loin des chroniques usées.`,
-    mainPlot:
-      "Les héros doivent démêler une menace locale avant qu'elle n'engloutisse les marchés et les routes — l'échec laisserait la région à feu et à sang.",
-    startingSituation:
-      "Tu te trouves au carrefour d'une route commerciale, attiré par des rumeurs contradictoires.",
-    openingScene:
-      "Une altercation ou une offre inattendue te force un choix immédiat, sans quitter le lieu d'accueil.",
+    worldSummary: `Le pays autour de ${location}.`,
+    mainPlot: "Une affaire locale à régler avant qu'elle ne gagne la route.",
+    startingSituation: "Tu es déjà sur place, à ce carrefour.",
+    openingScene: "Quelqu'un t'aborde, ou un bruit claque trop près.",
     scene: {
       location,
-      mood: "poussière dorée, voix tendues, odeur d'épices",
+      mood: "jour, passage, voix",
       tension: -20,
     },
   };
@@ -116,6 +113,7 @@ export async function bootstrapCampaignOpening(
       map,
       hostName: host.name,
       hostSheet: host.characterSheet,
+      mjProse: room.llmConfig?.mjProse,
     };
 
     const llm = resolveEffectiveLlmConfig(room.llmConfig!);
@@ -130,8 +128,14 @@ export async function bootstrapCampaignOpening(
     );
 
     const plan =
-      parseCampaignOpeningPlan(planResult.content, host.name) ??
+      parseCampaignOpeningPlan(planResult.content) ??
       fallbackPlan(worldSeed, map?.countries.join(", ") ?? "");
+
+    const unplayable = (content: string) =>
+      isCampaignOpeningUnplayable(content, host.name, {
+        sheet: host.characterSheet,
+        mjProse: ctx.mjProse,
+      });
 
     const narrativePrompt = buildCampaignOpeningNarrativePrompt(plan, ctx);
     const runOpening = (userPrompt: string) =>
@@ -146,19 +150,15 @@ export async function bootstrapCampaignOpening(
     let opening = await queueNarrativeLlm(roomId, "campaign-opening-narrative", () =>
       runOpening(narrativePrompt)
     );
-    if (isCampaignOpeningUnplayable(opening.content, host.name)) {
-      const rewritePrompt = buildCampaignOpeningRewritePrompt(
-        opening.content,
-        plan,
-        ctx
-      );
+    if (unplayable(opening.content)) {
       opening = await queueNarrativeLlm(
         roomId,
         "campaign-opening-narrative-retry",
-        () => runOpening(rewritePrompt)
+        () =>
+          runOpening(buildCampaignOpeningRewritePrompt(opening.content, plan, ctx))
       );
     }
-    if (isCampaignOpeningUnplayable(opening.content, host.name)) {
+    if (unplayable(opening.content)) {
       opening = {
         ...opening,
         content: renderFallbackOpeningNarrative(plan, ctx),

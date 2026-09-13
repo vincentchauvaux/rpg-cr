@@ -7,6 +7,10 @@ import type {
   CharacterUsableItem,
 } from "./types.js";
 import { formatAlignmentLabel, normalizeAlignment } from "./alignment.js";
+import {
+  formatCreationBriefForMj,
+  normalizeCreationBrief,
+} from "./character-brief.js";
 import { formatSkillsLine, normalizeSkills } from "./character-progression.js";
 import {
   clampCompanionLoyalty,
@@ -202,6 +206,9 @@ export function normalizeCharacterSheet(raw: Partial<CharacterSheet> = {}): Char
     actions: normalizeActions(raw.actions),
     usableItems: normalizeUsableItems(raw.usableItems),
     skills: normalizeSkills(raw.skills),
+    ...(normalizeCreationBrief(raw.creationBrief)
+      ? { creationBrief: normalizeCreationBrief(raw.creationBrief) }
+      : {}),
   };
 }
 
@@ -270,6 +277,9 @@ export function storyFieldsChanged(
   const a = normalizeCharacterSheet(current);
   const b = normalizeCharacterSheet(proposed);
   if ((a.alignment ?? "") !== (b.alignment ?? "")) return true;
+  if (JSON.stringify(a.creationBrief ?? null) !== JSON.stringify(b.creationBrief ?? null)) {
+    return true;
+  }
   for (const key of STORY_TEXT_FIELDS) {
     if ((a[key] ?? "") !== (b[key] ?? "")) return true;
   }
@@ -308,6 +318,8 @@ export function formatStatsLine(stats?: CharacterStats): string {
 export function formatCharacterSheetForMj(name: string, sheet: CharacterSheet): string {
   const s = normalizeCharacterSheet(sheet);
   const lines: string[] = [`### Fiche — ${name}`];
+  const briefBlock = formatCreationBriefForMj(s.creationBrief);
+  if (briefBlock) lines.push(briefBlock);
   if (s.alignment) lines.push(`- Alignement : ${formatAlignmentLabel(s.alignment)}`);
   if (s.personality?.trim()) lines.push(`- Caractère : ${s.personality.trim()}`);
   if (s.companionBond?.trim()) lines.push(`- Lien de route : ${s.companionBond.trim()}`);
@@ -422,6 +434,11 @@ export function mergeCharacterSheet(
     const stance = normalizeCompanionStance(patch.companionStance);
     if (!stance) delete next.companionStance;
     else next.companionStance = stance;
+  }
+  if (patch.creationBrief !== undefined) {
+    const brief = normalizeCreationBrief(patch.creationBrief);
+    if (!brief) delete next.creationBrief;
+    else next.creationBrief = brief;
   }
   return normalizeCharacterSheet(next);
 }

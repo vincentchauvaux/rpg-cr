@@ -1,4 +1,3 @@
-import { narrationCanonContinuityFooter } from "../../canon-continuity.js";
 import type { NarrationContext } from "../types.js";
 
 /**
@@ -12,9 +11,8 @@ export function buildSetPieceNarration(ctx: NarrationContext): string {
 
   return (
     `[SÉQUENCE NARRATIVE — ${name}]\n\n` +
-    "Le MJ développe une **séquence dramatique** : 4–8 paragraphes, rythme cinématographique, tension montante. " +
+    "Le MJ développe une **séquence dramatique** : suis le curseur Style du récit du salon (plus long seulement si le tournant le justifie). " +
     "Intègre la scène archivée, les PJ présents et la trame ; propose des jets si des choix risqués apparaissent." +
-    brief +
-    narrationCanonContinuityFooter()
+    brief
   );
 }

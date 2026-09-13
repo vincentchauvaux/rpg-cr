@@ -30,6 +30,7 @@ import {
   getCatalogEntry,
   hostRecapSessionStorageKey,
   pickHostMjPromptType,
+  MJ_PROSE_DEFAULT,
 } from "@rpg-cr/shared";
 import {
   getLlmCatalog,
@@ -367,6 +368,7 @@ export function RoomView({ code }: Props) {
         baseUrl: "http://127.0.0.1:11434/v1",
         useFallbackLmStudio: false,
         autoExtractFacts: true,
+        mjProse: MJ_PROSE_DEFAULT,
       };
     }
     const openai = getCatalogEntry("openai");
@@ -376,6 +378,7 @@ export function RoomView({ code }: Props) {
       toolModelId: defaultToolModelId(openai) || "gpt-4o-mini",
       useFallbackLmStudio: true,
       autoExtractFacts: true,
+      mjProse: MJ_PROSE_DEFAULT,
     };
   });
 

@@ -8,6 +8,8 @@ export * from "./narrative-arc.js";
 export * from "./locale.js";
 export * from "./player-colors.js";
 export * from "./character-sheet.js";
+export * from "./character-brief.js";
+export * from "./mj/mj-prose.js";
 export * from "./character-progression.js";
 export * from "./action-quick-suggestions.js";
 export * from "./dice-roll.js";

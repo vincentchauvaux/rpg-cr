@@ -5,6 +5,8 @@ import {
   isCampaignOpeningTooThin,
   isCampaignOpeningUnplayable,
   namesReferToSamePerson,
+  openingInventedFamilySecret,
+  openingInventedNamedNpc,
   openingTreatsHostAsNpc,
   parseCampaignOpeningPlan,
   renderFallbackOpeningNarrative,
@@ -81,18 +83,18 @@ test("même personne malgré prénom seul ou tiret unicode", () => {
   assert.equal(namesReferToSamePerson("Thorin", "Mira"), false);
 });
 
-test("plan JSON : le PNJ d'ouverture ne peut pas être l'hôte", () => {
+test("plan JSON : parse sans PNJ d'ouverture", () => {
   const raw = JSON.stringify({
     worldSummary: "Un camp au bord de la rivière.",
     mainPlot: "Récupérer le grimoire volé.",
     startingSituation: "Tu tiens le camp.",
     openingScene: "Les brigands fuient vers la rive.",
     scene: { location: "Campement des Ombres", mood: "braises", tension: -30 },
-    optionalNpc: { name: "Thorin Brume-Fine", role: "chevalier", hook: "recrute" },
+    optionalNpc: { name: "Sir Aldric", role: "chevalier", hook: "recrute" },
   });
-  const plan = parseCampaignOpeningPlan(raw, "Thorin Brume-Fine");
+  const plan = parseCampaignOpeningPlan(raw);
   assert.ok(plan);
-  assert.equal(plan!.optionalNpc, undefined);
+  assert.equal(plan!.scene.location, "Campement des Ombres");
 });
 
 test("réécriture d'ouverture : le prompt cite le texte raté", () => {
@@ -110,7 +112,28 @@ test("réécriture d'ouverture : le prompt cite le texte raté", () => {
     hostName: "Thorin Brume-Fine",
     hostSheet: { rank: "Chevalier" },
   });
-  assert.match(prompt, /RÉÉCRITURE OBLIGATOIRE/);
+  assert.match(prompt, /RÉÉCRITURE/);
   assert.match(prompt, /suivre Thorin/);
-  assert.match(prompt, /2e personne/);
+  assert.match(prompt, /JOUEUR/);
+});
+
+const SERA_OPENING = `
+Tu es Sera Lame‑Douce, chevalier de la Couronne d’Argent, marchant dans les ruelles étroites de Murmures.
+La nuit est fraîche, mais le vent qui s’échappe de la chapelle des Brumes porte un parfum de bois brûlé et des murmures lointains.
+Les lanternes aux lueurs argentées projettent des ombres dansantes sur les pierres anciennes de la porte.
+Tu sens l’écho d’une présence silencieuse derrière toi : Sir Aldric, Gardien de la Couronne, tient un parchemin.
+Un murmure se fait entendre dans la ruelle, comme si les murs eux-mêmes cherchaient à te parler.
+Sir Aldric murmure : « La vérité sur ton père se cache ici, mais elle n’est pas sans danger. »
+`;
+
+test("ouverture injouable : Sir Aldric et secret du père hors fiche", () => {
+  assert.equal(openingInventedNamedNpc(SERA_OPENING, "Sera Lame-Douce", { rank: "Chevalier" }), true);
+  assert.equal(openingInventedFamilySecret(SERA_OPENING, { rank: "Chevalier" }), true);
+  assert.equal(
+    isCampaignOpeningUnplayable(SERA_OPENING, "Sera Lame-Douce", {
+      sheet: { rank: "Chevalier" },
+      mjProse: 20,
+    }),
+    true
+  );
 });
