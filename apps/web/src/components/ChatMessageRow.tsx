@@ -178,6 +178,7 @@ export function ChatMessageRow({
           activeChoice={activeChoice}
           activeChoices={activeChoices}
           onChoiceClick={onChoiceClick}
+          selectId={`mj-choice-select-${m.id}`}
         />
       </div>
     );

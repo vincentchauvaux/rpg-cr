@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-13 (**UI** : choix MJ en select, zone Dire/Action 1 ligne qui s'agrandit)
+> Dernière mise à jour : 2026-09-14 (**UI** : pistes MJ dans le compositeur ; **« je rentre »** = entrer ici, pas chez soi)
 
 ## Vision
 
@@ -76,9 +76,9 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 ### Script de table (continuité)
 
 - **Quoi** : état vivant `rooms.table_now_json` + journal `room_beats` (lieu, présents, horaire, météo, dernier fait, propos, objets laissés ailleurs).
-- **Quand** : dès qu'un PJ agit (`applyTableNowFromPlayerAction` — « je rentre chez moi » verrouille le lieu **avant** le tour MJ) ; après chaque récit (`applyTableNowFromMjText` + extraction LLM si faits auto).
+- **Quand** : dès qu'un PJ agit (`applyTableNowFromPlayerAction` — « je rentre **chez moi** » verrouille la maison **avant** le tour MJ ; « je rentre » sans complément = entrer dans le bâtiment **devant soi**, ex. la taverne) ; après chaque récit (`applyTableNowFromMjText` + extraction LLM si faits auto).
 - **Injection** : bloc **Script de table** en tête du contexte MJ (`formatTableNowForMj`) — source de vérité ; interdit de re-narrer le trajet déjà joué.
-- **Lieu** : `extractPlaceLocationFromText` prend le **dernier** cadre, ignore « vous quittez la taverne » ; maison / ferme / cour / champs reconnus. Un lieu déclaré par le PJ (rentrer chez soi) n'est pas déboulonné par une ruelle de flashback.
+- **Lieu** : `extractPlaceLocationFromText` prend le **dernier** cadre, ignore « vous quittez la taverne » ; maison / ferme / cour / champs reconnus. Un lieu déclaré par le PJ (« rentrer chez moi ») n'est pas déboulonné par une ruelle de flashback. « Je rentre » sans « chez moi » pose le lieu sur le bâtiment **devant le PJ** (source `player`).
 - **UI** : `SceneIndicator` affiche aussi horaire · météo quand le script les a.
 
 ### Lieu de scène
@@ -179,7 +179,7 @@ Les listes markdown (`- …`) du **dernier** récit MJ encore **en vigueur** (2�
 | API | `POST /api/rooms/:roomId/scene-checks` `{ actorPlayerId, sourceMessageId, choice }` ; `…/:checkId/join` `{ stance: help\|oppose\|pass\|choice }` ; `…/:checkId/resolve` ; `GET /api/rooms/:code` expose `sceneCheck` + `liveChoiceMessageId` ; WS `{ type: "scene_check", sceneCheck, liveChoiceMessageId }` |
 | Mémoire | In-memory par salon (comme le verrou fill-all) — pas de SQLite |
 | MJ | Un seul message **Action** (`Tour de table` si plusieurs avis) puis **un** `scheduleActionMj`. Voix **2e personne** (tu / vous) : les PJ ne sont jamais narrés comme des PNJ, y compris quand un nouveau joueur arrive |
-| UI | `MjMessageMarkdown` (li cliquables tant que la liste est live et que le joueur n'a pas répondu) ; `SceneCheckBanner` (Laisser faire / Aider / S'opposer / On y va) ; **scroll figé sur le jet** |
+| UI | `MjMessageMarkdown` (select sous le récit) + **select « Pistes du MJ » dans le compositeur** (toujours visible, distinct de « Utiliser » / objets) ; `SceneCheckBanner` (Laisser faire / Aider / S'opposer / On y va) ; **scroll figé sur le jet** |
 | Prompt | `system-prompt.ts` + `MJ_PLAYER_VOICE_RULES` : 2e personne, pile de table, options non retenues ignorées. `player-action.ts` : narre le beat unique selon les totaux |
 
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.
@@ -648,7 +648,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Désactivé** (même flag) : `schedulePlayerIntroFollowUpMj`, `tryIntegrateHumanPlayerInStory`.
 - **Toujours actifs** : `requestPlayerMjTrigger` / `requestHostMjTrigger` (Réclamer, indice, préambule, récap), `scheduleCampaignOpening`, `scheduleCircleMj`, `scheduleAiPuppetGeneration`, routes god mode / `promptMj` HTTP.
 - Réactiver le MJ auto sur **Dire** : `AUTO_MJ_ON_PLAYER_MESSAGES = true` (heuristiques triviaux + banter dans `scheduleAutoMj` ; les actions passent par `scheduleActionMj` ou `scheduleAutoMj` selon le flag, sans double tour).
-- **UI statut MJ** : voyant compact `MjLlmStatusIndicator` (à côté scène) — prêt / vérification / en cours / erreur / injoignable ; poll `GET /api/llm/tunnel-status` ; WS `{ type: "mj_status", thinking, background?, phase? }` — `thinking` = récit narratif : bordure animée sur `.chat-log-wrap--mj-thinking` + ligne `.chat-mj-status` sous le fil (préambule, récap, reclaim inclus) ; `background` = `ScribIndicator` (plume, pas de bordure chat). Envoi / Réclamer bloqués pendant `thinking` narratif (pas pendant `background`). Overlay plein écran : **génération fiche** uniquement (`AiGenerationOverlay` dans `CharacterSheetFillAllButton`). **Compositeur** : textarea **1 ligne** qui s'agrandit avec le texte (`.chat-composer`) ; choix MJ et actions rapides en **`<select>`**. Entrée envoie, Maj+Entrée pour un saut de ligne. Serveur : `mjThinkingBegin` / `mjThinkingEnd` (`ws-hub.ts`) ; `executeAutoMj` appelle `mjThinkingEnd` **après** `broadcastMessage` (message ou erreur système), pas dans un `finally` qui précéderait le WS `message`. File d'attente si salon `busy` émet quand même `mjThinkingBegin` avant le retry. Client : feedback optimiste au clic Réclamer (`mjPromptPendingRef` + `setMjThinking` + libellé « Réclamer… ») ; tant que `mjPromptPendingRef`, tout `mj_status` avec `thinking: false` est **ignoré** pour l'overlay narratif (seul un message `mj` ou système « Le MJ n'a pas pu répondre… » / erreur HTTP / garde-fou 3 min termine l'attente) ; `refresh` après reconnexion compare les messages depuis le décompte au clic. Garde-fou 3 min si `thinking` bloqué.
+- **UI statut MJ** : voyant compact `MjLlmStatusIndicator` (à côté scène) — prêt / vérification / en cours / erreur / injoignable ; poll `GET /api/llm/tunnel-status` ; WS `{ type: "mj_status", thinking, background?, phase? }` — `thinking` = récit narratif : bordure animée sur `.chat-log-wrap--mj-thinking` + ligne `.chat-mj-status` sous le fil (préambule, récap, reclaim inclus) ; `background` = `ScribIndicator` (plume, pas de bordure chat). Envoi / Réclamer bloqués pendant `thinking` narratif (pas pendant `background`). Overlay plein écran : **génération fiche** uniquement (`AiGenerationOverlay` dans `CharacterSheetFillAllButton`). **Compositeur** : textarea **1 ligne** qui s'agrandit avec le texte (`.chat-composer`) ; **Pistes du MJ** dans un `<select>` du compositeur (distinct de « Utiliser » = objets/sorts). Extraction des pistes : markdown, puces, lignes vides entre items. Entrée envoie, Maj+Entrée pour un saut de ligne. Serveur : `mjThinkingBegin` / `mjThinkingEnd` (`ws-hub.ts`) ; `executeAutoMj` appelle `mjThinkingEnd` **après** `broadcastMessage` (message ou erreur système), pas dans un `finally` qui précéderait le WS `message`. File d'attente si salon `busy` émet quand même `mjThinkingBegin` avant le retry. Client : feedback optimiste au clic Réclamer (`mjPromptPendingRef` + `setMjThinking` + libellé « Réclamer… ») ; tant que `mjPromptPendingRef`, tout `mj_status` avec `thinking: false` est **ignoré** pour l'overlay narratif (seul un message `mj` ou système « Le MJ n'a pas pu répondre… » / erreur HTTP / garde-fou 3 min termine l'attente) ; `refresh` après reconnexion compare les messages depuis le décompte au clic. Garde-fou 3 min si `thinking` bloqué.
 - **Erreur** : `broadcastMjFailure` dans le chat (tous les joueurs) + bannière / `reclaimError` côté client ; `console.error` serveur avec `source` (`player:reclaim`, `action`, `host:preamble`, …).
 - **Sanitisation réponses** : `prepareMjResponse()` / `formatMjMessageForDisplay()` — retire blocs `<!--scene:…-->` / `<!--arc:…-->` / `<!--companion:…-->` (y compris **tronqués** sans `-->`), parse JSON par accolades équilibrées, variantes `**[MJ] <!--scene:…` ; préfixe écho `[MJ]` / `[VJ]` / `[DIRE]` ; `collapseTrailingPhraseLoop` (fin « Il reste. Il reste. … »). Messages déjà en base : filtre à l'affichage.
 - **Ton MJ** : curseur salon `mjProse` (défaut droit au but) + `system-prompt.ts` (scène calme = peu de phrases) ; builders Réclamer / préambule / ouverture alignés.
@@ -991,7 +991,7 @@ La carte n'est chargée en state client **que** si god mode actif.
 
 **Problème** : le compositeur était un `<input>` d'une ligne. Après Réclamer, le récit + dock + clavier iOS laissaient une lanière illisible. Déplacer l'aide personnelle n'agrandissait pas le champ.
 
-**Solution** : `ChatMentionInput` en **textarea d'une ligne** qui grandit avec le texte (plafond ~12 rem). Entrée envoie, Maj+Entrée pour un saut de ligne. Les choix MJ et « Utiliser » sont des **`<select>`** (plus de boutons pleine largeur). Le journal de récit cède de la hauteur (`max-height: 38dvh`) pour que la plume du joueur reste visible au-dessus du dock.
+**Solution** : `ChatMentionInput` en **textarea d'une ligne** qui grandit avec le texte (plafond ~12 rem). Entrée envoie, Maj+Entrée pour un saut de ligne. Les **pistes du MJ** sont un `<select>` dans le compositeur (`Pistes du MJ`) ; « Utiliser » reste les objets/sorts (`Objet ou sort…`). Le journal de récit cède de la hauteur (`max-height: 38dvh`) pour que la plume du joueur reste visible au-dessus du dock.
 
 **Fichiers** : `ChatMentionInput.tsx`, `RoomView.tsx`, `globals.css`
 

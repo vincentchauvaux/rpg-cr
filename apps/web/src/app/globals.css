@@ -447,6 +447,7 @@ label {
 .chat-panel--log-expanded .speech-mode-row,
 .chat-panel--log-expanded .quick-use-block,
 .chat-panel--log-expanded .quick-use-row,
+.chat-panel--log-expanded .mj-live-choices-block,
 .chat-panel--log-expanded .player-intro-panel,
 .chat-panel--log-expanded .chat-composer {
   flex-shrink: 0;
@@ -457,6 +458,7 @@ label {
 .chat-panel--log-expanded .speech-mode-row,
 .chat-panel--log-expanded .quick-use-block,
 .chat-panel--log-expanded .quick-use-row,
+.chat-panel--log-expanded .mj-live-choices-block,
 .chat-panel--log-expanded .chat-composer {
   padding: 0.35rem 0.75rem;
   background: var(--bg-panel);
@@ -763,6 +765,14 @@ label {
   flex-direction: column;
   gap: 0.25rem;
   margin: 0.55rem 0 0.15rem;
+  max-width: 100%;
+}
+
+.mj-live-choices-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0 0 0.45rem;
   max-width: 100%;
 }
 

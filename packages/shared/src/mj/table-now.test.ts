@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { extractPlaceLocationFromText } from "./scene-extract-prompt.js";
 import {
+  emptyTableNow,
   formatTableNowForMj,
   heuristicTableNowFromMjText,
   heuristicTableNowFromPlayerIntent,
   homeLocationFromHabitat,
   looksLikeGoingHome,
+  looksLikeGoingInside,
   mergeTableNow,
+  nearbyInteriorFromTable,
   parseTableNow,
 } from "./table-now.js";
 
@@ -72,4 +75,37 @@ test("formatTableNowForMj interdit de re-narrer le trajet", () => {
 test("parseTableNow ignore le JSON vide", () => {
   assert.equal(parseTableNow(""), null);
   assert.ok(parseTableNow({ location: "auberge", lastBeat: "tu bois" }));
+});
+
+test("je rentre sans chez moi = entrer ici, pas rentrer à la maison", () => {
+  assert.equal(looksLikeGoingHome("je rentre"), false);
+  assert.equal(looksLikeGoingInside("je rentre"), true);
+  assert.equal(looksLikeGoingHome("Je rentre chez moi"), true);
+  assert.equal(looksLikeGoingInside("Je rentre chez moi"), false);
+
+  const current = mergeTableNow(emptyTableNow(), {
+    location: "devant la taverne du Dé Roulé",
+    lastBeat: "Vous venez de chez vous et vous êtes devant la taverne.",
+    locationSource: "mj",
+  });
+  assert.match(nearbyInteriorFromTable(current) ?? "", /taverne/i);
+
+  const patch = heuristicTableNowFromPlayerIntent(
+    "je rentre",
+    current,
+    "Maison au village"
+  );
+  assert.match(patch?.location ?? "", /taverne/i);
+  assert.doesNotMatch(patch?.location ?? "", /maison/i);
+  assert.match(patch?.lastBeat ?? "", /taverne/i);
+
+  const fromHome = heuristicTableNowFromPlayerIntent(
+    "je rentre",
+    mergeTableNow(emptyTableNow(), {
+      location: "ta maison",
+      lastBeat: "Vous avez quitté la taverne plus tôt.",
+    }),
+    "Maison au village"
+  );
+  assert.match(fromHome?.location ?? "", /maison/i);
 });

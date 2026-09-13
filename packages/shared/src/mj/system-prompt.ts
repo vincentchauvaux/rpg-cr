@@ -65,6 +65,7 @@ ${MJ_COMPANION_PACT_RULES}
 
 ## Messages joueurs
 - Les lignes préfixées [DIRE] sont des paroles **entendues** autour du PJ ; [ACTION] sont des gestes physiques (combat, manipulation) — tranche-les avec plus de rigueur mécanique si besoin, sans casser le rythme narratif.
+- [ACTION] « je rentre » **sans** « chez moi » : le PJ **entre dans le bâtiment devant lui** (taverne, auberge, maison dont il est sur le seuil). « Je rentre chez moi » = sa maison, pas la taverne.
 - Si un [DIRE] n'apostrophe **personne** (@) et que c'est une **question à la table** (« on est où ? », « qu'est-ce que je vois ? ») : réponds depuis la scène / le dernier récit — **un seul lieu**, pas un collage taverne+cabane, pas de foule qui « entend ».
 - Si un [DIRE] n'apostrophe **personne** (@) et que c'est une **parole in-world** : les gens à portée réagissent. Un seul interlocuteur évident → il peut répondre. Plusieurs → quelqu'un peut demander à qui le PJ parle. Lieu public sans nom : un anonyme (tenancier, voisin) suffit — **pas** de nouveau PNJ nommé. Prière, juron ou aparté : regards plutôt qu'une fausse conversation.
 - Quand un joueur mentionne un sort, objet ou capacité de sa fiche, arbitre en cohérence avec le canon établi.
@@ -111,6 +112,7 @@ export const MJ_SYSTEM_PROMPT_COMPACT = `Tu es le MJ d'une table JDR médiéval-
 - [DIRE] sans @ : question table (« on est où », « où sont mes hommes ») = un seul lieu + fiche (rang/suite) ; parole in-world = les gens à portée réagissent.
 - **PJ = tu/vous**, jamais des PNJ. Un nouveau joueur n'en fait pas des figurants. Marionnettes IA / vrais PNJ : 3e personne.
 - Scène : bloc \`<!--scene:{"location","mood","tension"}-->\` seulement si lieu/ambiance/tension changent. Suit le **script de table** (lieu + horaire + dernier fait) : ne rejoue pas le trajet.
+- « Je rentre » sans chez moi = entrer dans le bâtiment **ici** (taverne…), pas la maison.
 ${MJ_COMPANION_PACT_RULES_COMPACT}
 - Si un [ACTION] annonce un **Jet D&D 5e** ou un **Tour de table**, résous **uniquement** selon ces totaux — ne redemande pas de jet. Options « non retenues » : ignorées.
 - Pas de [VJ] ; guillemets « … » pour les répliques.

@@ -28,6 +28,7 @@ interface Props {
   activeChoice?: string;
   activeChoices?: string[];
   onChoiceClick?: (choice: string) => void;
+  selectId?: string;
 }
 
 /** Récit MJ en markdown sûr (pas de HTML brut). */
@@ -39,6 +40,7 @@ export function MjMessageMarkdown({
   activeChoice,
   activeChoices,
   onChoiceClick,
+  selectId = "mj-choice-select",
 }: Props) {
   const interactive = choicesClickable && choices.length > 0 && Boolean(onChoiceClick);
   const selectedKey = `${activeChoice ?? ""}\n${(activeChoices ?? []).join("\n")}`;
@@ -77,11 +79,11 @@ export function MjMessageMarkdown({
       </ReactMarkdown>
       {interactive ? (
         <div className="mj-choice-select-wrap">
-          <label className="mj-choice-select-label" htmlFor="mj-choice-select">
-            Action
+          <label className="mj-choice-select-label" htmlFor={selectId}>
+            Piste du MJ
           </label>
           <select
-            id="mj-choice-select"
+            id={selectId}
             className="mj-choice-select"
             disabled={choicesDisabled}
             value={selectedValue}
@@ -92,7 +94,7 @@ export function MjMessageMarkdown({
               onChoiceClick?.(next);
             }}
           >
-            <option value="">Choisir une action…</option>
+            <option value="">Choisir une piste…</option>
             {choices.map((choice) => (
               <option key={choice} value={choice}>
                 {choice}

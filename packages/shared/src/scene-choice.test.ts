@@ -13,6 +13,42 @@ import {
   resolveSceneCheckOutcome,
 } from "./scene-check.js";
 
+test("extractMjChoices accepte une ligne vide entre les puces", () => {
+  const md = `Que faites-vous ?
+
+- Examinez le parchemin de plus près pour déchiffrer les détails.
+
+- Interrogez un client à proximité pour voir s'il connaît l'étranger.
+
+- Ignorez le message et passez à votre conversation habituelle.
+`;
+  const choices = extractMjChoices(md);
+  assert.equal(choices.length, 3);
+  assert.match(choices[0] ?? "", /Examinez le parchemin/);
+});
+
+test("extractMjChoices lit des puces et des impératifs sans markdown", () => {
+  const bullets = `Que choisissez-vous ?
+
+• Chercher des indices sur la relique dans l'auberge
+• Explorer les environs à la recherche d'éclaireurs
+• Prendre la route directement vers le repaire
+`;
+  assert.equal(extractMjChoices(bullets).length, 3);
+
+  const plain = `Vous avez la possibilité d'agir.
+
+Que faites-vous ?
+
+Examinez le parchemin de plus près pour déchiffrer les détails.
+Interrogez un client à proximité pour voir s'il connaît l'étranger.
+Ignorez le message et passez à votre conversation habituelle.
+`;
+  const plainChoices = extractMjChoices(plain);
+  assert.equal(plainChoices.length, 3);
+  assert.match(plainChoices[2] ?? "", /Ignorez le message/);
+});
+
 test("extractMjChoices lit la dernière liste de 2–8 options", () => {
   const md = `Un feu crépite dans la cheminée.
 
@@ -113,6 +149,7 @@ test("ignore / verre / rentrer chez soi : pas de d20", () => {
     true
   );
   assert.equal(isAutomaticSceneChoice("Je me lève et rentre chez moi"), true);
+  assert.equal(isAutomaticSceneChoice("je rentre"), true);
   assert.equal(isAutomaticSceneChoice("Examinez le parchemin de plus près"), false);
 });
 

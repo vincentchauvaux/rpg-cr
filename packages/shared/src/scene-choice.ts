@@ -1,12 +1,22 @@
 import type { StatKey } from "./character-sheet.js";
 import { stripMjMetadataComments } from "./mj/mj-response-prep.js";
 
-const LIST_ITEM_RE = /^\s*(?:[-*+]|\d+[.)])\s+(.+?)\s*$/;
+/** Markdown `-` / `*` / numéros, puces Unicode, tirets cadratin (souvent avec ligne vide entre items). */
+const LIST_ITEM_RE = /^\s*(?:[-*+•●◦‣·]|[–—]|\d+[.)])\s+(.+?)\s*$/;
 
 const MIN_CHOICE_LEN = 8;
 const MAX_CHOICE_LEN = 240;
 const MIN_CHOICES = 2;
 const MAX_CHOICES = 8;
+
+const CHOICE_PROMPT_RE =
+  /que (faites|feras|choisissez|décidez|souhaitez)|que fais[- ]tu/iu;
+
+/** Impératif 2e pers. (`Examinez`) ou infinitif (`Examiner`, `Prendre`). */
+const PLAIN_OPTION_RE =
+  /^(?:Ou bien\s+)?(?:Vous pouvez(?: aussi)?\s+)?[\p{L}][\p{L}'’-]*(?:ez|er|ir|re|oir)\b/u;
+
+type ChoiceBlock = { start: number; end: number; items: string[] };
 
 export type SceneCheckMode = "dc" | "opposed";
 
@@ -52,82 +62,110 @@ export function matchChoice(
   return choices.find((c) => normalizeChoiceText(c) === n);
 }
 
+function parseListItem(line: string): string | null {
+  const m = line.match(LIST_ITEM_RE);
+  if (!m?.[1]) return null;
+  const item = stripInlineMd(m[1]);
+  if (item.length < MIN_CHOICE_LEN || item.length > MAX_CHOICE_LEN) return null;
+  return item;
+}
+
+function isNarrativeLeadIn(text: string): boolean {
+  return /^(Le |La |Les |Il |Elle |On |Ce |Cette |Votre |Tu |Vous êtes|Vous vous|Vous avez|Un |Une )/u.test(
+    text
+  );
+}
+
+function parsePlainOption(line: string): string | null {
+  const t = stripInlineMd(line).trim();
+  if (t.length < MIN_CHOICE_LEN || t.length > MAX_CHOICE_LEN) return null;
+  if (parseListItem(line)) return null;
+  if (/^#{1,6}\s/.test(t) || /^<!--/.test(t)) return null;
+  if (CHOICE_PROMPT_RE.test(t)) return null;
+  if (isNarrativeLeadIn(t) && !/^Une? autre verre/u.test(t)) return null;
+  if (!PLAIN_OPTION_RE.test(t)) return null;
+  return t;
+}
+
+function findChoiceBlocksFromLines(
+  lines: string[],
+  parse: (line: string) => string | null
+): ChoiceBlock[] {
+  const blocks: ChoiceBlock[] = [];
+  let current: ChoiceBlock | null = null;
+
+  const flush = () => {
+    if (current) {
+      blocks.push(current);
+      current = null;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    const item = parse(line);
+    if (item) {
+      if (!current) current = { start: i, end: i, items: [item] };
+      else {
+        current.end = i;
+        current.items.push(item);
+      }
+      continue;
+    }
+    if (current && line.trim() === "") continue;
+    flush();
+  }
+  flush();
+  return blocks;
+}
+
+function lastValidChoiceBlock(text: string): ChoiceBlock | null {
+  const lines = text.split("\n");
+  const listBlocks = findChoiceBlocksFromLines(lines, parseListItem);
+  for (let i = listBlocks.length - 1; i >= 0; i--) {
+    const block = listBlocks[i];
+    if (block.items.length >= MIN_CHOICES && block.items.length <= MAX_CHOICES) {
+      return block;
+    }
+  }
+
+  const plainBlocks = findChoiceBlocksFromLines(lines, parsePlainOption);
+  for (let i = plainBlocks.length - 1; i >= 0; i--) {
+    const block = plainBlocks[i];
+    if (block.items.length >= MIN_CHOICES && block.items.length <= MAX_CHOICES) {
+      const before = lines[block.start - 1]?.trim() ?? "";
+      const before2 = lines[block.start - 2]?.trim() ?? "";
+      const prompted =
+        CHOICE_PROMPT_RE.test(before) ||
+        CHOICE_PROMPT_RE.test(before2) ||
+        CHOICE_PROMPT_RE.test(text.slice(Math.max(0, text.length - 800)));
+      if (prompted || block.items.length >= 3) return block;
+    }
+  }
+  return null;
+}
+
 /**
- * Dernière liste markdown de 2–8 items du récit MJ (choix de scène).
- * Ignore les listes trop courtes (inventaire d'un mot) ou trop longues.
+ * Dernière liste de 2–8 options du récit MJ (choix de scène).
+ * Accepte markdown, puces, et lignes d'impératif séparées (y compris par une ligne vide).
  */
 export function extractMjChoices(markdown: string): string[] {
   const text = stripMjMetadataComments(markdown ?? "");
   if (!text.trim()) return [];
-
-  const blocks: string[][] = [];
-  let current: string[] = [];
-
-  for (const line of text.split(/\n/)) {
-    const m = line.match(LIST_ITEM_RE);
-    if (m?.[1]) {
-      const item = stripInlineMd(m[1]);
-      if (item.length >= MIN_CHOICE_LEN && item.length <= MAX_CHOICE_LEN) {
-        current.push(item);
-        continue;
-      }
-    }
-    if (current.length) {
-      blocks.push(current);
-      current = [];
-    }
-  }
-  if (current.length) blocks.push(current);
-
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    const block = blocks[i];
-    if (block.length >= MIN_CHOICES && block.length <= MAX_CHOICES) {
-      return block;
-    }
-  }
-  return [];
+  return lastValidChoiceBlock(text)?.items ?? [];
 }
 
 /** Retire la dernière liste de choix cliquables (affichage compact via <select>). */
 export function stripTrailingMjChoiceList(markdown: string): string {
   const display = stripMjMetadataComments(markdown ?? "");
   if (!display.trim()) return display;
-
+  const block = lastValidChoiceBlock(display);
+  if (!block) return display.trim();
   const lines = display.split("\n");
-  type Block = { start: number; end: number; count: number };
-  const blocks: Block[] = [];
-  let current: Block | null = null;
-
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i]?.match(LIST_ITEM_RE);
-    if (m?.[1]) {
-      const item = stripInlineMd(m[1]);
-      if (item.length >= MIN_CHOICE_LEN && item.length <= MAX_CHOICE_LEN) {
-        if (!current) current = { start: i, end: i, count: 1 };
-        else {
-          current.end = i;
-          current.count += 1;
-        }
-        continue;
-      }
-    }
-    if (current) {
-      blocks.push(current);
-      current = null;
-    }
-  }
-  if (current) blocks.push(current);
-
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    const b = blocks[i];
-    if (b.count >= MIN_CHOICES && b.count <= MAX_CHOICES) {
-      return [...lines.slice(0, b.start), ...lines.slice(b.end + 1)]
-        .join("\n")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-    }
-  }
-  return display.trim();
+  return [...lines.slice(0, block.start), ...lines.slice(block.end + 1)]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function tensionToDcAndWorldMod(tension: number): { dc: number; worldMod: number } {
@@ -337,6 +375,12 @@ export function isAutomaticSceneChoice(choice: string): boolean {
     /\b(rentre[rz]? chez|chez moi|se lève|je me lève|aller dormir|me couche|travailler la terre)\b/iu.test(
       t
     )
+  ) {
+    return true;
+  }
+  if (
+    /\b(je rentre|j['’]rentre|on rentre|rentrer|je entre|j['’]entre)\b/iu.test(t) &&
+    !/\b(forc|effract|crochet|enfonc)\b/iu.test(t)
   ) {
     return true;
   }

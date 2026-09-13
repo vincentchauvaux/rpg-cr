@@ -129,8 +129,11 @@ export function homeLocationFromHabitat(habitat?: string | null): string {
   return h;
 }
 
+/** Chez soi seulement si c'est dit (pas le verbe « rentrer » tout seul). */
 const GO_HOME_RE =
-  /\b(rentre|rentrer|rentré|rentrée|chez moi|ma maison|me couche|aller dormir|va dormir)\b/iu;
+  /\b(chez moi|chez soi|chez nous|à la maison|a la maison|ma maison|me couche|aller dormir|va dormir|rentre[rz]? chez|rentré[e]? chez|rentrer à(?:\s+la)?\s+maison)\b/iu;
+const GO_INSIDE_RE =
+  /\b(je rentre|j['’]rentre|on rentre|rentrer|rentre|je entre|j['’]entre|entrer|entre dedans|rentre dedans)\b/iu;
 const WORK_LAND_RE =
   /\b(travailler la terre|la terre dehors|aux champs|au champ|jardiner)\b/iu;
 const IGNORE_HOOK_RE =
@@ -140,6 +143,56 @@ const TALK_RE =
 
 export function looksLikeGoingHome(intent: string): boolean {
   return GO_HOME_RE.test(intent);
+}
+
+/** « Je rentre » sans « chez moi » = entrer dans le bâtiment devant soi. */
+export function looksLikeGoingInside(intent: string): boolean {
+  if (looksLikeGoingHome(intent)) return false;
+  return GO_INSIDE_RE.test(intent);
+}
+
+const BUILDING_NAME_RE =
+  /\b((?:la |l['’])?(?:taverne|auberge)(?:\s+(?:du|de la|des|de l['’])[\p{L}0-9'’\- ]{1,40})?)/iu;
+
+/**
+ * Intérieur du bâtiment devant le PJ. Ne relit pas un « vous avez quitté la taverne »
+ * si le lieu actuel est déjà la maison.
+ */
+export function nearbyInteriorFromTable(current: TableNowState | null): string | null {
+  if (!current) return null;
+  const loc = current.location.trim();
+  const beat = current.lastBeat.trim();
+
+  if (!loc) {
+    const fromBeat = beat.match(
+      /\bdevant\s+((?:la |l['’])?(?:taverne|auberge)[^.,;]{0,40})/iu
+    );
+    return fromBeat?.[1]?.trim() ?? null;
+  }
+
+  if (isHomeLocation(loc) && !/\b(devant|seuil|entrée|ruelle)\b/iu.test(loc)) {
+    return loc;
+  }
+
+  const stripped = loc
+    .replace(
+      /^(?:devant|au seuil de|à l['’]?entrée de|devant la porte de)\s+/iu,
+      ""
+    )
+    .trim();
+  if (stripped && stripped.toLowerCase() !== loc.toLowerCase()) return stripped;
+
+  if (/\b(ruelle|rue|pavé|dehors)\b/iu.test(loc)) {
+    const fromLoc = loc.match(BUILDING_NAME_RE);
+    if (fromLoc?.[1]) return fromLoc[1].trim();
+    const fromBeat = beat.match(BUILDING_NAME_RE);
+    if (fromBeat?.[1]) return fromBeat[1].trim();
+    if (/\btaverne\b/iu.test(`${loc} ${beat}`)) return "la taverne";
+    if (/\bauberge\b/iu.test(`${loc} ${beat}`)) return "l'auberge";
+  }
+
+  if (/\b(taverne|auberge|bar)\b/iu.test(loc)) return loc;
+  return loc;
 }
 
 export function heuristicTableNowFromPlayerIntent(
@@ -158,6 +211,14 @@ export function heuristicTableNowFromPlayerIntent(
     patch.location = homeLocationFromHabitat(habitat);
     patch.lastBeat = "Le PJ rentre chez lui.";
     patch.people = [];
+  } else if (looksLikeGoingInside(t)) {
+    const dest = nearbyInteriorFromTable(current);
+    if (dest) {
+      patch.location = dest;
+      patch.lastBeat = `Le PJ rentre dans ${dest}.`;
+    } else {
+      patch.lastBeat = "Le PJ rentre dans le lieu devant lui.";
+    }
   } else if (WORK_LAND_RE.test(t)) {
     patch.location = isHomeLocation(current?.location ?? "")
       ? "champs près de chez toi"
@@ -344,6 +405,11 @@ export function formatTableNowForMj(
   ];
   if (state.lastPlayerIntent) {
     lines.push(`- Intention du PJ (à résoudre maintenant) : ${state.lastPlayerIntent}`);
+    if (looksLikeGoingInside(state.lastPlayerIntent)) {
+      lines.push(
+        "- **Lecture** : « rentrer » sans « chez moi » = entrer dans le bâtiment du lieu actuel (taverne, auberge…), **pas** rentrer à la maison."
+      );
+    }
   }
   if (state.talks.length) {
     lines.push(`- Échanges déjà tenus : ${state.talks.join(" ; ")}`);
@@ -419,7 +485,8 @@ Réponds UNIQUEMENT avec un JSON :
 }
 
 Règles :
-- Si le PJ a dit rentrer chez lui, location = sa maison / cour / champs — **pas** la taverne ni la ruelle du trajet.
+- Si le PJ a dit « rentrer chez moi / à la maison », location = sa maison / cour / champs — **pas** la taverne ni la ruelle du trajet.
+- Si le PJ a dit seulement « je rentre » / « je rentre dedans » (sans chez moi) alors qu'il est devant un bâtiment, location = **l'intérieur de CE bâtiment** (taverne, auberge…) — **pas** sa maison.
 - Ne recopie pas un lieu seulement mentionné comme « vous avez quitté… ».
 - people = présents **maintenant**. Un inconnu déjà disparu n'est plus là.
 - Omets un champ s'il est inchangé et déjà dans l'archive.`,
