@@ -120,7 +120,7 @@ export function SceneCheckBanner({
           >
             S&apos;opposer
           </button>
-          <span className="muted">ou un autre choix dans la liste</span>
+          <span className="muted">ou un autre choix dans le menu</span>
         </div>
       )}
     </div>

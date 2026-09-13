@@ -1,24 +1,9 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import type { Components } from "react-markdown";
-import { useMemo, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
-import { matchChoice } from "@rpg-cr/shared";
-
-function markdownChildrenToText(children: ReactNode): string {
-  if (children == null || typeof children === "boolean") return "";
-  if (typeof children === "string" || typeof children === "number") {
-    return String(children);
-  }
-  if (Array.isArray(children)) {
-    return children.map(markdownChildrenToText).join("");
-  }
-  if (typeof children === "object" && children !== null && "props" in children) {
-    const el = children as { props?: { children?: ReactNode } };
-    return markdownChildrenToText(el.props?.children);
-  }
-  return "";
-}
+import { matchChoice, stripTrailingMjChoiceList } from "@rpg-cr/shared";
 
 const BASE_COMPONENTS: Components = {
   h2: ({ children }) => <h2 className="chat-msg-mj-h2">{children}</h2>,
@@ -57,36 +42,20 @@ export function MjMessageMarkdown({
 }: Props) {
   const interactive = choicesClickable && choices.length > 0 && Boolean(onChoiceClick);
   const selectedKey = `${activeChoice ?? ""}\n${(activeChoices ?? []).join("\n")}`;
+  const displayContent = interactive ? stripTrailingMjChoiceList(content) : content;
+  const [picked, setPicked] = useState("");
 
-  const components = useMemo<Components>(() => {
-    if (!interactive) return BASE_COMPONENTS;
-    const selected = selectedKey.split("\n").filter(Boolean);
+  useEffect(() => {
+    setPicked("");
+  }, [content, choicesClickable]);
 
-    return {
-      ...BASE_COMPONENTS,
-      ul: ({ children }) => <ul className="mj-choice-list">{children}</ul>,
-      ol: ({ children }) => <ol className="mj-choice-list">{children}</ol>,
-      li: ({ children }) => {
-        const text = markdownChildrenToText(children).trim();
-        const choice = matchChoice(choices, text);
-        if (!choice) return <li>{children}</li>;
-
-        const isActive = selected.some((c) => Boolean(matchChoice([c], choice)));
-        return (
-          <li className={isActive ? "mj-choice mj-choice--active" : "mj-choice"}>
-            <button
-              type="button"
-              className="mj-choice-btn"
-              disabled={choicesDisabled}
-              onClick={() => onChoiceClick?.(choice)}
-            >
-              {children}
-            </button>
-          </li>
-        );
-      },
-    };
-  }, [interactive, choices, choicesDisabled, selectedKey, onChoiceClick]);
+  const selected = useMemo(
+    () => selectedKey.split("\n").filter(Boolean),
+    [selectedKey]
+  );
+  const selectedValue =
+    choices.find((c) => selected.some((s) => Boolean(matchChoice([s], c)))) ??
+    picked;
 
   return (
     <div className={interactive ? "chat-msg-mj chat-msg-mj--choices" : "chat-msg-mj"}>
@@ -102,10 +71,36 @@ export function MjMessageMarkdown({
           "button",
         ]}
         unwrapDisallowed
-        components={components}
+        components={BASE_COMPONENTS}
       >
-        {content}
+        {displayContent}
       </ReactMarkdown>
+      {interactive ? (
+        <div className="mj-choice-select-wrap">
+          <label className="mj-choice-select-label" htmlFor="mj-choice-select">
+            Action
+          </label>
+          <select
+            id="mj-choice-select"
+            className="mj-choice-select"
+            disabled={choicesDisabled}
+            value={selectedValue}
+            onChange={(e) => {
+              const next = e.target.value;
+              if (!next) return;
+              setPicked(next);
+              onChoiceClick?.(next);
+            }}
+          >
+            <option value="">Choisir une action…</option>
+            {choices.map((choice) => (
+              <option key={choice} value={choice}>
+                {choice}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
     </div>
   );
 }

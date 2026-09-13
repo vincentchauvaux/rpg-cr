@@ -758,6 +758,40 @@ label {
   gap: 0.4rem;
 }
 
+.mj-choice-select-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.55rem 0 0.15rem;
+  max-width: 100%;
+}
+
+.mj-choice-select-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.mj-choice-select,
+.quick-use-select {
+  width: 100%;
+  max-width: 100%;
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: var(--text);
+  padding: 0.4rem 0.55rem;
+  min-height: 2.35rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.mj-choice-select:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
 .mj-choice {
   margin: 0;
 }
@@ -2416,12 +2450,13 @@ label {
 }
 
 .chat-mention-field textarea.chat-compose-input {
-  min-height: 6.25rem;
+  min-height: 2.4rem;
   max-height: 12rem;
+  height: 2.4rem;
   resize: none;
   line-height: 1.45;
-  padding: 0.7rem 0.8rem;
-  overflow-y: auto;
+  padding: 0.45rem 0.7rem;
+  overflow-y: hidden;
 }
 
 .reclaim-error {
@@ -3093,10 +3128,15 @@ textarea.field-invalid {
 
 .quick-use-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 0.35rem;
-  margin-bottom: 0.5rem;
+  gap: 0.5rem;
+  margin-bottom: 0;
+}
+
+.quick-use-select {
+  flex: 1;
+  min-width: 0;
 }
 
 .btn-reclaim {
@@ -3410,7 +3450,7 @@ textarea.field-invalid {
   }
 
   .chat-mention-field textarea.chat-compose-input {
-    min-height: 7rem;
+    min-height: 2.6rem;
     font-size: 16px;
   }
 

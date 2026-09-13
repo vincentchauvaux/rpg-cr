@@ -5,6 +5,7 @@ import {
   inferSceneCheck,
   isAutomaticSceneChoice,
   matchChoice,
+  stripTrailingMjChoiceList,
 } from "./scene-choice.js";
 import {
   formatSceneCheckActionMessage,
@@ -27,6 +28,22 @@ Que choisissez-vous d'abord ?
   assert.match(choices[0] ?? "", /Chercher des indices/);
   assert.match(choices[1] ?? "", /Explorer les environs/);
   assert.match(choices[2] ?? "", /Prendre la route/);
+});
+
+test("stripTrailingMjChoiceList enlève la dernière liste de choix", () => {
+  const md = `Un feu crépite.
+
+Que choisissez-vous ?
+
+- Chercher des indices sur la relique dans l'auberge
+- Explorer les environs à la recherche d'éclaireurs
+- Prendre la route directement vers le repaire
+
+<!--scene:{"location":"auberge","mood":"calme","tension":20}-->`;
+  const stripped = stripTrailingMjChoiceList(md);
+  assert.match(stripped, /Un feu crépite/);
+  assert.doesNotMatch(stripped, /Chercher des indices/);
+  assert.doesNotMatch(stripped, /<!--scene/);
 });
 
 test("matchChoice ignore ponctuation et accents", () => {

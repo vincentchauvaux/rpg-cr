@@ -88,6 +88,48 @@ export function extractMjChoices(markdown: string): string[] {
   return [];
 }
 
+/** Retire la dernière liste de choix cliquables (affichage compact via <select>). */
+export function stripTrailingMjChoiceList(markdown: string): string {
+  const display = stripMjMetadataComments(markdown ?? "");
+  if (!display.trim()) return display;
+
+  const lines = display.split("\n");
+  type Block = { start: number; end: number; count: number };
+  const blocks: Block[] = [];
+  let current: Block | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i]?.match(LIST_ITEM_RE);
+    if (m?.[1]) {
+      const item = stripInlineMd(m[1]);
+      if (item.length >= MIN_CHOICE_LEN && item.length <= MAX_CHOICE_LEN) {
+        if (!current) current = { start: i, end: i, count: 1 };
+        else {
+          current.end = i;
+          current.count += 1;
+        }
+        continue;
+      }
+    }
+    if (current) {
+      blocks.push(current);
+      current = null;
+    }
+  }
+  if (current) blocks.push(current);
+
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const b = blocks[i];
+    if (b.count >= MIN_CHOICES && b.count <= MAX_CHOICES) {
+      return [...lines.slice(0, b.start), ...lines.slice(b.end + 1)]
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
+  }
+  return display.trim();
+}
+
 function tensionToDcAndWorldMod(tension: number): { dc: number; worldMod: number } {
   const t = Number.isFinite(tension) ? tension : 0;
   if (t <= -50) return { dc: 15, worldMod: 4 };

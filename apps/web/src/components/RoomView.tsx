@@ -1689,18 +1689,29 @@ export function RoomView({ code }: Props) {
 
               {speechMode === "action" && quickUseOptions.length > 0 && chatReady && (
                 <div className="quick-use-block">
-                <div className="quick-use-row" role="group" aria-label="Actions rapides">
-                  <span className="muted quick-use-label">Utiliser…</span>
-                  {quickUseOptions.map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      className="quick-use-btn"
-                      onClick={() => insertQuickUse(opt)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                <div className="quick-use-row">
+                  <label className="muted quick-use-label" htmlFor="quick-use-select">
+                    Utiliser
+                  </label>
+                  <select
+                    id="quick-use-select"
+                    className="quick-use-select"
+                    defaultValue=""
+                    aria-label="Actions rapides"
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const opt = quickUseOptions.find((o) => o.id === id);
+                      if (opt) insertQuickUse(opt);
+                      e.target.value = "";
+                    }}
+                  >
+                    <option value="">Choisir une action…</option>
+                    {quickUseOptions.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 {rollQuickHint && (
                   <p className="llm-hint muted quick-use-roll-hint">{rollQuickHint}</p>
@@ -1711,7 +1722,7 @@ export function RoomView({ code }: Props) {
               <div className="chat-form">
                 <ChatMentionInput
                   multiline
-                  rows={4}
+                  rows={1}
                   value={input}
                   onChange={setInput}
                   onSubmit={sendChat}

@@ -40,7 +40,7 @@ interface Props {
   disabled?: boolean;
   placeholder?: string;
   className?: string;
-  /** Zone de jeu : plusieurs lignes, hauteur mini réservée. */
+  /** Une ligne au départ, s’agrandit avec le texte. */
   multiline?: boolean;
   rows?: number;
 }
@@ -54,7 +54,7 @@ export function ChatMentionInput({
   placeholder,
   className,
   multiline = false,
-  rows = 4,
+  rows = 1,
 }: Props) {
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLUListElement>(null);
@@ -86,7 +86,9 @@ export function ChatMentionInput({
     const el = inputRef.current;
     if (!multiline || !el || el.tagName !== "TEXTAREA") return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_PX)}px`;
+    const next = Math.min(el.scrollHeight, TEXTAREA_MAX_PX);
+    el.style.height = `${Math.max(next, 0)}px`;
+    el.style.overflowY = el.scrollHeight > TEXTAREA_MAX_PX ? "auto" : "hidden";
   }, [multiline]);
 
   useLayoutEffect(() => {
