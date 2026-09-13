@@ -1536,6 +1536,7 @@ label {
 .char-wizard-actions {
   display: flex;
   gap: 0.75rem;
+  justify-content: flex-end;
   margin-top: 1rem;
 }
 
@@ -1590,11 +1591,6 @@ label {
 
 .brief-choice-hint {
   font-size: 0.75rem;
-}
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-  margin-top: 1rem;
 }
 
 .char-field-wrap {
