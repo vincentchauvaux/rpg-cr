@@ -270,7 +270,7 @@ export function isAutomaticSceneChoice(choice: string): boolean {
   if (!raw) return true;
   const t = normalizeForMatch(raw);
 
-  if (/^(demande|demander|parle|parler|discuter|signale|signaler)\b/iu.test(raw)) {
+  if (/^(demande|demander|parle|parler|discuter|signale|signaler|interroge|interroger)\b/iu.test(raw)) {
     return true;
   }
   if (/\b(rejoins?|rejoint)\b/iu.test(t)) return true;
@@ -281,6 +281,20 @@ export function isAutomaticSceneChoice(choice: string): boolean {
   if (/\b(ceinture|poches?|inventaire|équipement)\b/iu.test(t)) return true;
   if (
     /\b(regarder ce que|ce que j['’]?ai gagn|ce que j['’]?ai obtenu)\b/iu.test(t)
+  ) {
+    return true;
+  }
+  if (
+    /\b(ignor[ez]|ignorer le|passe[rz] à|conversation habituelle|un autre verre|demander un verre|boire|chope)\b/iu.test(
+      t
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(rentre[rz]? chez|chez moi|se lève|je me lève|aller dormir|me couche|travailler la terre)\b/iu.test(
+      t
+    )
   ) {
     return true;
   }

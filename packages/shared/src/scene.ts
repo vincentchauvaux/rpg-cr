@@ -6,6 +6,9 @@ export interface SceneState {
   mood: string;
   tension: TensionLevel;
   updatedAt: string;
+  people?: string;
+  timeOfDay?: string;
+  weather?: string;
 }
 
 export interface SceneLogEntry extends SceneState {
@@ -36,6 +39,8 @@ export function formatSceneLine(scene: SceneState | null | undefined): string {
     return "Scène non établie";
   }
   const loc = scene.location?.trim() || "Lieu inconnu";
+  const when = [scene.timeOfDay, scene.weather].filter(Boolean).join(", ");
   const mood = scene.mood?.trim();
-  return mood ? `${loc} — ${mood}` : loc;
+  const bits = [loc, when || null, mood || null].filter(Boolean);
+  return bits.join(" — ");
 }

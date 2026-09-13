@@ -7,6 +7,7 @@ import {
   namesReferToSamePerson,
   openingInventedFamilySecret,
   openingInventedNamedNpc,
+  openingLooksLikeQuestMcGuffin,
   openingTreatsHostAsNpc,
   parseCampaignOpeningPlan,
   renderFallbackOpeningNarrative,
@@ -125,6 +126,15 @@ Tu sens l’écho d’une présence silencieuse derrière toi : Sir Aldric, Gard
 Un murmure se fait entendre dans la ruelle, comme si les murs eux-mêmes cherchaient à te parler.
 Sir Aldric murmure : « La vérité sur ton père se cache ici, mais elle n’est pas sans danger. »
 `;
+
+test("ouverture injouable : parchemin crypté d'un inconnu qui disparaît", () => {
+  const text =
+    "Vous êtes assis au comptoir. Un homme aux yeux perçants dépose un parchemin griffonné " +
+    "puis se fond rapidement dans la foule. « L'éclat de la mer se cache sous le soleil couchant. " +
+    "Trouvez le phare d'argent. » Que faites-vous ?";
+  assert.equal(openingLooksLikeQuestMcGuffin(text), true);
+  assert.equal(isCampaignOpeningUnplayable(text, "Bibhou"), true);
+});
 
 test("ouverture injouable : Sir Aldric et secret du père hors fiche", () => {
   assert.equal(openingInventedNamedNpc(SERA_OPENING, "Sera Lame-Douce", { rank: "Chevalier" }), true);

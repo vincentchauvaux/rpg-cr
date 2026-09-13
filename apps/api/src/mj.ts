@@ -45,6 +45,7 @@ import {
   formatEstablishedCanonForMj,
   warnCanonContinuityDrift,
 } from "./established-canon.js";
+import { formatTableNowBlockForMj } from "./room-table-now.js";
 
 export interface MjTurnOptions {
   speakingPlayerId?: string;
@@ -124,6 +125,7 @@ function buildMjTurnMessages(
   const establishedCanonBlock =
     micro || slim ? "" : formatEstablishedCanonForMj(establishedCanon);
   const sceneBlock = formatSceneForMj(getSceneState(roomId));
+  const tableNowBlock = formatTableNowBlockForMj(roomId);
   const arcBlock = formatNarrativeArcForMj(getNarrativeArc(roomId));
 
   const tableAlignments = slim
@@ -172,6 +174,7 @@ function buildMjTurnMessages(
   const worldParts = micro
     ? [
         `Graine : ${worldSeed}.`,
+        `### Script de table\n${truncateMjBlock(tableNowBlock, 700)}`,
         `### Canon (résumé)\n${establishedCanonSummary}`,
         `### Scène\n${sceneBlock}`,
         playerSheetBlock
@@ -180,6 +183,7 @@ function buildMjTurnMessages(
       ].filter(Boolean)
     : [
         `Graine narrative du salon : ${worldSeed}.`,
+        `### Script de table (source de vérité — ne pas re-narrer)\n${truncateMjBlock(tableNowBlock, slim ? 900 : 1800)}`,
         `### Résumé canon établi (ne pas inventer au-delà)\n${establishedCanonSummary}`,
         map
           ? `Carte (graine ${map.seed}) : pays — ${map.countries.join(", ")}. POI : ${map.pois.map((p) => p.name).join("; ")}.`

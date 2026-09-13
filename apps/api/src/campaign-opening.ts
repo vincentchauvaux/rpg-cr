@@ -31,7 +31,8 @@ import {
   mjThinkingBegin,
   mjThinkingEnd,
 } from "./ws-hub.js";
-import { applySceneUpdate, bootstrapSceneLocationFromHistory } from "./room-scene.js";
+import { applySceneUpdate, bootstrapSceneLocationFromHistory, getSceneState } from "./room-scene.js";
+import { seedTableNowFromOpening } from "./room-table-now.js";
 import { updateNarrativeArc } from "./room-narrative-arc.js";
 import { broadcastScene } from "./ws-hub.js";
 import { queueNarrativeLlm } from "./room-llm-queue.js";
@@ -191,6 +192,18 @@ export async function bootstrapCampaignOpening(
       preferNewest: false,
     });
     if (bootstrapped) broadcastScene(roomId, bootstrapped);
+
+    seedTableNowFromOpening(
+      roomId,
+      {
+        location: scenePatch?.location || plan.scene.location,
+        mood: scenePatch?.mood || plan.scene.mood,
+        beat: plan.openingScene.slice(0, 220) || plan.startingSituation,
+      },
+      mjMsg.id
+    );
+    const nowScene = getSceneState(roomId);
+    if (nowScene) broadcastScene(roomId, nowScene);
 
     updateNarrativeArc(roomId, {
       mainPlot: arcPatch?.mainPlot ?? plan.mainPlot,

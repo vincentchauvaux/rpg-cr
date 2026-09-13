@@ -56,12 +56,12 @@ export function locationsEquivalent(a: string, b: string): boolean {
   return false;
 }
 
-/** Types de lieux reconnus (FR médiéval-fantastique + « bar » courant en ouverture). */
+/** Types de lieux reconnus (FR médiéval-fantastique + maison / ferme / bar). */
 export const PLACE_TYPE_WORD =
-  /(?:taverne|bar|estaminet|cabaret|brasserie|auberge|marché|carrefour|port|atelier|sanctuaire|tribunal|caravansérail|bergerie|moulin|ruines|forteresse|forêt|citadelle|crypte|village|château|caverne|temple|marais|montagne|plaine|donjon|place|échoppe|boutique|grange|écurie|repaire|manoir|palais|relais|halte|campement|grotte|mine|pont|quai|docks?|cimetière|bibliothèque|académie|guild|cellier|cave|salle|hall|ruelle)/i;
+  /\b(?:taverne|bar|estaminet|cabaret|brasserie|auberge|marché|carrefour|port|atelier|sanctuaire|tribunal|caravansérail|bergerie|moulin|ruines|forteresse|forêt|citadelle|crypte|village|château|caverne|temple|marais|montagne|plaine|donjon|place|échoppe|boutique|grange|écurie|repaire|manoir|palais|relais|halte|campement|grotte|mine|pont|quai|docks?|cimetière|bibliothèque|académie|guild|cellier|cave|salle|hall|ruelle|maison|demeure|chaumière|logis|foyer|grenier|cour|ferme|champs?|jardin|habitation)\b/i;
 
 const PLACE_TYPE_CAPTURE =
-  "(?:taverne|bar|estaminet|cabaret|brasserie|marché|carrefour|auberge|port|atelier|sanctuaire|tribunal|caravansérail|bergerie|moulin|ruines|forteresse|forêt|citadelle|crypte|village|château|caverne|temple|marais|montagnes?|plaine|donjon|cellier|cave|salle|hall)";
+  "(?:taverne|bar|estaminet|cabaret|brasserie|marché|carrefour|auberge|port|atelier|sanctuaire|tribunal|caravansérail|bergerie|moulin|ruines|forteresse|forêt|citadelle|crypte|village|château|caverne|temple|marais|montagnes?|plaine|donjon|cellier|cave|salle|hall|ruelle|maison|demeure|chaumière|logis|foyer|grenier|cour|ferme|champs?|jardin|habitation)";
 
 /** Lieu plausible (pas un prénom PJ isolé). */
 export function isLikelyPlaceLocation(location: string): boolean {
@@ -401,41 +401,51 @@ const MOOD_HINTS: [RegExp, string][] = [
   ],
 ];
 
-/** Extrait un nom de lieu depuis un extrait de récit (sans seuil de longueur). */
+function isDepartureMention(text: string, index: number): boolean {
+  const window = text.slice(Math.max(0, index - 48), index + 8);
+  return /\b(quitt[eé]|laiss[eé]|sorti[e]? de|derrière vous|n['’]êtes plus|plus à la)\b/i.test(
+    window
+  );
+}
+
+/** Extrait le lieu **actuel** (dernier cadre, pas le lieu qu'on vient de quitter). */
 export function extractPlaceLocationFromText(text: string): string | null {
   const sample = text.slice(0, 6000).trim();
   if (sample.length < 8) return null;
 
-  let location = "";
+  const found: { loc: string; index: number }[] = [];
 
-  const explicit = new RegExp(
-    `(?:dans|aux|sur|sous|devant|derrière|au seuil de|au cœur des?|au milieu des?|à l'intérieur de|à l'intérieur d')\\s+(?:les?\\s+|la\\s+|l'|un\\s+|une\\s+)?(${PLACE_TYPE_CAPTURE}(?:\\s+(?:de|du|d'|des)\\s+[\\w''\\-]+)?)`,
-    "i"
-  );
-  const explicitMatch = sample.match(explicit);
-  if (explicitMatch?.[1]) location = explicitMatch[1].trim().slice(0, 80);
-
-  if (!location) {
-    const articlePlace = new RegExp(
-      `\\b(?:la|le|l'|les|une|un)\\s+(${PLACE_TYPE_CAPTURE}(?:\\s+(?:de|du|d'|des)\\s+[\\w''\\-]+)?)`,
-      "i"
-    );
-    const ap = sample.match(articlePlace);
-    if (ap?.[1]) location = ap[1].trim().slice(0, 80);
+  for (const m of sample.matchAll(/\bchez\s+(?:toi|vous|moi|soi)\b/gi)) {
+    found.push({ loc: "chez soi", index: m.index ?? 0 });
   }
 
-  if (!location) {
-    const named = sample.match(
-      new RegExp(
-        `\\b((${PLACE_TYPE_CAPTURE})[\\w\\s''\\-]{0,40}|(?:ancien|vieux|vieille)\\s+[\\w''\\-]{3,30})`,
-        "i"
-      )
-    );
-    if (named?.[1]) location = named[1].trim().slice(0, 80);
+  const placeTail = `${PLACE_TYPE_CAPTURE}\\b(?:\\s+(?:de|du|d'|des)\\s+[\\w''\\-]+)?`;
+  const patterns = [
+    new RegExp(
+      `(?:dans|aux|sur|sous|devant|derrière|au seuil de|au cœur des?|au milieu des?|à l'intérieur de|à l'intérieur d')\\s+(?:les?\\s+|la\\s+|l'|un\\s+|une\\s+|ta\\s+|ton\\s+|votre\\s+)?(${placeTail})`,
+      "gi"
+    ),
+    new RegExp(
+      `\\b(?:la|le|l'|les|une|un|ta|ton|votre|modeste)\\s+(${placeTail})`,
+      "gi"
+    ),
+  ];
+
+  for (const re of patterns) {
+    for (const m of sample.matchAll(re)) {
+      const loc = (m[1] ?? "").trim().slice(0, 80);
+      if (loc && isLikelyPlaceLocation(loc)) {
+        found.push({ loc, index: m.index ?? 0 });
+      }
+    }
   }
 
-  if (!location || !isLikelyPlaceLocation(location)) return null;
-  return location;
+  if (!found.length) return null;
+  found.sort((a, b) => a.index - b.index);
+  const current = found.filter((f) => !isDepartureMention(sample, f.index));
+  const pick = (current.length ? current : found).at(-1);
+  if (!pick || !isLikelyPlaceLocation(pick.loc)) return null;
+  return pick.loc;
 }
 
 /** Parcourt des textes (ordre fourni par l'appelant) et retourne le premier lieu plausible. */

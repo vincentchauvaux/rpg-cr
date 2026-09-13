@@ -45,6 +45,9 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
   const sceneBlock = ctx.sceneSummary?.trim()
     ? `\n### Scène en cours\n${ctx.sceneSummary.trim()}`
     : "";
+  const tableNowBlock = ctx.tableNowSummary?.trim()
+    ? `\n### Script de table (source de vérité)\n${ctx.tableNowSummary.trim()}\nNarre **seulement** la conséquence de l'action, dans CE lieu, **après** le dernier fait. Interdit de rejouer le trajet.`
+    : "";
   const trameBlock = ctx.trameSummary?.trim()
     ? `\n### Trame\n${ctx.trameSummary.trim()}`
     : "";
@@ -71,6 +74,7 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
     `- Pas de tutoriel ni de mécanique hors jeu ; ton immersif en français.` +
     (invite ? COMPANION_INVITE_MJ_HINT : COMPANION_ONGOING_MJ_HINT) +
     rollBlock +
+    tableNowBlock +
     sceneBlock +
     trameBlock +
     companions

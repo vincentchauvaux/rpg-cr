@@ -121,6 +121,7 @@ import {
   listSceneLog,
 } from "./room-scene.js";
 import { updateNarrativeArc } from "./room-narrative-arc.js";
+import { applyTableNowFromMjText } from "./room-table-now.js";
 import { queueNarrativeLlm } from "./room-llm-queue.js";
 import {
   canManageAvatar,
@@ -558,6 +559,11 @@ app.post<{
       updateNarrativeArc(room.id, arcPatch);
     }
     applyCompanionDirectives(room.id, companionDirectives);
+    const tableNow = applyTableNowFromMjText(room.id, content, msg.id);
+    if (tableNow) {
+      const scene = getSceneState(room.id);
+      if (scene) broadcastScene(room.id, scene);
+    }
     if (shouldAutoExtractFacts(room.llmConfig) && !usesTightGroqTpm(room.llmConfig)) {
       const apiKey = resolveRoomApiKey(room.llmConfig, req.body.apiKey, room.id);
       void (async () => {

@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-13 (**prod** : `1b0ce75` poussé et déployé — curseur de ton, QCM de départ, ouverture simplifiée)
+> Dernière mise à jour : 2026-09-13 (**MJ** : script de table — lieu, gens, horaire, météo, propos — avant chaque tour)
 
 ## Vision
 
@@ -72,6 +72,14 @@ Helpers : `packages/shared/src/character-sheet.ts` — `STORY_TEXT_FIELDS`, `MAT
 **UI** : onglets Histoire / Biens matériels / Stats & capacités dans `CharacterSheetPanel` ; wizard multi-étapes ; ✨ par section (`POST …/character/generate-section`).
 
 **Scène (lieu + ambiance + tension)** :
+
+### Script de table (continuité)
+
+- **Quoi** : état vivant `rooms.table_now_json` + journal `room_beats` (lieu, présents, horaire, météo, dernier fait, propos, objets laissés ailleurs).
+- **Quand** : dès qu'un PJ agit (`applyTableNowFromPlayerAction` — « je rentre chez moi » verrouille le lieu **avant** le tour MJ) ; après chaque récit (`applyTableNowFromMjText` + extraction LLM si faits auto).
+- **Injection** : bloc **Script de table** en tête du contexte MJ (`formatTableNowForMj`) — source de vérité ; interdit de re-narrer le trajet déjà joué.
+- **Lieu** : `extractPlaceLocationFromText` prend le **dernier** cadre, ignore « vous quittez la taverne » ; maison / ferme / cour / champs reconnus. Un lieu déclaré par le PJ (rentrer chez soi) n'est pas déboulonné par une ruelle de flashback.
+- **UI** : `SceneIndicator` affiche aussi horaire · météo quand le script les a.
 
 ### Lieu de scène
 
@@ -551,9 +559,9 @@ Pas de bouton « ajouter un compagnon » : le PJ **demande au PNJ** (Dire `@PNJ`
 - **Noms de royaumes** : générés de façon déterministe par `world_seed` / `map_seed` dans `packages/shared/src/map/world-names.ts` → stockés dans `rooms.map_json` (`countries`, `territories`, POI). Plus de liste figée Aldermar / Brumes / Khar-Vos pour les **nouveaux** salons.
 - **Déclenchement unique** quand l'**hôte** (admin humain) finalise sa fiche (`POST …/character/finalize`) ou passe `ready` + `story_locked` : `scheduleCampaignOpening` → `bootstrapCampaignOpening` (`apps/api/src/campaign-opening.ts`).
 - Deux appels LLM : plan JSON (`packages/shared/src/mj/campaign-opening-prompt.ts`) puis récit MJ long (Acte I, hook, enjeu) intégrant la fiche hôte — **pas** de second message d'intégration pour l'hôte. Le prompt d'ouverture injecte les pays / territoires / POI de la carte et interdit les noms legacy sauf s'ils sont déjà dans `map_json` (anciennes parties).
-- **Voix PJ** : 2e personne ; `isCampaignOpeningUnplayable` (trop court, trop romancé, trop de lieux, hôte=PNJ, Sir/Dame hors fiche, secret du père). Retry = réécriture courte, puis récit de secours. Style salon = **une** injection (`formatMjProseRules` dans le system MJ). Contraintes d'Acte I = `openingHardRules` (plan + récit). Footer canon = une fois via `buildNarrationPrompt`.
+- **Voix PJ** : 2e personne ; `isCampaignOpeningUnplayable` (trop court, trop romancé, trop de lieux, hôte=PNJ, Sir/Dame hors fiche, secret du père, **McGuffin parchemin d'inconnu**). Retry = réécriture courte, puis récit de secours. Style salon = **une** injection (`formatMjProseRules` dans le system MJ). Contraintes d'Acte I = `openingHardRules` (plan + récit) : hook **personnel** (vie du PJ), pas un messager crypté qui disparaît.
 - **Style** : `llm_config.mjProse` (0–100, défaut 20) — curseur admin « Droit au but / Sobre / Romancé » injecté dans tous les tours MJ (`formatMjProseRules`).
-- **Brief de départ** : QCM `creationBrief` (qui / en ce moment / passé) avant la fiche ; préremplit rang/habitat/suite ; contraint l'ouverture à **un lieu** calé sur le choix.
+- **Brief de départ** : QCM `creationBrief` (qui / en ce moment / passé) avant la fiche ; préremplit rang/habitat/suite ; paysan local → **Maison au village** ; contraint l'ouverture à **un lieu** calé sur le choix.
 - Finalisation **hôte** : « X a scellé sa fiche. » (sans « présentez-vous ») ; les autres PJ gardent l'invite à se présenter.
 - WS `mj_status` phase `opening` → placeholder barre de chat « Le MJ prépare le monde… » ; message système discret au démarrage.
 - **Resync client** : `GET /api/rooms/:code` expose `mjStatus` (refcount serveur) ; `RoomView.refresh` réapplique l'état MJ si WS manqué ; heuristique messages (« Le MJ prépare le monde… » sans récit MJ ni échec) → statut occupé ; si échec ouverture déjà dans le fil → **clear** du spinner bloqué (WS `message` + refresh).
@@ -945,7 +953,7 @@ La carte n'est chargée en state client **que** si god mode actif.
 
 **Problème** : l'Acte I tenait en une question + des choix « Rejoins Timmy… ». Le MJ niait le rang et les hommes (fiche non injectée : `servants` / background absents). Cliquer « chercher dans ta ceinture » lançait un jet de **Force contesté** (`ceintur` dans le parseur). Le MJ inventait fusil, éclat magique et « autres compagnons ».
 
-**Solution** : fiche MJ = rang + suite + histoire ; ouverture à la 2e personne (jamais « rejoins le PJ ») ; ouverture trop courte → retry puis récit de secours ; questions « où sont mes hommes » = orientation table ; choix sûrs (ceinture, rejoindre, demander) **sans d20**.
+**Solution** : fiche MJ = rang + suite + histoire ; ouverture à la 2e personne (jamais « rejoins le PJ ») ; ouverture trop courte → retry puis récit de secours ; questions « où sont mes hommes » = orientation table ; choix sûrs (ceinture, rejoindre, demander, ignorer, verre, rentrer chez soi) **sans d20**.
 
 **Fichiers** : `character-sheet.ts`, `campaign-opening-prompt.ts`, `campaign-opening.ts`, `scene-choice.ts`, `scene-check.ts`, `player-table-ask.ts`, `system-prompt.ts`
 

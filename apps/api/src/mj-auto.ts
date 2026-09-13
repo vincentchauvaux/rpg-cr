@@ -71,6 +71,12 @@ import {
   getSceneState,
 } from "./room-scene.js";
 import {
+  applyTableNowFromMjText,
+  applyTableNowFromPlayerAction,
+  extractTableNowFromText,
+  formatTableNowBlockForMj,
+} from "./room-table-now.js";
+import {
   extractNarrativeArcFromText,
   formatNarrativeArcForMj,
   getNarrativeArc,
@@ -192,6 +198,7 @@ function buildPlayerActionNarrationContext(
     playerName,
     actionText: content,
     abilitiesHint: buildAbilitiesHintForPlayer(playerId),
+    tableNowSummary: formatTableNowBlockForMj(roomId),
     sceneSummary: formatSceneForMj(scene),
     trameSummary: formatNarrativeArcForMj(arc),
     companionsPresent: listPresentCompanionLines(roomId, playerId),
@@ -432,6 +439,26 @@ async function maybeExtractScene(
   });
 }
 
+async function maybeExtractTableNow(
+  roomId: string,
+  messageId: string,
+  mjContent: string,
+  skipSceneExtract?: boolean
+): Promise<void> {
+  const room = getRoomById(roomId);
+  if (!room?.llmConfig || !shouldAutoExtractFacts(room.llmConfig)) return;
+  if (usesTightGroqTpm(room.llmConfig) || skipSceneExtract) return;
+  await runBackgroundScrib(roomId, "extract-table-now", async () => {
+    await extractTableNowFromText(
+      roomId,
+      messageId,
+      mjContent,
+      room.llmConfig!,
+      resolveRoomApiKey(room.llmConfig, undefined, roomId)
+    );
+  });
+}
+
 async function maybeExtractArc(
   roomId: string,
   mjContent: string,
@@ -564,6 +591,11 @@ async function executeAutoMj(
         arcApplied = true;
       }
       applyCompanionDirectives(roomId, companionDirectives);
+      const tableNow = applyTableNowFromMjText(roomId, content, mjMsg.id);
+      if (tableNow) {
+        const scene = getSceneState(roomId);
+        if (scene) broadcastScene(roomId, scene);
+      }
       void maybeExtractFacts(roomId, mjMsg.id, content);
       void maybeExtractScene(
         roomId,
@@ -572,6 +604,7 @@ async function executeAutoMj(
         sceneApplied,
         skipSceneExtract
       );
+      void maybeExtractTableNow(roomId, mjMsg.id, content, skipSceneExtract);
       void maybeExtractArc(roomId, content, arcApplied);
       onSuccess?.();
     });
@@ -926,6 +959,10 @@ export function scheduleActionMj(
 
   const player = getPlayerById(playerId);
   if (!player) return;
+
+  applyTableNowFromPlayerAction(roomId, playerId, trimmed);
+  const immediateScene = getSceneState(roomId);
+  if (immediateScene) broadcastScene(roomId, immediateScene);
 
   const prompt = buildNarrationPrompt(
     buildPlayerActionNarrationContext(roomId, playerId, playerName, trimmed)

@@ -74,6 +74,11 @@ export function SceneIndicator({
       <div className="scene-indicator-text">
         <span className="scene-indicator-label muted">Scène</span>
         <span className="scene-indicator-location">{locationLabel}</span>
+        {scene?.timeOfDay || scene?.weather ? (
+          <span className="scene-indicator-mood">
+            {[scene.timeOfDay, scene.weather].filter(Boolean).join(" · ")}
+          </span>
+        ) : null}
         {moodLabel ? <span className="scene-indicator-mood">{moodLabel}</span> : null}
       </div>
       {isAdminGod && (

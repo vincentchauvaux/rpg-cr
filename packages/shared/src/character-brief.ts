@@ -161,11 +161,16 @@ export function applyCreationBriefToSheet(
         ? "Quelques hommes sous tes ordres (pas de nom propre tant que tu ne les as pas nommés)."
         : "";
 
+  const habitatDefault =
+    brief.past === "local" && (brief.station === "peasant" || brief.station === "artisan")
+      ? "Maison au village"
+      : ACTIVITY_HABITAT[brief.activity];
+
   return {
     ...sheet,
     creationBrief: brief,
     rank: fillIfEmpty(sheet.rank, STATION_RANK[brief.station]),
-    habitat: fillIfEmpty(sheet.habitat, ACTIVITY_HABITAT[brief.activity]),
+    habitat: fillIfEmpty(sheet.habitat, habitatDefault),
     background: fillIfEmpty(sheet.background, background),
     servants: fillIfEmpty(sheet.servants, servants),
     ambition: fillIfEmpty(
@@ -189,6 +194,7 @@ export function formatCreationBriefForMj(brief?: CharacterCreationBrief | null):
     `- Histoire récente : ${optionLabel(BRIEF_PAST_OPTIONS, b.past)}`,
     "- N'invente **pas** de père secret, de prophétie ni de PNJ nommé hors fiche.",
     `- L'ouverture se passe **là où le joueur a dit être** (${optionLabel(BRIEF_ACTIVITY_OPTIONS, b.activity)}). Un seul lieu.`,
+    "- Incident **personnel** (ça le concerne). Interdit : inconnu + parchemin crypté + disparition.",
   ].join("\n");
 }
 

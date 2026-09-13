@@ -11,6 +11,9 @@ import {
   inferSceneMoodFromTexts,
   mergeScenePatch,
   parseExtractedScene,
+  parseTableNow,
+  isHomeLocation,
+  isTransientPathLocation,
   scrubScenePatchLocation,
   hasExplicitPerilInTexts,
   isPerilMoodLabel,
@@ -27,6 +30,31 @@ import { listPlayers } from "./rooms.js";
 import { listMessages } from "./messages.js";
 import { queueBackgroundLlm } from "./room-llm-queue.js";
 
+function tableNowOf(roomId: string) {
+  const row = db.prepare(`SELECT table_now_json FROM rooms WHERE id = ?`).get(roomId) as
+    | { table_now_json?: string | null }
+    | undefined;
+  return parseTableNow(row?.table_now_json);
+}
+
+function scrubPatchAgainstTableNow(
+  roomId: string,
+  patch: ScenePatchInput
+): ScenePatchInput {
+  if (!patch.location?.trim()) return patch;
+  const now = tableNowOf(roomId);
+  if (now?.locationSource !== "player" || !now.location.trim()) return patch;
+  const incoming = patch.location;
+  const rewind =
+    isTransientPathLocation(incoming) ||
+    (/\b(taverne|auberge|bar)\b/i.test(incoming) && isHomeLocation(now.location));
+  if (rewind && !isHomeLocation(incoming)) {
+    const { location: _loc, ...rest } = patch;
+    return rest;
+  }
+  return patch;
+}
+
 function playerNamesForSceneGuard(roomId: string): string[] {
   return listPlayers(roomId)
     .filter((p) => p.circleStatus !== "withdrawn")
@@ -36,11 +64,16 @@ function playerNamesForSceneGuard(roomId: string): string[] {
 function rowToScene(row: Record<string, unknown>): SceneState | null {
   const updatedAt = row.scene_updated_at ? String(row.scene_updated_at) : "";
   if (!updatedAt) return null;
+  const now = parseTableNow(row.table_now_json);
+  const location = now?.location?.trim() || String(row.scene_location ?? "");
   return {
-    location: String(row.scene_location ?? ""),
+    location,
     mood: String(row.scene_mood ?? ""),
     tension: clampTension(Number(row.scene_tension ?? 0)),
     updatedAt,
+    people: now?.people.length ? now.people.join(", ") : undefined,
+    timeOfDay: now?.timeOfDay || undefined,
+    weather: now?.weather || undefined,
   };
 }
 
@@ -197,6 +230,7 @@ export function applySceneUpdate(
   options?: { force?: boolean; explicitScene?: boolean }
 ): SceneState | null {
   patch = scrubScenePatchLocation(patch, playerNamesForSceneGuard(roomId));
+  patch = scrubPatchAgainstTableNow(roomId, patch);
   if (!options?.force) {
     patch = scrubScenePatchMoodAndTension(patch, scrubContextForRoom(roomId));
   }
@@ -241,8 +275,11 @@ export function formatSceneForMj(scene: SceneState | null): string {
   if (!scene?.location?.trim() && !scene?.mood?.trim()) {
     return "Lieu et ambiance non encore archivés.";
   }
+  const when = [scene.timeOfDay, scene.weather].filter(Boolean).join(" · ");
   return (
     `Lieu : ${scene.location || "—"}\n` +
+    (scene.people ? `Présents : ${scene.people}\n` : "") +
+    (when ? `Moment : ${when}\n` : "") +
     `Ambiance : ${scene.mood || "—"}\n` +
     `Tension (−100 périlleux … +100 serein) : ${scene.tension}`
   );

@@ -39,6 +39,7 @@ export * from "./mj/player-mj-prompts.js";
 export * from "./mj/host-mj-prompts.js";
 export * from "./mj/narrative-facts-prompt.js";
 export * from "./mj/scene-extract-prompt.js";
+export * from "./mj/table-now.js";
 export * from "./mj/narrative-arc-extract-prompt.js";
 export * from "./mj/mj-response-prep.js";
 export * from "./mj/campaign-opening-prompt.js";

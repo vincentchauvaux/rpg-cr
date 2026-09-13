@@ -84,6 +84,21 @@ test("chercher dans sa ceinture n'est pas un jet de Force contesté", () => {
   );
 });
 
+test("ignore / verre / rentrer chez soi : pas de d20", () => {
+  assert.equal(
+    isAutomaticSceneChoice("Ignorez le message et passez à votre conversation habituelle."),
+    true
+  );
+  assert.equal(
+    isAutomaticSceneChoice(
+      "Ou bien continuer votre conversation avec le tavernier, demandant un autre verre."
+    ),
+    true
+  );
+  assert.equal(isAutomaticSceneChoice("Je me lève et rentre chez moi"), true);
+  assert.equal(isAutomaticSceneChoice("Examinez le parchemin de plus près"), false);
+});
+
 test("resolveSceneCheckOutcome : DD, contesté, égalité", () => {
   const ok = resolveSceneCheckOutcome({
     actorKeptNatural: 14,

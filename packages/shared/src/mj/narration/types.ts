@@ -37,6 +37,7 @@ export interface NarrationContext {
   hostName?: string;
   worldSeed?: string;
   sceneSummary?: string;
+  tableNowSummary?: string;
   trameSummary?: string;
   readyPlayersBlock?: string;
   journalSummary?: string;

@@ -137,6 +137,7 @@ export function initDb(): void {
   ensureColumn("rooms", "campaign_opening_done", "INTEGER NOT NULL DEFAULT 0");
   ensureColumn("rooms", "last_preamble_at", "TEXT");
   ensureColumn("rooms", "last_recap_at", "TEXT");
+  ensureColumn("rooms", "table_now_json", "TEXT");
 
   db.exec(`
     UPDATE rooms SET world_seed = map_seed WHERE world_seed IS NULL OR world_seed = '';
@@ -154,6 +155,21 @@ export function initDb(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_room_scene_log_room ON room_scene_log(room_id);
+
+    CREATE TABLE IF NOT EXISTS room_beats (
+      id TEXT PRIMARY KEY,
+      room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+      location TEXT NOT NULL DEFAULT '',
+      people TEXT NOT NULL DEFAULT '[]',
+      time_of_day TEXT NOT NULL DEFAULT '',
+      weather TEXT NOT NULL DEFAULT '',
+      event TEXT NOT NULL DEFAULT '',
+      talks TEXT NOT NULL DEFAULT '[]',
+      source_message_id TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_room_beats_room ON room_beats(room_id);
   `);
 
   db.exec(`

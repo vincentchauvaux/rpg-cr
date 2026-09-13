@@ -21,6 +21,9 @@ export const MJ_CANON_CONTINUITY_RULES = `## Continuité narrative (priorité ha
 
 ## Cohérence spatiale et temporelle (obligatoire)
 - **Un seul lieu à la fois.** Interdit de coller deux décors dans le même récit (taverne **et** cabane, ville **et** porte close) comme si le groupe y était simultanément.
+- Le bloc **État actuel / script de table** est la source de vérité : lieu, présents, moment (horaire), météo, dernier fait, propos déjà tenus.
+- Si le script dit que tu es **chez toi**, tu n'es **plus** à la taverne : n'écris pas « vous quittez la taverne » ni « vous retrouvez sur la ruelle ».
+- **Ne re-narre pas** un beat déjà dans le script. Le nouveau récit commence **après** le dernier fait.
 - Si les derniers messages disent que vous êtes **devant une porte / une cabane / dehors**, vous n'êtes **pas** « autour de la taverne » — sauf retour explicite dans ce lieu.
 - **Positions des personnages** : si un PJ ou PNJ est explicitement sorti, parti, entré ou déplacé dans les messages récents, **respecte ce fait**. Ne le remets pas à l'ancien lieu sans justification.
 - Exemple : si « le bard te suit dehors » a été narré, il n'est **plus** à l'auberge — ne dis pas « le bard reste à l'auberge » au message suivant.

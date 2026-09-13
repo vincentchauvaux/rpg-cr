@@ -63,9 +63,10 @@ function openingHardRules(host: string, location?: string): string {
   return [
     `${lieu} Pas d'enfilade ruelle + chapelle + pièce.`,
     `« ${host} » est le JOUEUR (tu / tes). Interdit : 3e personne, réplique de ${host}, « suivez ${host} ».`,
-    "Pas de PNJ nommé hors fiche. Figurant anonyme OK.",
+    "Pas de PNJ nommé hors fiche. Figurant anonyme OK — seulement s'il **connaît** le PJ ou partage son quotidien.",
     "Pas de secret familial, destin ou prophétie hors fiche.",
-    "Hook petit et concret (bruit, message, altercation).",
+    "Hook **personnel** : ça touche sa vie (voisin, travail, faim, ronde, chope renversée, nouvelle du village). Le PJ doit avoir une raison de réagir.",
+    "Interdit : inconnu qui dépose un parchemin crypté et disparaît ; « trouvez le X » ; quête livrée par un messager sans lien avec la fiche.",
   ]
     .map((line) => `- ${line}`)
     .join("\n");
@@ -104,7 +105,7 @@ Réponds UNIQUEMENT avec un objet JSON valide (${langNote}) :
   "worldSummary": "2 phrases max : le pays",
   "mainPlot": "Enjeu local (2 phrases)",
   "startingSituation": "Où est le PJ et ce qu'il fait (1 phrase)",
-  "openingScene": "Un incident dans CE lieu (1 phrase)",
+  "openingScene": "Incident PERSONNEL dans CE lieu (voisin, travail, bagarre, faim) — pas un parchemin d'inconnu",
   "scene": { "location": "UN lieu concret", "mood": "1 détail", "tension": -20 }
 }
 
@@ -310,7 +311,23 @@ export function openingInventedFamilySecret(
   return true;
 }
 
-/** Ouverture trop courte, menu vide, PJ=PNJ, PNJ inventé, trop de lieux, ou trop romancé. */
+/** Inconnu + papier crypté + disparition : McGuffin que le joueur ignore. */
+export function openingLooksLikeQuestMcGuffin(content: string): boolean {
+  const t = stripOpeningComments(content);
+  const parchment = /\b(parchemin|manuscrit|missive|papier griffonn)\b/i.test(t);
+  const cryptic =
+    /\b(crypt[ée]|message.{0,40}cod[ée]|phare d['’]argent|éclat de la mer|trouvez le)\b/i.test(t);
+  const vanish =
+    /\b(dispara[iî]t|se fond (dans|parmi)|s['’]évanouit|visage disparaissant|se fond rapidement)\b/i.test(
+      t
+    );
+  if (parchment && (cryptic || vanish)) return true;
+  if (parchment && vanish && /\b(inconnu|étranger|un homme|un vieux|vieillard)\b/i.test(t)) {
+    return true;
+  }
+  return false;
+}
+/** Ouverture trop courte, menu vide, PJ=PNJ, PNJ inventé, trop de lieux, McGuffin, ou trop romancé. */
 export function isCampaignOpeningUnplayable(
   content: string,
   hostName: string,
@@ -320,6 +337,7 @@ export function isCampaignOpeningUnplayable(
   if (openingTreatsHostAsNpc(content, hostName)) return true;
   if (openingInventedNamedNpc(content, hostName, opts?.sheet)) return true;
   if (openingInventedFamilySecret(content, opts?.sheet)) return true;
+  if (openingLooksLikeQuestMcGuffin(content)) return true;
   if (openingTooManyPlaces(content, opts?.mjProse)) return true;
   if (openingTooOrnate(content, opts?.mjProse)) return true;
   return false;
