@@ -79,6 +79,7 @@ export function buildUnaddressedSayHint(
       `- Le PJ **apostrophe ${vocative}** (sans @, mais l'adresse est explicite). ` +
       `**${vocative} répond** — une réplique entre guillemets qui traite le contenu exact (question, demande, reproche). ` +
       `Donne-lui un visage et une voix ; si elle n'a pas encore de nom, un nom simple est permis (c'est un rôle du lieu, pas un PNJ majeur). ` +
+      `**Dis qui parle** avant la réplique (un geste suffit : « La tenancière repose son pichet : « … » ») — pas de guillemets orphelins. ` +
       `**Interdit** : répondre en narrateur (« Tu es dans… »), demander « à qui parles-tu ? », ou éluder la question.\n`
     );
   }

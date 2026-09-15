@@ -945,7 +945,10 @@ La carte n'est chargée en state client **que** si god mode actif.
 - `formatEstablishedCanonSummary` : table à **un seul héros** → bloc « Table solo » qui impose le **tu** ; règle de voix « garde la même adresse d'un tour à l'autre ».
 - `rewriteTableMetaClosers` dans `sanitizeMjResponse` : les relances méta deviennent « Que fais‑tu ? ». Le doublon `mj-live-choices-block` est supprimé (les pistes restent dans le message MJ).
 
-**Fichiers** : `unaddressed-speech.ts`, `player-banter.ts`, `scene-extract-prompt.ts`, `sanitize-response.ts`, `canon-continuity.ts`, `room-scene.ts`, `RoomView.tsx` (+ tests `unaddressed-speech.test.ts`, `mj-coherence.test.ts`)
+- Le PNJ apostrophé doit être **nommé avant sa réplique** (« La tenancière repose son pichet : « … » ») — plus de guillemets orphelins.
+- `chat-jump-bottom` devient une **pastille** de 1,95 rem dans la gouttière droite du récit (elle masquait la dernière ligne du message MJ) ; le libellé reste en `aria-label` / `title`.
+
+**Fichiers** : `unaddressed-speech.ts`, `player-banter.ts`, `scene-extract-prompt.ts`, `sanitize-response.ts`, `canon-continuity.ts`, `room-scene.ts`, `RoomView.tsx`, `globals.css` (+ tests `unaddressed-speech.test.ts`, `mj-coherence.test.ts`)
 
 ### Graines différentes entre l'ordi et le téléphone
 

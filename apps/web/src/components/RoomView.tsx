@@ -1572,7 +1572,6 @@ export function RoomView({ code }: Props) {
                   aria-label="Descendre en bas de la conversation"
                 >
                   <span aria-hidden>↓</span>
-                  Bas du récit
                 </button>
               ) : null}
               {mjInputThinking ? (
