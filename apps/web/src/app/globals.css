@@ -1508,9 +1508,9 @@ label {
 /* Hôte : wizard sur la colonne chat ; panneau admin (god mode / LLM) reste cliquable. */
 .chat-section-wizard-host {
   position: relative;
-  height: min(80dvh, 720px);
+  min-height: 16rem;
+  height: min(36rem, calc(100dvh - 8rem));
   max-height: calc(100dvh - 7rem);
-  min-height: 18rem;
 }
 
 .char-wizard-overlay {
@@ -1624,25 +1624,8 @@ label {
   -webkit-overflow-scrolling: touch;
 }
 
-.char-wizard:has(.char-brief) {
-  overflow: hidden;
-}
-
 .char-brief {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.char-brief-choices {
-  flex: 1 1 auto;
-  min-height: 8rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  padding-right: 0.15rem;
+  min-width: 0;
 }
 
 .char-wizard-actions {
@@ -1650,7 +1633,6 @@ label {
   gap: 0.75rem;
   justify-content: flex-end;
   margin-top: 1rem;
-  flex-shrink: 0;
 }
 
 .brief-fieldset {
@@ -3477,6 +3459,16 @@ textarea.field-invalid {
 
   .room-main {
     gap: 0.45rem;
+  }
+
+  .chat-section-wizard-host {
+    height: calc(100dvh - 8.75rem - env(safe-area-inset-bottom, 0px));
+    max-height: none;
+    min-height: 12rem;
+  }
+
+  .char-wizard-overlay--section {
+    padding: 0.5rem;
   }
 
   .table-header-row {
