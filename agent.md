@@ -664,6 +664,8 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Auth** : NextAuth v5 (`apps/web/src/auth.ts`) — provider Google ; sync API `POST /api/auth/sync` (secret interne `AUTH_INTERNAL_SECRET`).
 - **UI accueil** : `GoogleAuthPanel` — connexion / déconnexion ; graines fusionnées local + `GET /api/users/:id/grains`.
 - **Création / join** : body optionnel `userId` sur `POST /api/rooms` et `POST …/join` ; reprise graine → `POST …/link-user`.
+- **Un seul héros par compte et par salon** : `joinRoom` cherche un joueur humain déjà lié à `userId` dans ce salon (après le test `existingPlayerId` du localStorage) et le **reprend** (`rejoined: true`, pas de message « a rejoint ») — plus de second personnage quand on ouvre le même code depuis le téléphone. `SalonRoomClient` interroge `GET /api/users/:id/grains` quand aucune graine locale ne correspond : la page reprend la session **sans** demander de nom.
+- **Limite connue** : un salon créé **hors connexion** garde `players.user_id = NULL` — il n'apparaît sur les autres appareils qu'après une visite de l'accueil **connecté** sur l'appareil d'origine (auto-link des graines locales).
 - **Sync automatique graines** : dès la connexion Google, toutes les graines localStorage sont automatiquement liées au compte (`linkPlayerToUserApi`) — les campagnes deviennent accessibles sur tous les appareils. Un `useRef` évite le re-linking à chaque render. Le refresh des graines est déclenché après le linking pour afficher l'état à jour.
 - **Tunnel auto hôte** : `ensureHostTunnel()` — à la création salon, reprise graine (admin), entrée salon hôte et wizard MJ (mode VPS). Appelle l'assistant local `POST http://127.0.0.1:17434/start`, puis poll `GET /api/llm/tunnel-status` jusqu'à `reachable:true`. CLI : `npm run tunnel:ensure`.
 - **Auth.js** : `basePath` = `/rpg-cr/api/auth` en prod ; handler route réinjecte `/rpg-cr` (Next.js le retire). `AUTH_URL` = origine HTTPS **sans** `/rpg-cr`. Nginx conserve le préfixe vers le conteneur web.
@@ -928,6 +930,14 @@ La carte n'est chargée en state client **que** si god mode actif.
 - Pas de traduction de ses propres messages ; sans LLM : clic 🌐 → tooltip « MJ non configuré » (pas d'appel auto au chargement).
 
 ## Correctifs 2026-09-15
+
+### Graines différentes entre l'ordi et le téléphone
+
+**Problème** : « Mes graines » = localStorage du navigateur + salons liés au compte. Les salons ouverts hors connexion restaient sur un seul appareil, et taper le code depuis le téléphone créait un **second personnage** à côté du héros existant.
+
+**Solution** : `joinRoom` reprend le joueur déjà lié au `userId` dans ce salon ; `SalonRoomClient` retrouve la graine du compte (`/api/users/:id/grains`) et reprend la session sans redemander de nom.
+
+**Fichiers** : `rooms.ts`, `SalonRoomClient.tsx`
 
 ### Ouverture rustre et toujours la même (Ching, le vieux au comptoir)
 

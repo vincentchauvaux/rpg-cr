@@ -397,6 +397,21 @@ export function joinRoom(
     }
   }
 
+  // Même compte, même salon : on reprend le héros déjà lié (créé sur un autre
+  // appareil) au lieu d'en créer un second à côté.
+  if (userId) {
+    const linked = db
+      .prepare(
+        `SELECT id FROM players
+         WHERE room_id = ? AND user_id = ? AND player_kind = 'human'
+         ORDER BY joined_at ASC
+         LIMIT 1`
+      )
+      .get(roomId, userId) as { id: string } | undefined;
+    const mine = linked ? getPlayerById(linked.id) : null;
+    if (mine) return { player: mine, rejoined: true };
+  }
+
   const role = asAdmin ? "admin" : "player";
   const player = insertPlayer(roomId, trimmedName, role, {
     isGodMode: false,

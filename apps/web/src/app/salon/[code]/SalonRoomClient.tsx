@@ -8,7 +8,12 @@ import {
   resolvePlaceholderValue,
 } from "@/components/PlaceholderInput";
 import { useAppUserId } from "@/components/GoogleAuthPanel";
-import { getRoom, joinRoom, linkPlayerToUserApi } from "@/lib/api";
+import {
+  getRoom,
+  joinRoom,
+  linkPlayerToUserApi,
+  listUserGrainsFromApi,
+} from "@/lib/api";
 import {
   findMostRecentGrainForRoom,
   rememberGrain,
@@ -86,6 +91,34 @@ export function SalonRoomClient({ code }: { code: string }) {
         setGate("join");
       });
   }, [normalizedCode, appUserId]);
+
+  /** Compte connecté : reprendre le héros de ce salon créé sur un autre appareil. */
+  useEffect(() => {
+    if (gate !== "join" || !appUserId) return;
+    let cancelled = false;
+    void listUserGrainsFromApi(appUserId)
+      .then(({ grains }) => {
+        if (cancelled) return;
+        const mine = grains.find(
+          (g) => g.roomCode.toUpperCase() === normalizedCode
+        );
+        if (!mine) return;
+        resumeGrainSession({
+          roomId: mine.roomId,
+          roomCode: mine.roomCode,
+          roomName: mine.roomName,
+          playerId: mine.playerId,
+          playerName: mine.playerName,
+          role: mine.role,
+          lastVisitedAt: new Date().toISOString(),
+        });
+        setGate("ready");
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [gate, appUserId, normalizedCode]);
 
   async function handleJoin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
