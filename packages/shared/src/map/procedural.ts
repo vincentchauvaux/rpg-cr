@@ -6,8 +6,10 @@ import type {
 } from "../types.js";
 import {
   generateProceduralCountryNames,
+  formatCapitalName,
   generateProceduralDungeonName,
   generateProceduralRulerName,
+  generateProceduralSettlementName,
   generateProceduralTerritoryName,
 } from "./world-names.js";
 
@@ -153,6 +155,7 @@ export function generateProceduralMap(
   });
 
   const pois: MapPointOfInterest[] = [];
+  const usedPoiNames = new Set<string>();
   const poiTypes: MapPointOfInterest["type"][] = [
     "capital",
     "city",
@@ -176,15 +179,22 @@ export function generateProceduralMap(
     }
     const type = poiTypes[i % poiTypes.length];
     const country = countries[i % countries.length];
+    const baseName =
+      type === "capital"
+        ? formatCapitalName(country)
+        : type === "dungeon"
+          ? generateProceduralDungeonName(seed, i)
+          : generateProceduralSettlementName(seed, i, type);
+    // Deux capitales homonymes sur la même carte = repère inutilisable.
+    let name = baseName;
+    for (let bump = 1; usedPoiNames.has(name.toLowerCase()); bump++) {
+      name = generateProceduralSettlementName(seed, i + bump * 100, "city");
+    }
+    usedPoiNames.add(name.toLowerCase());
     pois.push({
       id: `poi-${i}`,
       type,
-      name:
-        type === "capital"
-          ? `Capitale de ${country}`
-          : type === "dungeon"
-            ? generateProceduralDungeonName(seed, i)
-            : `${type} ${i + 1}`,
+      name,
       x: px,
       y: py,
       ruler: generateProceduralRulerName(seed, i),

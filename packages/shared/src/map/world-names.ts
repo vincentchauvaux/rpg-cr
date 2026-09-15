@@ -178,16 +178,30 @@ const REGION_QUALIFIERS = [
   "Vallée Profonde",
 ] as const;
 
+/** « Royaume d'Aldermar » → « Aldermar » (pour composer sans empiler les « de »). */
+export function shortCountryName(country: string): string {
+  return (
+    country
+      .replace(
+        /^(Royaume|Dominion|Confédération|Marche|République|Îles|Union|Thalassocratie)\s+(d'|de |des |du )/i,
+        ""
+      )
+      .trim() || country
+  );
+}
+
+/** Capitale d'un royaume, sans « Capitale de Marche du … ». */
+export function formatCapitalName(country: string): string {
+  return `Capitale de ${shortCountryName(country)}`;
+}
+
 export function generateProceduralTerritoryName(
   seed: string,
   country: string,
   index: number
 ): string {
   const rnd = seededRandom(`${seed}:territory:${index}`);
-  const short =
-    country.replace(/^(Royaume|Dominion|Confédération|Marche|République|Îles|Union|Thalassocratie)\s+(d'|de |des |du )/i, "").trim() ||
-    country;
-  return `${pick(REGION_QUALIFIERS, rnd)} de ${short}`;
+  return `${pick(REGION_QUALIFIERS, rnd)} de ${shortCountryName(country)}`;
 }
 
 const DUNGEON_EPITHETS = [
@@ -203,4 +217,68 @@ const DUNGEON_EPITHETS = [
 export function generateProceduralDungeonName(seed: string, index: number): string {
   const rnd = seededRandom(`${seed}:dungeon:${index}`);
   return `Donjon des ${pick(DUNGEON_EPITHETS, rnd)}`;
+}
+
+const SETTLEMENT_PREFIXES = [
+  "Bourg",
+  "Val",
+  "Pont",
+  "Mont",
+  "Fort",
+  "Clair",
+  "Roche",
+  "Saint",
+] as const;
+
+const VILLAGE_FORMS: ((core: string) => string)[] = [
+  (c) => `Hameau de ${c}`,
+  (c) => `${c}-les-Saules`,
+  (c) => `${c}-sur-Ruisse`,
+  (c) => `Petit-${c}`,
+];
+
+const CITY_FORMS: ((core: string) => string)[] = [
+  (c) => `Cité de ${c}`,
+  (c) => `${c}-la-Haute`,
+  (c) => `Porte de ${c}`,
+  (c) => `${c}-sur-Rive`,
+];
+
+const CHURCH_FORMS: ((core: string) => string)[] = [
+  (c) => `Chapelle de ${c}`,
+  (c) => `Sanctuaire de ${c}`,
+  (c) => `Abbaye de ${c}`,
+  (c) => `Temple de ${c}`,
+];
+
+const WILD_FORMS: ((core: string) => string)[] = [
+  (c) => `Ruines de ${c}`,
+  (c) => `Halte de ${c}`,
+  (c) => `Carrefour de ${c}`,
+  (c) => `Vieux ${c}`,
+];
+
+/** Nom FR pour un point d'intérêt — évite les libellés techniques (« city 2 »). */
+export function generateProceduralSettlementName(
+  seed: string,
+  index: number,
+  type: "city" | "village" | "church" | "unknown"
+): string {
+  const rnd = seededRandom(`${seed}:settlement:${type}:${index}`);
+  const prefix = pick(SETTLEMENT_PREFIXES, rnd);
+  const end = pick(NAME_ENDS, rnd);
+  // « Bourg » + « gard » → « Bourgard » plutôt que « Bourggard ».
+  const core =
+    prefix.slice(-1).toLowerCase() === end.slice(0, 1).toLowerCase()
+      ? `${prefix}${end.slice(1)}`
+      : `${prefix}${end}`;
+  const forms =
+    type === "city"
+      ? CITY_FORMS
+      : type === "village"
+        ? VILLAGE_FORMS
+        : type === "church"
+          ? CHURCH_FORMS
+          : WILD_FORMS;
+  return pick(forms, rnd)(core);
 }

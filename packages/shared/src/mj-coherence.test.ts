@@ -8,6 +8,8 @@ import {
 } from "./mj/scene-extract-prompt.js";
 import { rewriteTableMetaClosers } from "./mj/sanitize-response.js";
 import { formatEstablishedCanonSummary } from "./mj/canon-continuity.js";
+import { generateProceduralMap } from "./map/procedural.js";
+import { generateProceduralSettlementName } from "./map/world-names.js";
 
 const MJ_TEXT =
   "La tenancière, une femme au visage buriné, soupire. « Le forgeron, ça fait deux matins qu'il ne vient pas. »";
@@ -51,6 +53,21 @@ test("relance méta réécrite en relance jouable", () => {
   assert.match(
     rewriteTableMetaClosers("Quelles actions souhaitez-vous entreprendre ?"),
     /Que fais‑tu \?/
+  );
+});
+
+test("les lieux de carte ont des noms FR, pas « city 2 »", () => {
+  const map = generateProceduralMap("graine-de-test");
+  for (const poi of map.pois) {
+    assert.doesNotMatch(
+      poi.name,
+      /^(?:city|town|village|church|capital|unknown)[\s_-]*\d*$/i,
+      `nom technique : ${poi.name}`
+    );
+  }
+  assert.match(
+    generateProceduralSettlementName("graine-de-test", 1, "city"),
+    /[A-Za-zÀ-ÿ]{3}/
   );
 });
 

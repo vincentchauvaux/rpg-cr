@@ -141,13 +141,19 @@ function incidentsFor(activity?: BriefActivity, station?: BriefStation): string[
   return [...base, ...extra];
 }
 
+/** Libellés techniques des anciennes cartes (« city 2 », « unknown 6 ») — jamais dans le récit. */
+const PLACEHOLDER_PLACE_RE =
+  /^(?:city|town|village|church|dungeon|capital|unknown|poi|ter)[\s_-]*\d*$/i;
+
 function mapPlaceNames(map: ProceduralMap | null): string[] {
   if (!map) return [];
   return [
     ...map.pois.map((p) => p.name),
     ...map.territories.map((t) => t.name),
     ...map.countries,
-  ].filter((n) => n.trim().length > 1);
+  ]
+    .map((n) => n.trim())
+    .filter((n) => n.length > 1 && !PLACEHOLDER_PLACE_RE.test(n));
 }
 
 /** Variation déterministe : même salon = même pose, salon suivant = autre heure / autre incident. */
