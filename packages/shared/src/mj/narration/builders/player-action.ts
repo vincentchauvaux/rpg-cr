@@ -64,6 +64,7 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
     `${name} **effectue une action** : « ${action} »${abilities}\n\n` +
     `## Consignes MJ\n` +
     `- **Interprète** l'action demandée et intègre-la au fil narratif en cours (conséquences, réactions du monde, vrais PNJ).\n` +
+    `- Un geste **petit** (se lever, tendre un papier) reste petit : pas d'agenouillement, pas de « merci tu es venu », pas de quête close.\n` +
     `- Si l'idée est **viable** et que tu ne l'avais pas prévue : **prends-la**. Déplace l'enjeu (un autre visage, une autre porte) plutôt que de dire non pour sauver un plan.\n` +
     `- Parle à **${name}** et aux autres PJ à la **2e personne** (tu / vous). Ce sont des héros de la table, **pas** des PNJ.\n` +
     `- **Interdit** d'écrire les paroles de ${name} entre « … » s'il ne les a pas dites mot pour mot. Les PNJ parlent ; lui, tu résumes le geste.\n` +

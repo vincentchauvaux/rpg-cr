@@ -57,6 +57,12 @@ export function messageOffersARound(content: string): boolean {
   );
 }
 
+export function messageOrdersADrink(content: string): boolean {
+  return /\b(un autre (pichet|verre|chope)|encore (un|une) (pichet|verre|chope|bière)|sers[- ]moi|apporte[- ]moi|un pichet ici)\b/iu.test(
+    content
+  );
+}
+
 /** Consignes MJ quand le PJ recadre ou sert à boire. */
 export function mjPlayerIntentHints(speech: string): string {
   const bits: string[] = [];
@@ -68,6 +74,11 @@ export function mjPlayerIntentHints(speech: string): string {
   if (messageOffersARound(speech)) {
     bits.push(
       `- Il propose à boire / sert : **oui, et** — un visage connu a soif. Tu ne sors pas un menu de quête.`
+    );
+  }
+  if (messageOrdersADrink(speech)) {
+    bits.push(
+      `- Le PJ **commande à boire**. Le PNJ **sert, refuse, ou fait la queue** — interdit d'inverser (« tu veux te débarrasser de ton verre », « je n'ai pas besoin que tu m'envoies un autre »).`
     );
   }
   return bits.length ? `${bits.join("\n")}\n` : "";

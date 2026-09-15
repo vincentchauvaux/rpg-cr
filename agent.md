@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-15 (**table KSED7T** : « village » ne doit plus écraser un lieu nommé)
+> Dernière mise à jour : 2026-09-15 (**table VUKRS7** : ouverture serveur/faveur d'hier refusée, commande de verre non inversée)
 
 ## Vision
 
@@ -974,6 +974,18 @@ La carte n'est chargée en state client **que** si god mode actif.
 - Panneau compte : compteur rafraîchi via l'événement `rpg-cr:grains-linked` ; l'onglet « Mes graines » dit « liées à votre compte » quand on est connecté.
 
 **Fichiers** : `auth.ts`, `SalonRoomClient.tsx`, `GoogleAuthPanel.tsx`, `HomePageContent.tsx`, `docker-compose.prod.yml`, `deploy/.env.production.example`
+
+### Table VUKRS7 (Taverne du Héros Fatigué) — Kael Sans-Carte, paysan, Ollama 7B
+
+**Constat** :
+1. Pose OK (tu, lieu, 19h) mais le MJ **range les assiettes** (serveur) alors que le brief est client ; barbe grise + « tu te souviens du pain d'hier » + « il t'a déjà demandé ce service ».
+2. Dire de recadrage : le PNJ **admet** l'erreur, tutoiement, lieu stable — mieux que KSED7T.
+3. « Tenancière, un autre pichet » : vocatif nommé, mais **commande inversée** (« tu veux te débarrasser de ton verre »).
+4. Action « j'apporte la note » : le MJ **clôt une quête** (agenouillement, « je ne pensais pas que tu viendrais », pluie).
+
+**Solution** : `openingTreatsGuestAsStaff` + `openingInventedPriorFavor` rendent l'intro injouable (retry / secours). Hint vocatif + `messageOrdersADrink` : servir, ne pas inverser. Action : un geste petit reste petit.
+
+**Fichiers** : `campaign-opening-prompt.ts`, `unaddressed-speech.ts`, `player-banter.ts`, `player-action.ts` (+ tests)
 
 ### Table KSED7T (Refuge du Héros Fatigué) — Gwen Pièce-d'Or, paysanne, Ollama 7B
 

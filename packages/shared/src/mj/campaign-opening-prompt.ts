@@ -569,7 +569,7 @@ export function openingLooksLikeStockHook(content: string): boolean {
   if (/^(Le vieux|Un vieux|Le vieillard|Un vieil homme|Un homme étrange)\b/i.test(head)) {
     return true;
   }
-  const oldMan = /\b(le vieux|un vieux|le vieillard|barbe grise|sa canne)\b/i.test(t);
+  const oldMan = /\b(le vieux|un vieux|le vieillard|barbe grise|barbe grisonnante|sa canne)\b/i.test(t);
   const bar = /\b(chope|comptoir|bière fraîche|houblon)\b/i.test(t);
   const stranger =
     /\b(homme étrange|n['’]était pas du village|manteau sombre|pas du village)\b/i.test(t);
@@ -578,6 +578,34 @@ export function openingLooksLikeStockHook(content: string): boolean {
   if (oldMan && bar && stranger) return true;
   if (stranger && bag) return true;
   return false;
+}
+
+/**
+ * Brief « à l'auberge » = client. Ranger les assiettes / essuyer / servir = mauvais rôle.
+ */
+export function openingTreatsGuestAsStaff(
+  content: string,
+  sheet?: CharacterSheet
+): boolean {
+  const brief = normalizeCreationBrief(sheet?.creationBrief);
+  const t = stripOpeningComments(content);
+  const innish =
+    brief?.activity === "inn" ||
+    (!brief && /\b(taverne|auberge)\b/i.test(t));
+  if (!innish) return false;
+  return /\b(tu ranges?|tu essuies?|tu sers |derrière le comptoir|dernière assiette|finir de ranger|tables rangées.{0,40}tes pas)\b/i.test(
+    t
+  );
+}
+
+/** « Tu te souviens d'hier / l'an dernier je t'ai déjà demandé » — quête commencée hors fiche. */
+export function openingInventedPriorFavor(content: string): boolean {
+  const t = stripOpeningComments(content);
+  const memory = /\b(tu te souviens|vous souvenez[- ]vous|t['’]a déjà demandé|vous a déjà demandé)\b/i.test(
+    t
+  );
+  const when = /\b(hier soir|l['’]an dernier|la semaine dernière|ce matin encore)\b/i.test(t);
+  return memory || (when && /\b(déjà demandé|ce service|que j['’]ai laissé à ta table)\b/i.test(t));
 }
 
 /** La première phrase n'adresse pas le PJ : on saute la pose du lieu. */
@@ -602,6 +630,8 @@ export function isCampaignOpeningUnplayable(
   if (openingInventedFamilySecret(content, opts?.sheet)) return true;
   if (openingLooksLikeQuestMcGuffin(content)) return true;
   if (openingLooksLikeStockHook(content)) return true;
+  if (openingTreatsGuestAsStaff(content, opts?.sheet)) return true;
+  if (openingInventedPriorFavor(content)) return true;
   if (openingSkipsPlaceSetup(content)) return true;
   if (openingDumpsEncyclopedia(content)) return true;
   if (openingTooManyPlaces(content, opts?.mjProse)) return true;
@@ -626,6 +656,11 @@ export function renderFallbackOpeningNarrative(
   const sheet = ctx.hostSheet;
   const rank = sheet.rank?.trim();
   const who = rank ? `Tu es ${ctx.hostName}, ${rank}.` : `Tu es ${ctx.hostName}.`;
+  const brief = normalizeCreationBrief(sheet.creationBrief);
+  const guestSeat =
+    brief?.activity === "inn"
+      ? " Tu es à une table, une chope à la main — tu n'es pas le service."
+      : "";
   const followers = sheetFollowersForMj(sheet.servants);
   const suite = followers ? ` Tes hommes sont avec toi : ${followers}.` : "";
   const location = plan.scene.location.trim() || pal.place;
@@ -636,7 +671,7 @@ export function renderFallbackOpeningNarrative(
     [start, scene].filter(Boolean).join(" ") || pal.incident;
 
   return (
-    `${who}${suite}\n\n` +
+    `${who}${suite}${guestSeat}\n\n` +
     `Tu es à **${location}**, ${pal.when}. ${pal.weather}${mood ? ` ${mood}.` : ""}\n\n` +
     `${beat}\n\n` +
     `Que fais-tu ?\n` +
@@ -652,6 +687,8 @@ function playableOpeningBeat(text: string, ctx: CampaignOpeningContext): string 
   if (openingInventedNamedNpc(t, ctx.hostName, ctx.hostSheet)) return "";
   if (openingLooksLikeQuestMcGuffin(t)) return "";
   if (openingLooksLikeStockHook(t)) return "";
+  if (openingTreatsGuestAsStaff(t, ctx.hostSheet)) return "";
+  if (openingInventedPriorFavor(t)) return "";
   if (openingDumpsEncyclopedia(t)) return "";
   return t;
 }

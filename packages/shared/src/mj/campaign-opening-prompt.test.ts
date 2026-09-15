@@ -12,6 +12,8 @@ import {
   openingLooksLikeQuestMcGuffin,
   openingLooksLikeStockHook,
   openingSkipsPlaceSetup,
+  openingTreatsGuestAsStaff,
+  openingInventedPriorFavor,
   openingTreatsHostAsNpc,
   parseCampaignOpeningPlan,
   renderFallbackOpeningNarrative,
@@ -269,4 +271,36 @@ test("palette d'ouverture : deux graines, deux poses", () => {
   });
   assert.notEqual(`${a.when}|${a.weather}|${a.incident}`, `${b.when}|${b.weather}|${b.incident}`);
   assert.match(a.place, /auberge/i);
+});
+
+const KAEL_STAFF_OPENING = `
+La taverne du Héros Fatigué s'éclaire d'une lueur tamisée. Il est presque 19h, et tu ranges la dernière assiette de la soirée.
+Soudain, un homme à la barbe grisonnante s'avance vers toi. Il tient un petit sac de pain.
+« Tu te souviens du morceau de pain que j'ai laissé à ta table hier soir ? » Il t'a déjà demandé ce service.
+Que fais-tu ?
+`;
+
+test("ouverture injouable : paysan à l'auberge rangé en serveur + faveur d'hier", () => {
+  const sheet = {
+    rank: "Villageois",
+    creationBrief: { station: "peasant" as const, activity: "inn" as const, past: "local" as const },
+  };
+  assert.equal(openingTreatsGuestAsStaff(KAEL_STAFF_OPENING, sheet), true);
+  assert.equal(openingInventedPriorFavor(KAEL_STAFF_OPENING), true);
+  assert.equal(isCampaignOpeningUnplayable(KAEL_STAFF_OPENING, "Kael Sans-Carte", { sheet }), true);
+});
+
+test("ouverture client à l'auberge (chope, pas de service) reste jouable", () => {
+  const sheet = {
+    rank: "Villageois",
+    creationBrief: { station: "peasant" as const, activity: "inn" as const, past: "local" as const },
+  };
+  const text = `
+Tu es à la taverne du Héros Fatigué, une chope à la main, assis à ta table habituelle. Le feu crépite.
+La tenancière essuie trop longtemps le même verre. Ton banc d'habitude n'est pas libre.
+Que fais-tu ?
+`;
+  assert.equal(openingTreatsGuestAsStaff(text, sheet), false);
+  assert.equal(openingInventedPriorFavor(text), false);
+  assert.equal(isCampaignOpeningUnplayable(text, "Kael Sans-Carte", { sheet }), false);
 });

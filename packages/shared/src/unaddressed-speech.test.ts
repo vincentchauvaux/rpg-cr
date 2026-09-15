@@ -85,6 +85,16 @@ test("« Tenancière, … ? » = parole in-world, pas question de table", () => 
   assert.match(hint, /Interdit/);
 });
 
+test("commande à la tenancière : le hint interdit d'inverser", () => {
+  const hint = buildUnaddressedSayHint(
+    [],
+    true,
+    "Tenancière, un autre pichet ici — et dites à cet homme que sa table, c'est pas la mienne."
+  );
+  assert.match(hint, /tenancière/i);
+  assert.match(hint, /commande/i);
+});
+
 test("apostrophe en fin de réplique et « Patron ! »", () => {
   assert.equal(
     extractSpokenVocative("Le forgeron n'est pas venu, patron ?"),
