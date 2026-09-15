@@ -34,21 +34,37 @@ export function tensionToAngleDeg(tension: number): number {
   return 90 - (t / 100) * 90;
 }
 
+function isBlankWhenBit(value?: string | null): boolean {
+  const t = value?.trim() ?? "";
+  return !t || t === "—" || t === "-" || t === "–";
+}
+
+/** L'ambiance dit déjà ce bit : phrase recopiée, ou le moment en tête (« soir de lanternes »). */
+function moodAlreadyStatesWhen(mood: string, bit: string): boolean {
+  const m = mood.toLowerCase();
+  const b = bit.toLowerCase();
+  if (m === b) return true;
+  if (b.length >= 12 && m.includes(b)) return true;
+  if (b === "midi" && /apr[eè]s[-‐‑–— ]?midi/i.test(m)) return true;
+  return m.startsWith(`${b} `) || m.startsWith(`${b},`) || m.startsWith(`${b} ·`);
+}
+
 /**
  * Ligne « moment · météo », vidée de ce que l'ambiance dit déjà — les ouvertures
  * recopiaient l'ambiance dans la météo et la même phrase s'affichait deux fois.
+ * Ne pas utiliser `includes` : « midi » est dans « après-midi ».
  */
 export function getSceneWhenDisplayLabel(
   scene: Pick<SceneState, "timeOfDay" | "weather"> | null | undefined,
   moodLabel?: string | null,
   separator = " · "
 ): string | null {
-  const bits = [scene?.timeOfDay?.trim(), scene?.weather?.trim()].filter(
-    (b): b is string => Boolean(b)
-  );
+  const bits = [scene?.timeOfDay, scene?.weather]
+    .map((v) => v?.trim() ?? "")
+    .filter((b) => !isBlankWhenBit(b));
   if (bits.length === 0) return null;
-  const mood = (moodLabel ?? "").trim().toLowerCase();
-  const kept = mood ? bits.filter((b) => !mood.includes(b.toLowerCase())) : bits;
+  const mood = (moodLabel ?? "").trim();
+  const kept = mood ? bits.filter((b) => !moodAlreadyStatesWhen(mood, b)) : bits;
   return kept.length > 0 ? kept.join(separator) : null;
 }
 

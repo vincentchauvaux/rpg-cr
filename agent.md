@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-15 (**MJ** : ouverture posée et variée par graine, plus le moule « le vieux au comptoir »)
+> Dernière mise à jour : 2026-09-15 (**table KSED7T** : « village » ne doit plus écraser un lieu nommé)
 
 ## Vision
 
@@ -974,6 +974,30 @@ La carte n'est chargée en state client **que** si god mode actif.
 - Panneau compte : compteur rafraîchi via l'événement `rpg-cr:grains-linked` ; l'onglet « Mes graines » dit « liées à votre compte » quand on est connecté.
 
 **Fichiers** : `auth.ts`, `SalonRoomClient.tsx`, `GoogleAuthPanel.tsx`, `HomePageContent.tsx`, `docker-compose.prod.yml`, `deploy/.env.production.example`
+
+### Table KSED7T (Refuge du Héros Fatigué) — Gwen Pièce-d'Or, paysanne, Ollama 7B
+
+**Constat** :
+1. Ouverture **mieux** que Y4BQ4H : tu + lieu + 18h + pluie + **chope** (client, pas tavernier). Scène sans doublon ni « — ».
+2. Hook trop chargé : « villageois que tu as aidé l'an dernier » + fetch « bois de la forêt de Sylor » (Sylor = pays de la carte, pas une forêt listée).
+3. Tour Dire : le MJ **paraphrase** l'ouverture, n'a pas le PNJ qui répond, ignore « je te connais de vue ». Lieu archivé **« village »** (mot du dialogue PJ) à la place du Refuge — `village` n'était pas dans `VAGUE_LOCATION_RE` (trop « légitime » comme type de lieu).
+4. 2e Dire (insister) : **vous** en solo, « Vous, Gwen… êtes le seul ici » — le villageois **disparaît**.
+
+**Solution** : `locationIsVaguerThan` / `mergeTableNow` refusent un type seul (`village`, `forêt`, `auberge`…) quand le lieu actuel a déjà un nom propre.
+
+**Fichiers** : `scene-extract-prompt.ts`, `table-now.ts` (+ test `mj-coherence.test.ts`)
+
+### Table Y4BQ4H (Auberge des Brumes) — Gwen, paysanne locale
+
+**Constat** (gpt-4o, brief paysan / à l'auberge / je vis ici) :
+1. Ouverture **posée** (tu, lieu nommé, heure) — plus de « city 2 », plus de doublon d'ambiance collé mot pour mot.
+2. Mais le MJ **met le PJ derrière le comptoir** (essuyer, servir) alors que la palette dit banc / choppe / tenancière distincte. La fiche dit même « tu bois un verre ».
+3. Tour 1 : 3e personne (« Gwen, en déposant… ») + quête inventée (« retrouver mon anneau »).
+4. Ligne scène « — » : `weather` archivé comme tiret, et « midi » filtré à tort dans « après-midi ».
+
+**Solution** : `openingHardRules` impose le rôle **client** à l'auberge ; canon interdit 3e personne du PJ et quête déjà commencée hors fiche ; `getSceneWhenDisplayLabel` ignore « — » et ne confond plus midi / après-midi.
+
+**Fichiers** : `campaign-opening-prompt.ts`, `canon-continuity.ts`, `scene.ts` (+ tests)
 
 ### QCM de création écrasé dans une fente de 85 px
 

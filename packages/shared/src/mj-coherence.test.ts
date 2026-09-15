@@ -47,6 +47,17 @@ test("« salle » ne remplace pas « Refuge du Griffon »", () => {
   );
 });
 
+test("« village » ne remplace pas « Refuge du Héros Fatigué »", () => {
+  assert.equal(locationIsVaguerThan("village", "Refuge du Héros Fatigué"), true);
+  assert.equal(
+    mergeScenePatch(
+      { location: "Refuge du Héros Fatigué", mood: "18h, l’air frais après la pluie", tension: 10 },
+      { location: "village" }
+    ),
+    null
+  );
+});
+
 test("relance méta réécrite en relance jouable", () => {
   assert.match(
     rewriteTableMetaClosers("Elle hausse les épaules. Quelles seront vos prochaines actions ?"),
@@ -67,6 +78,14 @@ test("le moment n'est pas répété quand l'ambiance le dit déjà", () => {
     "vent"
   );
   assert.equal(getSceneWhenDisplayLabel({}, mood), null);
+  assert.equal(getSceneWhenDisplayLabel({ weather: "—" }, mood), null);
+  assert.equal(
+    getSceneWhenDisplayLabel(
+      { timeOfDay: "midi", weather: "—" },
+      "fin d’après‑midi, humidité collante"
+    ),
+    null
+  );
 });
 
 test("un libellé technique de carte n'est pas un lieu de scène", () => {

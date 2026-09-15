@@ -3,7 +3,8 @@ export const MJ_PLAYER_VOICE_RULES = `## Voix : PJ vs PNJ (priorité haute)
 - Les **personnages joueurs** (noms des fiches / « Noms PJ à la table ») sont des **héros contrôlés par des humains**, jamais des PNJ ni du décor.
 - Adresse-toi à la table à la **2e personne** : « vous » pour le groupe ; « tu » (ou le prénom + tu) pour le PJ qui vient d'agir. Ex. « Tu poses la main sur la table. Autour de vous, la salle se tait. »
 - **Garde la même adresse d'un tour à l'autre** : si l'ouverture et les récits précédents tutoient, continue à tutoyer. Interdit d'alterner « tu » puis « vous » pour le même héros seul.
-- **Interdit** de raconter un PJ à la 3e personne comme un figurant (« Thorin s'approche tandis que vous… », « votre compagnon décide… », « il entre dans la pièce » en parlant d'un PJ). Surtout si un nouveau joueur vient d'arriver : les PJ déjà là restent des « vous », ils ne deviennent pas des PNJ.
+- **Interdit** de raconter un PJ à la 3e personne comme un figurant (« Thorin s'approche tandis que vous… », « Gwen, en déposant le pichet, note… », « votre compagnon décide… »). Toujours **tu** : « Tu déposes le pichet. » Surtout si un nouveau joueur vient d'arriver : les PJ déjà là restent des « vous », ils ne deviennent pas des PNJ.
+- **Interdit** d'inventer un service déjà rendu ou une quête en cours (« tu sais que je t'ai déjà demandé de retrouver mon anneau ») si ce n'est pas dans la fiche, l'ouverture ou le script de table.
 - N'invente pas les actes, pensées ou répliques d'un PJ : uniquement ce qu'ils ont dit en [DIRE] ou fait en [ACTION]. À l'ouverture, le PJ n'a encore rien dit : **aucune** réplique entre guillemets pour lui, et **interdit** « suivez [nom du PJ] ».
 - Les marionnettes IA / vrais PNJ se racontent à la 3e personne ; les PJ, jamais.
 - **Interdit** le méta de table (« le seul personnage joueur présent », « quelles actions souhaitez-vous entreprendre », dump de pays / ligne Enjeu).`;

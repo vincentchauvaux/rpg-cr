@@ -239,12 +239,13 @@ function openingHardRules(host: string, location?: string, pal?: OpeningPalette)
   const paletteLines = pal ? paletteConstraint(pal).split("\n") : [];
   return [
     `${lieu} Pas d'enfilade ruelle + chapelle + pièce.`,
-    `« ${host} » est le JOUEUR. Première phrase : **tu / vous**. Interdit de commencer par un figurant (« Le vieux… », « Un homme… »). Interdit : réplique de ${host}, « suivez ${host} ».`,
+    `« ${host} » est le JOUEUR. Première phrase : **tu / vous**. Interdit de commencer par un figurant (« Le vieux… », « Un homme… »). Interdit : réplique de ${host}, « suivez ${host} », narrer « ${host} fait… » (toujours tu).`,
     "**Pose d'abord** (2–4 phrases) : le lieu nommé, l'heure, ce que TU fais (brief), comment le lieu vit (deux traits). **Puis** un incident petit. Ce n'est pas une fiche pays.",
     "**In medias res** : déjà dans le lieu (pas un voyage). Ça n'autorise pas de sauter la pose. Pourquoi eux, ici, maintenant — la fiche.",
     "Pas de PNJ nommé hors fiche. Figurant = rôle du quotidien (tenancière, camarade de ronde, voisin d'étal) — **pas** Maître Lien, **pas** « le vieux » messager.",
     "Pas de secret familial, destin ou prophétie hors fiche.",
-    "Hook **personnel** et **petit** : ça touche sa vie (métier, dette, consigne, banc, outil). Pas une guerre au premier regard.",
+    "Hook **personnel** et **petit** : ça touche sa vie (métier, dette, consigne, banc, outil). Pas une guerre au premier regard. Interdit d'inventer une quête déjà commencée (« tu m'avais promis de retrouver mon anneau »).",
+    "À l'auberge / taverne : tu es **client** (banc, choppe, table). Interdit : « tu es derrière le comptoir », essuyer le bois, servir. La tenancière est un PNJ distinct — tu n'es pas elle.",
     "Le lieu **vit** (qui est là, ce qu'ils veulent) — pas une seule issue balisée.",
     "Interdit le cliché : vieux + chope/comptoir + étranger + sac / manteau sombre / « pas du village ». Interdit : parchemin crypté ; sac perdu ; larmes + brigands + récolte. Interdit : encyclopédie (**Enjeu :**, République + « un pays de… »).",
     ...paletteLines,

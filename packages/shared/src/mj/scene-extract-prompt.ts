@@ -88,10 +88,17 @@ export function scrubScenePatchAgainstSourceText(
 const VAGUE_LOCATION_RE =
   /^(?:l[ae]\s+|les\s+|un[e]?\s+)?(?:salle(?:\s+commune)?|pi[èe]ce|int[eé]rieur|dedans|comptoir|table|sol|endroit|lieu|b[âa]timent|coin)$/iu;
 
-/** « salle » après « Refuge du Griffon » = reformulation, pas un déplacement. */
+/** Type de lieu seul (« village », « forêt ») — trop pauvre pour remplacer un nom propre. */
+const GENERIC_PLACE_ONLY_RE =
+  /^(?:l[ae]\s+|les\s+|un[e]?\s+|du\s+|de\s+la\s+|des\s+)?(?:village|ville|forêt|foret|bois|auberge|taverne|route|chemin|place|marché|temple|camp|campement)$/iu;
+
+/** « salle » / « village » après « Refuge du Héros Fatigué » = reformulation, pas un déplacement. */
 export function locationIsVaguerThan(next: string, current: string): boolean {
   if (!current.trim()) return false;
-  return VAGUE_LOCATION_RE.test(next.trim());
+  const n = next.trim();
+  if (VAGUE_LOCATION_RE.test(n)) return true;
+  if (GENERIC_PLACE_ONLY_RE.test(n) && current.trim().split(/\s+/).length >= 2) return true;
+  return false;
 }
 
 /** Types de lieux reconnus (FR médiéval-fantastique + maison / ferme / bar). */

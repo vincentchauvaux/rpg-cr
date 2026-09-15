@@ -1,5 +1,6 @@
 import {
   extractPlaceLocationFromText,
+  locationIsVaguerThan,
   locationsEquivalent,
 } from "./scene-extract-prompt.js";
 
@@ -359,9 +360,16 @@ export function mergeTableNow(
   patch: TableNowPatch
 ): TableNowState {
   const base = current ?? emptyTableNow();
-  const nextLocation = (patch.location ?? base.location).trim();
+  const proposed = (patch.location ?? "").trim();
+  const keepCurrent =
+    Boolean(proposed) &&
+    Boolean(base.location.trim()) &&
+    (locationsEquivalent(proposed, base.location) ||
+      locationIsVaguerThan(proposed, base.location));
+  const nextLocation = keepCurrent ? base.location : proposed || base.location;
   const locationChanged =
-    Boolean(patch.location?.trim()) &&
+    Boolean(proposed) &&
+    !keepCurrent &&
     !locationsEquivalent(nextLocation, base.location || nextLocation);
 
   return {
