@@ -34,13 +34,31 @@ export function tensionToAngleDeg(tension: number): number {
   return 90 - (t / 100) * 90;
 }
 
+/**
+ * Ligne « moment · météo », vidée de ce que l'ambiance dit déjà — les ouvertures
+ * recopiaient l'ambiance dans la météo et la même phrase s'affichait deux fois.
+ */
+export function getSceneWhenDisplayLabel(
+  scene: Pick<SceneState, "timeOfDay" | "weather"> | null | undefined,
+  moodLabel?: string | null,
+  separator = " · "
+): string | null {
+  const bits = [scene?.timeOfDay?.trim(), scene?.weather?.trim()].filter(
+    (b): b is string => Boolean(b)
+  );
+  if (bits.length === 0) return null;
+  const mood = (moodLabel ?? "").trim().toLowerCase();
+  const kept = mood ? bits.filter((b) => !mood.includes(b.toLowerCase())) : bits;
+  return kept.length > 0 ? kept.join(separator) : null;
+}
+
 export function formatSceneLine(scene: SceneState | null | undefined): string {
   if (!scene?.location?.trim() && !scene?.mood?.trim()) {
     return "Scène non établie";
   }
   const loc = scene.location?.trim() || "Lieu inconnu";
-  const when = [scene.timeOfDay, scene.weather].filter(Boolean).join(", ");
   const mood = scene.mood?.trim();
-  const bits = [loc, when || null, mood || null].filter(Boolean);
+  const when = getSceneWhenDisplayLabel(scene, mood, ", ");
+  const bits = [loc, when, mood || null].filter(Boolean);
   return bits.join(" — ");
 }

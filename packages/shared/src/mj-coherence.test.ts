@@ -9,6 +9,7 @@ import {
 } from "./mj/scene-extract-prompt.js";
 import { rewriteTableMetaClosers } from "./mj/sanitize-response.js";
 import { formatEstablishedCanonSummary } from "./mj/canon-continuity.js";
+import { getSceneWhenDisplayLabel } from "./scene.js";
 import { generateProceduralMap } from "./map/procedural.js";
 import { generateProceduralSettlementName } from "./map/world-names.js";
 
@@ -55,6 +56,17 @@ test("relance méta réécrite en relance jouable", () => {
     rewriteTableMetaClosers("Quelles actions souhaitez-vous entreprendre ?"),
     /Que fais‑tu \?/
   );
+});
+
+test("le moment n'est pas répété quand l'ambiance le dit déjà", () => {
+  const mood = "soir de lanternes, l’air est tiède";
+  assert.equal(getSceneWhenDisplayLabel({ weather: mood }, mood), null);
+  assert.equal(getSceneWhenDisplayLabel({ timeOfDay: "soir" }, mood), null);
+  assert.equal(
+    getSceneWhenDisplayLabel({ timeOfDay: "soir", weather: "vent" }, mood),
+    "vent"
+  );
+  assert.equal(getSceneWhenDisplayLabel({}, mood), null);
 });
 
 test("un libellé technique de carte n'est pas un lieu de scène", () => {

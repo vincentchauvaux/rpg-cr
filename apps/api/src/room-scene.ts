@@ -5,6 +5,7 @@ import {
   clampTension,
   completeChat,
   findSceneLocationInTexts,
+  getSceneWhenDisplayLabel,
   hasEstablishedSceneLocation,
   hasEstablishedSceneMood,
   heuristicSceneFromMjText,
@@ -276,7 +277,7 @@ export function formatSceneForMj(scene: SceneState | null): string {
   if (!scene?.location?.trim() && !scene?.mood?.trim()) {
     return "Lieu et ambiance non encore archivés.";
   }
-  const when = [scene.timeOfDay, scene.weather].filter(Boolean).join(" · ");
+  const when = getSceneWhenDisplayLabel(scene, scene.mood);
   return (
     `Lieu : ${scene.location || "—"}\n` +
     (scene.people ? `Présents : ${scene.people}\n` : "") +

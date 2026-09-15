@@ -983,6 +983,14 @@ La carte n'est chargée en state client **que** si god mode actif.
 
 **Fichiers** : `globals.css`
 
+### Indicateur de scène : ambiance affichée deux fois à l'ouverture
+
+**Problème** : sous le lieu, « soir de lanternes, l'air est tiède » s'affichait sur **deux lignes** en début de partie, puis les deux lignes devenaient distinctes. `seedTableNowFromOpening` recopiait le `mood` de l'ouverture dans `table_now.weather` ; l'UI rend une ligne « moment · météo » **et** une ligne ambiance. Dès qu'un tour extrayait une vraie météo (« vent »), le doublon disparaissait.
+
+**Solution** : à l'ouverture, `timeOfDay` / `weather` sont **déduits** du texte (`extractTimeOfDayFromText`, `extractWeatherFromText`) au lieu de recopier l'ambiance. `getSceneWhenDisplayLabel` retire des libellés « moment · météo » ce que l'ambiance dit déjà (répare aussi les parties déjà enregistrées), et sert à l'UI, à `formatSceneLine` et au bloc scène du prompt MJ.
+
+**Fichiers** : `room-table-now.ts`, `scene.ts`, `SceneIndicator.tsx`, `room-scene.ts` (+ test `mj-coherence.test.ts`)
+
 ### Lieux de carte nommés « city 2 »
 
 **Problème** : le MJ annonçait « vérifier que tu es bien sur la bonne voie vers **city 2** » et la scène s'archivait en « Sentier entre la capitale de la Thalassocratie de Kethune et city 2 » : `generateProceduralMap` nommait les POI `${type} ${i+1}` (libellé technique anglais), et le prompt d'ouverture demande de citer un nom de carte.

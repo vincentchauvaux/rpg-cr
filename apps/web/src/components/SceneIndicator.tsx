@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import type { SceneState } from "@rpg-cr/shared";
-import { getSceneLocationDisplayLabel, getSceneMoodDisplayLabel } from "@rpg-cr/shared";
+import {
+  getSceneLocationDisplayLabel,
+  getSceneMoodDisplayLabel,
+  getSceneWhenDisplayLabel,
+} from "@rpg-cr/shared";
 import { SceneTensionGauge } from "@/components/SceneTensionGauge";
 import { patchRoomScene, extractRoomScene } from "@/lib/api";
 
@@ -67,6 +71,7 @@ export function SceneIndicator({
 
   const locationLabel = getSceneLocationDisplayLabel(scene);
   const moodLabel = getSceneMoodDisplayLabel(scene, { recentTexts });
+  const whenLabel = getSceneWhenDisplayLabel(scene, moodLabel);
   const displayTension = scene?.tension ?? 0;
 
   return (
@@ -74,10 +79,8 @@ export function SceneIndicator({
       <div className="scene-indicator-text">
         <span className="scene-indicator-label muted">Scène</span>
         <span className="scene-indicator-location">{locationLabel}</span>
-        {scene?.timeOfDay || scene?.weather ? (
-          <span className="scene-indicator-mood">
-            {[scene.timeOfDay, scene.weather].filter(Boolean).join(" · ")}
-          </span>
+        {whenLabel ? (
+          <span className="scene-indicator-mood">{whenLabel}</span>
         ) : null}
         {moodLabel ? <span className="scene-indicator-mood">{moodLabel}</span> : null}
       </div>

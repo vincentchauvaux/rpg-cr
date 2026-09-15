@@ -3,6 +3,8 @@ import type { LlmRoomConfig, TableBeat, TableNowPatch, TableNowState } from "@rp
 import {
   buildTableNowExtractMessages,
   completeChat,
+  extractTimeOfDayFromText,
+  extractWeatherFromText,
   formatTableNowForMj,
   heuristicTableNowFromMjText,
   heuristicTableNowFromPlayerIntent,
@@ -160,13 +162,16 @@ export function seedTableNowFromOpening(
   input: { location: string; mood?: string; beat?: string },
   sourceMessageId: string | null
 ): TableNowState {
+  // L'ambiance n'est pas une météo : la recopier telle quelle affichait deux fois
+  // la même ligne sous le lieu (« soir de lanternes, l'air est tiède »).
+  const source = [input.mood, input.beat].filter(Boolean).join(". ");
   return applyTableNowPatch(
     roomId,
     {
       location: input.location,
       lastBeat: input.beat || `Ouverture : ${input.location}`,
-      timeOfDay: "",
-      weather: input.mood?.trim() || "",
+      timeOfDay: extractTimeOfDayFromText(source) ?? "",
+      weather: extractWeatherFromText(source) ?? "",
       people: [],
       locationSource: "opening",
     },
