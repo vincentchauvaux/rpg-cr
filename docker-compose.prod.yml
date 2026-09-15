@@ -57,7 +57,11 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - AUTH_INTERNAL_SECRET=${AUTH_INTERNAL_SECRET:-}
-      - API_INTERNAL_URL=${API_INTERNAL_URL:-http://127.0.0.1:4010}
+      # L'API tourne en network_mode: host — depuis ce conteneur bridge,
+      # 127.0.0.1 désigne le web lui-même : il faut passer par l'hôte.
+      - API_INTERNAL_URL=${API_INTERNAL_URL:-http://host.docker.internal:4010}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       api:
         condition: service_healthy
