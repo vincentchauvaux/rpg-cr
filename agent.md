@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-15 (**UI** : tout l’intérieur du QCM défile ; nom du PJ au-dessus du Dire/Action)
+> Dernière mise à jour : 2026-09-15 (**MJ** : ouverture posée et variée par graine, plus le moule « le vieux au comptoir »)
 
 ## Vision
 
@@ -559,7 +559,7 @@ Pas de bouton « ajouter un compagnon » : le PJ **demande au PNJ** (Dire `@PNJ`
 - **Noms de royaumes** : générés de façon déterministe par `world_seed` / `map_seed` dans `packages/shared/src/map/world-names.ts` → stockés dans `rooms.map_json` (`countries`, `territories`, POI). Plus de liste figée Aldermar / Brumes / Khar-Vos pour les **nouveaux** salons.
 - **Déclenchement unique** quand l'**hôte** (admin humain) finalise sa fiche (`POST …/character/finalize`) ou passe `ready` + `story_locked` : `scheduleCampaignOpening` → `bootstrapCampaignOpening` (`apps/api/src/campaign-opening.ts`).
 - Deux appels LLM : plan JSON (`packages/shared/src/mj/campaign-opening-prompt.ts`) puis récit MJ long (Acte I, hook, enjeu) intégrant la fiche hôte — **pas** de second message d'intégration pour l'hôte. Le prompt d'ouverture injecte les pays / territoires / POI de la carte et interdit les noms legacy sauf s'ils sont déjà dans `map_json` (anciennes parties).
-- **Voix PJ** : 2e personne ; `isCampaignOpeningUnplayable` (trop court, trop romancé, trop de lieux, hôte=PNJ y compris « visages de X » / « X se trouve » / « X doit décider », Sir/Dame/**Maître** hors fiche, secret du père, **McGuffin** : parchemin, sac perdu, **voisin en larmes + brigands + récolte**, dump **Enjeu :** / République). Retry puis récit de secours **jouable** (pas de « Tes hommes : Aucun », pas de fiche « je … » collée, pas d'encyclopédie). `openingHardRules` : hook **petit** et personnel, **in medias res**. Maîtrise : ne **pas parler pour le PJ** ; s'il réduit le geste, on réduit ; un verre = quelqu'un boit ; sort sans ennemi ≠ bataille. Source métier : [blog Le Rôliste](https://www.blog.leroliste.com/).
+- **Voix PJ** : 2e personne ; `isCampaignOpeningUnplayable` (trop court, trop romancé, trop de lieux, hôte=PNJ y compris « visages de X » / « X se trouve » / « X doit décider », Sir/Dame/**Maître** hors fiche, secret du père, **McGuffin** : parchemin, sac perdu, **étranger + sac de provisions**, **voisin en larmes + brigands + récolte**, dump **Enjeu :** / République, **moule taverne** : « Le vieux » + chope + inconnu). Retry puis récit de secours **jouable** (pose tu/vous + lieu + heure issus de la **palette de graine**, pas de « Tes hommes : Aucun », pas de fiche « je … » collée, pas d'encyclopédie). `openingHardRules` : **pose d'abord** le lieu et ce que tu fais, **puis** un incident petit ; **in medias res** ≠ sauter l'intro ; interdit le cliché vieux/sac. Palette déterministe `buildOpeningPalette` (heure, météo, incident, nom de carte). Maîtrise : ne **pas parler pour le PJ** ; s'il réduit le geste, on réduit ; un verre = quelqu'un boit ; sort sans ennemi ≠ bataille. Source métier : [blog Le Rôliste](https://www.blog.leroliste.com/).
 - **Style** : `llm_config.mjProse` (0–100, défaut 20) — curseur admin « Droit au but / Sobre / Romancé » injecté dans tous les tours MJ (`formatMjProseRules`).
 - **Brief de départ** : QCM `creationBrief` (qui / en ce moment / passé) avant la fiche ; préremplit rang/habitat/suite ; paysan local → **Maison au village** ; contraint l'ouverture à **un lieu** calé sur le choix.
 - Finalisation **hôte** : « X a scellé sa fiche. » (sans « présentez-vous ») ; les autres PJ gardent l'invite à se présenter.
@@ -926,6 +926,16 @@ La carte n'est chargée en state client **que** si god mode actif.
 - **MJ** : répond dans la langue du joueur qui a déclenché le tour (`preferredLocale` du dernier locuteur debounce).
 - **Fiche PJ (IA)** : `generate-field` / `generate-section` / `generate-all` / `ask-mj` utilisent la locale de l'**acteur** (`actorPlayerId`), pas celle de la cible.
 - Pas de traduction de ses propres messages ; sans LLM : clic 🌐 → tooltip « MJ non configuré » (pas d'appel auto au chargement).
+
+## Correctifs 2026-09-15
+
+### Ouverture rustre et toujours la même (Ching, le vieux au comptoir)
+
+**Problème** : l'Acte I sautait la pose (lieu, heure, ce que **tu** fais) et recyclait le moule « Le vieux + chope + homme étrange + sac de provisions ». L'in medias res trop sec + l'exemple « le vieux » dans le prompt + un 7B = toujours la même taverne.
+
+**Solution** : pose d'abord (2e personne, lieu, heure) puis incident petit ; palette déterministe par **graine** (heure / météo / incident / nom de carte) ; détecteurs `openingLooksLikeStockHook` + `openingSkipsPlaceSetup` + McGuffin étranger+sac ; secours plus vivant, plus varié.
+
+**Fichiers** : `campaign-opening-prompt.ts` (+ tests), `campaign-opening.ts`, `mj-craft.ts`, `system-prompt.ts`, `mj-prose.ts`, `character-brief.ts`
 
 ## Correctifs 2026-09-13
 

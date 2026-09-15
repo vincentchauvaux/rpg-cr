@@ -1,5 +1,10 @@
 import type { CharacterSheet, ProceduralMap } from "../types.js";
 import { formatAlignmentLabel } from "../alignment.js";
+import {
+  type BriefActivity,
+  type BriefStation,
+  normalizeCreationBrief,
+} from "../character-brief.js";
 import { formatCharacterSheetForMj, sheetFollowersForMj } from "../character-sheet.js";
 import { buildGenerationLocaleRules, localeLabel, normalizeLocale } from "../locale.js";
 import { legacyWorldNamesGuard } from "../map/world-names.js";
@@ -30,6 +35,170 @@ export interface CampaignOpeningContext {
   mjProse?: number;
 }
 
+export interface OpeningPalette {
+  when: string;
+  weather: string;
+  incident: string;
+  place: string;
+  mustName: string;
+}
+
+function seedHash(value: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    h ^= value.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function pickFrom<T>(items: readonly T[], seed: string, salt: string): T {
+  return items[seedHash(`${seed}:${salt}`) % items.length]!;
+}
+
+const OPENING_WHENS = [
+  "fin d'après-midi",
+  "aube encore grise",
+  "soir de lanternes",
+  "juste après la pluie",
+  "heure du repas",
+  "milieu de matinée",
+] as const;
+
+const OPENING_WEATHERS = [
+  "L'air est tiède.",
+  "Un vent sec racle les seuils.",
+  "L'humidité colle aux manches.",
+  "La pierre reste froide sous la main.",
+  "Le soleil est bas.",
+  "Une bruine fine n'a pas fini.",
+] as const;
+
+const ACTIVITY_PLACE: Record<BriefActivity, string> = {
+  inn: "l'auberge",
+  patrol: "la ronde",
+  road: "la halte de route",
+  market: "la place du marché",
+  post: "ton poste",
+  trouble: "un toit précaire",
+  looking_work: "le seuil où l'on embauche",
+};
+
+function incidentsFor(activity?: BriefActivity, station?: BriefStation): string[] {
+  const byActivity: Record<BriefActivity, string[]> = {
+    inn: [
+      "La tenancière essuie trop longtemps le même verre. Ton banc d'habitude n'est pas libre — ou l'est trop.",
+      "Un habitué que tu vois tous les jours n'a pas repris sa place. On parle bas, d'une affaire de la maison.",
+      "On te doit encore l'écot, ou une faveur : un geste trop franc le rappelle, sans te coller une mission.",
+    ],
+    patrol: [
+      "La consigne du jour a une ligne en trop, sans signature.",
+      "Le camarade qui relève d'habitude n'est pas là ; la ronde tourne comme si de rien n'était.",
+      "Une porte que tu fermes chaque soir est restée entrouverte.",
+    ],
+    road: [
+      "La halte a un feu trop petit, ou trop grand. Quelqu'un du métier a passé avant toi — pas un messager d'aventure.",
+      "Ton paquet a bougé. Rien de volé à grand spectacle : juste de travers.",
+      "La piste porte une ornière récente qui n'était pas là ce matin.",
+    ],
+    market: [
+      "L'étal contre lequel tu t'adosses a un manque : une balance, une caisse, un voisin d'étal.",
+      "Une dispute d'étals éclate trop près : ça concerne ton rang, pas le sac d'un inconnu.",
+      "On a changé ta place, ou celle d'à côté, sans te prévenir.",
+    ],
+    post: [
+      "Au poste, un ordre anonyme (un rôle, pas un nom hors fiche) te concerne toi, pour une tâche du jour trop précise.",
+      "L'outil ou le registre que tu touches tous les jours n'est pas à sa place.",
+      "On t'attendait plus tôt — ou plus tard. Le silence autour de ça est trop net.",
+    ],
+    trouble: [
+      "On te regarde trop longtemps. Pas un héros : un débiteur, un accusé, quelqu'un qui te doit ou à qui tu dois.",
+      "Une voix trop connue baisse d'un cran quand tu passes. L'affaire est la tienne, pas une guerre.",
+      "Un objet à toi (ou qu'on dit à toi) traîne là où il ne devrait pas.",
+    ],
+    looking_work: [
+      "On embauche, ou on refuse, à deux pas. La file, le silence, le regard : ça te concerne.",
+      "Un contremaître anonyme a déjà dit non une fois. Aujourd'hui il hésite — trop peu pour une quête, assez pour jouer.",
+      "Ton sac de route est ouvert d'un cran. Rien de magique : quelqu'un a fouillé, ou tu as mal fermé.",
+    ],
+  };
+  const extra =
+    station === "priest"
+      ? ["L'office a sauté une phrase, ou une flamme. Les habitués font semblant de n'avoir rien vu."]
+      : station === "guard"
+        ? ["Un sceau sur la porte de faction n'est pas celui d'hier."]
+        : station === "sailor"
+          ? ["La corde que tu connais a un nœud de trop — ou de moins."]
+          : station === "ranger"
+            ? ["Le gibier d'habitude n'a pas laissé la trace attendue. Juste ça."]
+            : station === "wizard"
+              ? ["Ta page ou ta tablette n'est plus au même signet. Personne n'avoue."]
+              : [];
+  const base = activity ? byActivity[activity] : [
+    "Quelque chose de ton quotidien manque à sa place, sans qu'un inconnu t'apporte une quête.",
+    "Un visage connu de ton métier te fait signe pour une affaire ordinaire, trop nette pour être rien.",
+  ];
+  return [...base, ...extra];
+}
+
+function mapPlaceNames(map: ProceduralMap | null): string[] {
+  if (!map) return [];
+  return [
+    ...map.pois.map((p) => p.name),
+    ...map.territories.map((t) => t.name),
+    ...map.countries,
+  ].filter((n) => n.trim().length > 1);
+}
+
+/** Variation déterministe : même salon = même pose, salon suivant = autre heure / autre incident. */
+export function buildOpeningPalette(ctx: CampaignOpeningContext): OpeningPalette {
+  const brief = normalizeCreationBrief(ctx.hostSheet.creationBrief);
+  const habitat = ctx.hostSheet.habitat?.trim() ?? "";
+  const names = mapPlaceNames(ctx.map);
+  const mustName = names.length > 0 ? pickFrom(names, ctx.worldSeed, "place") : "";
+  const place =
+    (brief ? ACTIVITY_PLACE[brief.activity] : "") ||
+    habitat ||
+    mustName ||
+    "ici";
+  return {
+    when: pickFrom(OPENING_WHENS, ctx.worldSeed, "when"),
+    weather: pickFrom(OPENING_WEATHERS, ctx.worldSeed, "weather"),
+    incident: pickFrom(incidentsFor(brief?.activity, brief?.station), ctx.worldSeed, "incident"),
+    place,
+    mustName,
+  };
+}
+
+function paletteConstraint(pal: OpeningPalette): string {
+  const nameLine = pal.mustName
+    ? `Nomme **${pal.mustName}** (carte / graine) au moins une fois.`
+    : "Un détail unique du lieu (objet, bruit) — pas le moule bière fraîche + bois brûlé.";
+  return [
+    `**Cette graine** (change à chaque salon) :`,
+    `- Moment : ${pal.when}. ${pal.weather}`,
+    `- Incident à incarner : ${pal.incident}`,
+    `- ${nameLine}`,
+  ].join("\n");
+}
+
+export function buildFallbackOpeningPlan(ctx: CampaignOpeningContext): CampaignOpeningPlan {
+  const pal = buildOpeningPalette(ctx);
+  return {
+    worldSummary: pal.mustName
+      ? `${pal.mustName}, ${pal.when}.`
+      : `Ici, ${pal.when}.`,
+    mainPlot: pal.incident.slice(0, 180),
+    startingSituation: `Tu es déjà à ${pal.place}. ${pal.when}. ${pal.weather}`,
+    openingScene: pal.incident,
+    scene: {
+      location: pal.place,
+      mood: `${pal.when}. ${pal.weather}`.slice(0, 80),
+      tension: -18,
+    },
+  };
+}
+
 function mapSummary(map: ProceduralMap | null, worldSeed: string): string {
   if (!map) return `Monde en gestation (graine narrative ${worldSeed}).`;
   const poi =
@@ -56,22 +225,24 @@ function mapSummary(map: ProceduralMap | null, worldSeed: string): string {
 }
 
 /** Règles d'Acte I — une seule copie, plan + récit. */
-function openingHardRules(host: string, location?: string): string {
+function openingHardRules(host: string, location?: string, pal?: OpeningPalette): string {
   const lieu = location?.trim()
     ? `**Un seul lieu** : ${location.trim()}.`
     : "**Un seul lieu**, calé sur le brief / la fiche.";
+  const paletteLines = pal ? paletteConstraint(pal).split("\n") : [];
   return [
     `${lieu} Pas d'enfilade ruelle + chapelle + pièce.`,
-    `« ${host} » est le JOUEUR (tu / tes). Interdit : 3e personne, réplique de ${host}, « suivez ${host} ».`,
-    "Pas de PNJ nommé hors fiche. Figurant anonyme OK — seulement s'il **connaît** le PJ ou partage son quotidien.",
+    `« ${host} » est le JOUEUR. Première phrase : **tu / vous**. Interdit de commencer par un figurant (« Le vieux… », « Un homme… »). Interdit : réplique de ${host}, « suivez ${host} ».`,
+    "**Pose d'abord** (2–4 phrases) : le lieu nommé, l'heure, ce que TU fais (brief), comment le lieu vit (deux traits). **Puis** un incident petit. Ce n'est pas une fiche pays.",
+    "**In medias res** : déjà dans le lieu (pas un voyage). Ça n'autorise pas de sauter la pose. Pourquoi eux, ici, maintenant — la fiche.",
+    "Pas de PNJ nommé hors fiche. Figurant = rôle du quotidien (tenancière, camarade de ronde, voisin d'étal) — **pas** Maître Lien, **pas** « le vieux » messager.",
     "Pas de secret familial, destin ou prophétie hors fiche.",
-    "Hook **personnel** et **petit** : ça touche sa vie (voisin, travail, faim, ronde, chope, rumeur). Pas une guerre livrée au premier regard.",
-    "Le lieu **vit** (qui est là, ce qu'ils veulent) — pas une seule issue balisée. Le PJ doit pouvoir surprendre sans que tu le ramènes au menu.",
-    "**In medias res** : déjà dans le lieu et l'incident. Pas de prologue taverne + inconnu. Pourquoi eux, ici, maintenant — la fiche.",
-    "Figurant : « un voisin », « le vieux », « la tenancière » — **pas** Maître Lien, pas de nom hors fiche.",
-    "Interdit : encyclopédie (République + « un pays de… », ligne **Enjeu :**). Interdit : voisin en larmes + brigands + récolte volée. Interdit : parchemin crypté ; sac perdu d'étrangers ; « trouvez le X ».",
+    "Hook **personnel** et **petit** : ça touche sa vie (métier, dette, consigne, banc, outil). Pas une guerre au premier regard.",
+    "Le lieu **vit** (qui est là, ce qu'ils veulent) — pas une seule issue balisée.",
+    "Interdit le cliché : vieux + chope/comptoir + étranger + sac / manteau sombre / « pas du village ». Interdit : parchemin crypté ; sac perdu ; larmes + brigands + récolte. Interdit : encyclopédie (**Enjeu :**, République + « un pays de… »).",
+    ...paletteLines,
   ]
-    .map((line) => `- ${line}`)
+    .map((line) => (line.startsWith("- ") || line.startsWith("**Cette") ? line : `- ${line}`))
     .join("\n");
 }
 
@@ -87,6 +258,7 @@ export function buildCampaignOpeningPlanMessages(
     : "non précisé";
   const loc = normalizeLocale(preferredLocale);
   const langNote = localeLabel(loc);
+  const pal = buildOpeningPalette(ctx);
   const styleNote =
     mjProseBand(ctx.mjProse) === "lush"
       ? "JSON un peu plus atmosphérique autorisé."
@@ -97,19 +269,20 @@ export function buildCampaignOpeningPlanMessages(
       role: "system",
       content: `Tu es concepteur de campagnes D&D 5e (narration uniquement, pas de jets de dés).
 Tu prépares l'**Acte I** en JSON. ${styleNote}
+Chaque salon a une **graine différente** : réutilise les noms de la carte et la contrainte ci-dessous. Interdit de recycler le moule taverne + vieux + étranger au sac.
 
 ${legacyWorldNamesGuard("fr")}
-${openingHardRules(ctx.hostName)}
+${openingHardRules(ctx.hostName, undefined, pal)}
 
 ${buildGenerationLocaleRules(preferredLocale)}
 
 Réponds UNIQUEMENT avec un objet JSON valide (${langNote}) :
 {
-  "worldSummary": "2 phrases max : le pays",
-  "mainPlot": "Enjeu local (2 phrases)",
-  "startingSituation": "Où est le PJ et ce qu'il fait (1 phrase)",
-  "openingScene": "Incident PETIT dans CE lieu (chope, voisin connu, rumeur) — pas un parchemin, pas un sac perdu, pas une guerre de brigands",
-  "scene": { "location": "UN lieu concret", "mood": "1 détail", "tension": 10 }
+  "worldSummary": "2 phrases : comment CE lieu vit aujourd'hui (noms de la carte). Pas une fiche pays.",
+  "mainPlot": "Tension locale personnelle (2 phrases, pas une guerre)",
+  "startingSituation": "Tu/vous + lieu + heure + ce que le PJ fait (brief)",
+  "openingScene": "Incident PETIT calé sur la contrainte de graine — pas un vieux au comptoir, pas un sac d'inconnu",
+  "scene": { "location": "UN lieu concret", "mood": "heure + un trait", "tension": 10 }
 }
 
 tension : entier −100 à +100.`,
@@ -161,11 +334,12 @@ export function buildCampaignOpeningNarrativePrompt(
   ctx: CampaignOpeningContext
 ): string {
   const host = ctx.hostName.trim();
+  const pal = buildOpeningPalette(ctx);
   return (
     `[OUVERTURE DE CAMPAGNE — Acte I]\n\n` +
     `Graine : \`${ctx.worldSeed}\`.\n\n` +
     `## Table\n` +
-    openingHardRules(host, plan.scene.location) +
+    openingHardRules(host, plan.scene.location, pal) +
     `\n- Si la fiche a des hommes, ils sont avec toi (sans les nommer si la fiche ne les nomme pas).\n` +
     `- ${legacyWorldNamesGuard("fr")}\n` +
     `- Termine par une question ou 2–3 pistes **dans ce lieu**.\n` +
@@ -344,6 +518,10 @@ export function openingLooksLikeQuestMcGuffin(content: string): boolean {
   if (parchment && vanish && /\b(inconnu|étranger|un homme|un vieux|vieillard)\b/i.test(t)) {
     return true;
   }
+  const weirdStranger =
+    /\b(homme étrange|femme étrange|n['’]était pas du village|manteau sombre)\b/i.test(t);
+  const bagProp = /\b(sac|besace|provisions?)\b/i.test(t);
+  if (weirdStranger && bagProp) return true;
   const strangers = /\b(voyageurs?|étrangers?|inconnus?|passants?|un homme|une femme)\b/i.test(
     t
   );
@@ -372,6 +550,38 @@ export function openingDumpsEncyclopedia(content: string): boolean {
   if (/\bTes hommes sont avec toi\s*:\s*Aucun\b/i.test(t)) return true;
   return false;
 }
+
+/**
+ * Moule usé : le vieux au comptoir, l'étranger au sac, départ à la 3e personne.
+ * (Ching : « Le vieux, sa barbe… sac de provisions… pas du village ».)
+ */
+export function openingLooksLikeStockHook(content: string): boolean {
+  const t = stripOpeningComments(content);
+  const head = t.replace(/^["«\s]+/, "").slice(0, 90);
+  if (/^(Le vieux|Un vieux|Le vieillard|Un vieil homme|Un homme étrange)\b/i.test(head)) {
+    return true;
+  }
+  const oldMan = /\b(le vieux|un vieux|le vieillard|barbe grise|sa canne)\b/i.test(t);
+  const bar = /\b(chope|comptoir|bière fraîche|houblon)\b/i.test(t);
+  const stranger =
+    /\b(homme étrange|n['’]était pas du village|manteau sombre|pas du village)\b/i.test(t);
+  const bag = /\b(sac de provisions|sac.{0,24}à la main)\b/i.test(t);
+  if (oldMan && (stranger || bag)) return true;
+  if (oldMan && bar && stranger) return true;
+  if (stranger && bag) return true;
+  return false;
+}
+
+/** La première phrase n'adresse pas le PJ : on saute la pose du lieu. */
+export function openingSkipsPlaceSetup(content: string): boolean {
+  const t = stripOpeningComments(content);
+  const head = t.slice(0, 220);
+  if (/^(Le vieux|Un vieux|Le vieillard|Un homme|Une femme|Un inconnu)\b/i.test(head.trim())) {
+    return true;
+  }
+  return !/\b(tu |vous |tes |ton |ta |votre |vos )\b/i.test(head);
+}
+
 /** Ouverture trop courte, menu vide, PJ=PNJ, PNJ inventé, trop de lieux, McGuffin, ou trop romancé. */
 export function isCampaignOpeningUnplayable(
   content: string,
@@ -383,6 +593,8 @@ export function isCampaignOpeningUnplayable(
   if (openingInventedNamedNpc(content, hostName, opts?.sheet)) return true;
   if (openingInventedFamilySecret(content, opts?.sheet)) return true;
   if (openingLooksLikeQuestMcGuffin(content)) return true;
+  if (openingLooksLikeStockHook(content)) return true;
+  if (openingSkipsPlaceSetup(content)) return true;
   if (openingDumpsEncyclopedia(content)) return true;
   if (openingTooManyPlaces(content, opts?.mjProse)) return true;
   if (openingTooOrnate(content, opts?.mjProse)) return true;
@@ -397,33 +609,30 @@ export function isCampaignOpeningTooThin(content: string): boolean {
   return false;
 }
 
-/** Récit de secours si le LLM ne pose pas le monde. Jouable : 2e personne, pas d'encyclopédie. */
+/** Récit de secours si le LLM ne pose pas le monde. Jouable : 2e personne, pose du lieu, pas d'encyclopédie. */
 export function renderFallbackOpeningNarrative(
   plan: CampaignOpeningPlan,
   ctx: CampaignOpeningContext
 ): string {
+  const pal = buildOpeningPalette(ctx);
   const sheet = ctx.hostSheet;
   const rank = sheet.rank?.trim();
   const who = rank ? `Tu es ${ctx.hostName}, ${rank}.` : `Tu es ${ctx.hostName}.`;
   const followers = sheetFollowersForMj(sheet.servants);
   const suite = followers ? ` Tes hommes sont avec toi : ${followers}.` : "";
-  const background = sheet.background?.trim() ?? "";
-  const past =
-    background && !/^(je|j['’])/i.test(background) ? ` ${background.slice(0, 160)}` : "";
-  const location = plan.scene.location.trim() || "ici";
+  const location = plan.scene.location.trim() || pal.place;
   const mood = plan.scene.mood.trim();
   const start = playableOpeningBeat(plan.startingSituation, ctx);
   const scene = playableOpeningBeat(plan.openingScene, ctx);
   const beat =
-    [start, scene].filter(Boolean).join(" ") ||
-    "Tu es déjà là, dans le geste du métier. Un visage connu, pas une guerre livrée par un voisin.";
+    [start, scene].filter(Boolean).join(" ") || pal.incident;
 
   return (
-    `${who}${suite}${past}\n\n` +
-    `Tu es à **${location}**.${mood ? ` ${mood}.` : ""}\n\n` +
+    `${who}${suite}\n\n` +
+    `Tu es à **${location}**, ${pal.when}. ${pal.weather}${mood ? ` ${mood}.` : ""}\n\n` +
     `${beat}\n\n` +
     `Que fais-tu ?\n` +
-    `<!--scene:{"location":${JSON.stringify(plan.scene.location)},"mood":${JSON.stringify(plan.scene.mood)},"tension":${plan.scene.tension}}-->\n` +
+    `<!--scene:{"location":${JSON.stringify(plan.scene.location || location)},"mood":${JSON.stringify(mood || pal.weather)},"tension":${plan.scene.tension}}-->\n` +
     `<!--arc:{"mainPlot":${JSON.stringify(plan.mainPlot)},"currentBeat":${JSON.stringify(beat.slice(0, 200))}}-->`
   );
 }
@@ -434,6 +643,7 @@ function playableOpeningBeat(text: string, ctx: CampaignOpeningContext): string 
   if (openingTreatsHostAsNpc(t, ctx.hostName)) return "";
   if (openingInventedNamedNpc(t, ctx.hostName, ctx.hostSheet)) return "";
   if (openingLooksLikeQuestMcGuffin(t)) return "";
+  if (openingLooksLikeStockHook(t)) return "";
   if (openingDumpsEncyclopedia(t)) return "";
   return t;
 }

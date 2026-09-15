@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildCampaignOpeningRewritePrompt,
+  buildOpeningPalette,
   isCampaignOpeningTooThin,
   isCampaignOpeningUnplayable,
   namesReferToSamePerson,
@@ -9,6 +10,8 @@ import {
   openingInventedFamilySecret,
   openingInventedNamedNpc,
   openingLooksLikeQuestMcGuffin,
+  openingLooksLikeStockHook,
+  openingSkipsPlaceSetup,
   openingTreatsHostAsNpc,
   parseCampaignOpeningPlan,
   renderFallbackOpeningNarrative,
@@ -228,4 +231,42 @@ test("secours d'ouverture : paysan seul, pas de guerre collée", () => {
     }),
     false
   );
+});
+
+const CHING_STOCK_OPENING = `
+Le vieux, sa barbe grise tremblante, s'approche du comptoir où vous sirotez votre chope. Le parfum de bois brûlé et de bière fraîche flotte dans l'air. Il baisse la voix, s’appuyant sur sa canne.
+« J’ai vu un homme étrange sortir du comptoir, sac de provisions à la main. Il portait un manteau sombre, et ses pas étaient pressés. Il n’était pas du village, j’en suis sûr. »
+L’odeur de houblon se mêle à un léger parfum de bois de santal que dégage son manteau.
+Vous pouvez répondre, regarder autour, ou demander plus de détails.
+Que faites‑vous ?
+`;
+
+test("ouverture injouable : le vieux au comptoir et l'étranger au sac", () => {
+  assert.equal(openingLooksLikeStockHook(CHING_STOCK_OPENING), true);
+  assert.equal(openingLooksLikeQuestMcGuffin(CHING_STOCK_OPENING), true);
+  assert.equal(openingSkipsPlaceSetup(CHING_STOCK_OPENING), true);
+  assert.equal(isCampaignOpeningUnplayable(CHING_STOCK_OPENING, "Ching choung"), true);
+});
+
+test("palette d'ouverture : deux graines, deux poses", () => {
+  const sheet = {
+    rank: "Villageois",
+    creationBrief: { station: "peasant" as const, activity: "inn" as const, past: "local" as const },
+  };
+  const a = buildOpeningPalette({
+    roomName: "Test",
+    worldSeed: "graine-alpha-111",
+    map: null,
+    hostName: "Ching",
+    hostSheet: sheet,
+  });
+  const b = buildOpeningPalette({
+    roomName: "Test",
+    worldSeed: "graine-omega-999",
+    map: null,
+    hostName: "Ching",
+    hostSheet: sheet,
+  });
+  assert.notEqual(`${a.when}|${a.weather}|${a.incident}`, `${b.when}|${b.weather}|${b.incident}`);
+  assert.match(a.place, /auberge/i);
 });

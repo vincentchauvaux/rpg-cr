@@ -194,6 +194,7 @@ export function formatCreationBriefForMj(brief?: CharacterCreationBrief | null):
     `- Histoire récente : ${optionLabel(BRIEF_PAST_OPTIONS, b.past)}`,
     "- N'invente **pas** de père secret, de prophétie ni de PNJ nommé hors fiche.",
     `- L'ouverture se passe **là où le joueur a dit être** (${optionLabel(BRIEF_ACTIVITY_OPTIONS, b.activity)}). Un seul lieu.`,
+    "- D'abord tu/vous + le lieu + ce qu'il fait ; ensuite un incident de CE lieu. Interdit : le vieux + étranger + sac.",
     "- Incident **personnel** (ça le concerne). Interdit : inconnu + parchemin crypté + disparition.",
   ].join("\n");
 }

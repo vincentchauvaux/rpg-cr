@@ -3,13 +3,13 @@ import {
   buildCampaignOpeningNarrativePrompt,
   buildCampaignOpeningPlanMessages,
   buildCampaignOpeningRewritePrompt,
+  buildFallbackOpeningPlan,
   completeChat,
   isCampaignOpeningUnplayable,
   parseCampaignOpeningPlan,
   renderFallbackOpeningNarrative,
   resolveEffectiveLlmConfig,
   resolveMjMaxTokens,
-  type CampaignOpeningPlan,
 } from "@rpg-cr/shared";
 import { resolveRoomApiKey } from "./llm-api-key.js";
 import {
@@ -63,24 +63,6 @@ function findHostPlayer(roomId: string, preferredId?: string): Player | null {
   );
 }
 
-function fallbackPlan(worldSeed: string, mapCountries: string): CampaignOpeningPlan {
-  const firstRealm = mapCountries.split(",")[0]?.trim();
-  const location = firstRealm
-    ? `Carrefour du ${firstRealm}`
-    : `Carrefour (${worldSeed.slice(0, 8)})`;
-  return {
-    worldSummary: `Le pays autour de ${location}.`,
-    mainPlot: "Une affaire locale à régler avant qu'elle ne gagne la route.",
-    startingSituation: "Tu es déjà sur place, à ce carrefour.",
-    openingScene: "Quelqu'un t'aborde, ou un bruit claque trop près.",
-    scene: {
-      location,
-      mood: "jour, passage, voix",
-      tension: -20,
-    },
-  };
-}
-
 export async function bootstrapCampaignOpening(
   roomId: string,
   hostPlayerId: string
@@ -129,8 +111,7 @@ export async function bootstrapCampaignOpening(
     );
 
     const plan =
-      parseCampaignOpeningPlan(planResult.content) ??
-      fallbackPlan(worldSeed, map?.countries.join(", ") ?? "");
+      parseCampaignOpeningPlan(planResult.content) ?? buildFallbackOpeningPlan(ctx);
 
     const unplayable = (content: string) =>
       isCampaignOpeningUnplayable(content, host.name, {
