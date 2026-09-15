@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   applyCreationBriefToSheet,
   formatCreationBriefAsHints,
+  formatCreationBriefForMj,
   isCharacterCreationBriefComplete,
   normalizeCreationBrief,
 } from "./character-brief.js";
@@ -45,4 +46,14 @@ test("hints IA : pas de destin inventé", () => {
     past: "alone",
   });
   assert.match(hints, /père|destin/i);
+});
+
+test("brief MJ : à l'auberge = client, pas cuisine", () => {
+  const text = formatCreationBriefForMj({
+    station: "peasant",
+    activity: "inn",
+    past: "local",
+  });
+  assert.match(text, /client/i);
+  assert.match(text, /cuisine/i);
 });

@@ -42,6 +42,7 @@ export function buildCharacterAllMessages(
       content:
         "Tu es le MJ d'une campagne médiéval-fantasy. Fiche personnage complète mais CONCISE (phrases courtes). " +
         "Cohérence globale (ex. marchand → argent, inventaire, monture alignés). " +
+        "Si le brief dit « à l'auberge », le PJ y est client ce soir : n'écris pas qu'il y travaille en cuisine. " +
         "Stats 8–16 sauf une force/faiblesse (1–20). Au plus 2 sorts, 2 actions, 2 objets utilisables si pertinent. " +
         "Réponds UNIQUEMENT avec un objet JSON valide, sans markdown ni commentaire.\n" +
         buildGenerationLocaleRules(preferredLocale),

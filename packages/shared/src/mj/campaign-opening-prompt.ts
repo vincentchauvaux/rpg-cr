@@ -242,10 +242,12 @@ function openingHardRules(host: string, location?: string, pal?: OpeningPalette)
     `« ${host} » est le JOUEUR. Première phrase : **tu / vous**. Interdit de commencer par un figurant (« Le vieux… », « Un homme… »). Interdit : réplique de ${host}, « suivez ${host} », narrer « ${host} fait… » (toujours tu).`,
     "**Pose d'abord** (2–4 phrases) : le lieu nommé, l'heure, ce que TU fais (brief), comment le lieu vit (deux traits). **Puis** un incident petit. Ce n'est pas une fiche pays.",
     "**In medias res** : déjà dans le lieu (pas un voyage). Ça n'autorise pas de sauter la pose. Pourquoi eux, ici, maintenant — la fiche.",
-    "Pas de PNJ nommé hors fiche. Figurant = rôle du quotidien (tenancière, camarade de ronde, voisin d'étal) — **pas** Maître Lien, **pas** « le vieux » messager.",
+    "Pas de PNJ nommé hors fiche. Figurant = rôle du quotidien (tenancière, camarade de ronde, voisin d'étal) — **pas** « nommé Gauthier », **pas** Maître Lien, **pas** « le vieux » messager.",
     "Pas de secret familial, destin ou prophétie hors fiche.",
-    "Hook **personnel** et **petit** : ça touche sa vie (métier, dette, consigne, banc, outil). Pas une guerre au premier regard. Interdit d'inventer une quête déjà commencée (« tu m'avais promis de retrouver mon anneau »).",
-    "À l'auberge / taverne : tu es **client** (banc, choppe, table). Interdit : « tu es derrière le comptoir », essuyer le bois, servir. La tenancière est un PNJ distinct — tu n'es pas elle.",
+    "Hook **petit et présent** : ce qui se passe ici maintenant (chope, banc pris, voix à la table d'à côté). Pas une guerre. Interdit d'inventer dette, prêt oublié ou quête déjà commencée — sauf si le brief « mauvaise passe » le dit.",
+    "À l'auberge / taverne : tu es **client** (banc, chope, table). Interdit : cuisine, fourneaux, légumes, pommes de terre, préparer un repas, servir, essuyer, derrière le comptoir. Le tenancier est un PNJ distinct — tu n'es pas lui.",
+    "Interdit d'écrire les répliques du PJ (« Je… Bien sûr, » réponds-tu). Les PNJ parlent ; le joueur n'a encore rien dit.",
+    "Termine par « Que fais-tu ? ». Interdit un questionnaire (Laisseras-tu / Chercheras-tu / 1. 2. 3.).",
     "Le lieu **vit** (qui est là, ce qu'ils veulent) — pas une seule issue balisée.",
     "Interdit le cliché : vieux + chope/comptoir + étranger + sac / manteau sombre / « pas du village ». Interdit : parchemin crypté ; sac perdu ; larmes + brigands + récolte. Interdit : encyclopédie (**Enjeu :**, République + « un pays de… »).",
     ...paletteLines,
@@ -478,7 +480,10 @@ function sheetCanonBlob(hostName: string, sheet?: CharacterSheet): string {
     .join(" ");
 }
 
-/** PNJ titré (Sir Aldric…) absent de la fiche. */
+const NAMED_NPC_RE =
+  /\bnomm(?:é|ée|és|ées)\s+([A-ZÉÈÀÂÎÔÛ][\p{L}'’-]+)/gu;
+
+/** PNJ titré (Sir Aldric…) ou « nommé Gauthier » absent de la fiche. */
 export function openingInventedNamedNpc(
   content: string,
   hostName: string,
@@ -486,14 +491,16 @@ export function openingInventedNamedNpc(
 ): boolean {
   const t = stripOpeningComments(content);
   const canon = normalizePersonName(sheetCanonBlob(hostName, sheet));
-  TITLED_NPC_RE.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = TITLED_NPC_RE.exec(t)) !== null) {
-    const given = match[1] ?? "";
-    if (!given) continue;
-    if (namesReferToSamePerson(given, hostName)) continue;
-    if (canon.includes(normalizePersonName(given))) continue;
-    return true;
+  for (const re of [TITLED_NPC_RE, NAMED_NPC_RE]) {
+    re.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(t)) !== null) {
+      const given = match[1] ?? "";
+      if (!given) continue;
+      if (namesReferToSamePerson(given, hostName)) continue;
+      if (canon.includes(normalizePersonName(given))) continue;
+      return true;
+    }
   }
   return false;
 }
@@ -581,7 +588,7 @@ export function openingLooksLikeStockHook(content: string): boolean {
 }
 
 /**
- * Brief « à l'auberge » = client. Ranger les assiettes / essuyer / servir = mauvais rôle.
+ * Brief « à l'auberge » = client. Ranger, cuisiner, servir = mauvais rôle.
  */
 export function openingTreatsGuestAsStaff(
   content: string,
@@ -593,19 +600,44 @@ export function openingTreatsGuestAsStaff(
     brief?.activity === "inn" ||
     (!brief && /\b(taverne|auberge)\b/i.test(t));
   if (!innish) return false;
-  return /\b(tu ranges?|tu essuies?|tu sers |derrière le comptoir|dernière assiette|finir de ranger|tables rangées.{0,40}tes pas)\b/i.test(
+  return /\b(tu ranges?|tu essuies?|tu sers |derrière le comptoir|dernière assiette|finir de ranger|tables rangées.{0,40}tes pas|prépar(?:e[rs]?|ant) un repas|voyageurs attendus|pommes de terre|cuillère de bois|fourneaux|en cuisine|tu (?:t['’]actives?|cuisin|pluches?|découpes?|mijotes?)|manipul(?:e[s]?|ent) des légumes)\b/i.test(
     t
   );
 }
 
-/** « Tu te souviens d'hier / l'an dernier je t'ai déjà demandé » — quête commencée hors fiche. */
-export function openingInventedPriorFavor(content: string): boolean {
+/** « Tu te souviens d'hier » / prêt oublié — quête commencée hors fiche. */
+export function openingInventedPriorFavor(
+  content: string,
+  sheet?: CharacterSheet
+): boolean {
   const t = stripOpeningComments(content);
-  const memory = /\b(tu te souviens|vous souvenez[- ]vous|t['’]a déjà demandé|vous a déjà demandé)\b/i.test(
+  const memory = /\b(tu te souviens|vous souvenez[- ]vous|t['’]a déjà demandé|vous a déjà demandé|tu connais bien cette voix)\b/i.test(
     t
   );
   const when = /\b(hier soir|l['’]an dernier|la semaine dernière|ce matin encore)\b/i.test(t);
-  return memory || (when && /\b(déjà demandé|ce service|que j['’]ai laissé à ta table)\b/i.test(t));
+  if (memory || (when && /\b(déjà demandé|ce service|que j['’]ai laissé à ta table)\b/i.test(t))) {
+    return true;
+  }
+  const brief = normalizeCreationBrief(sheet?.creationBrief);
+  if (brief?.activity === "trouble") return false;
+  return /\b(vieux prêt|vieille dette|prêt que tu (?:as )?oubli|dette que tu (?:as )?oubli|oublié d['’]apurer|as[- ]tu déjà entendu parler d['’]une dette|te rappelle un (?:vieux )?prêt)\b/i.test(
+    t
+  );
+}
+
+/** Le MJ a écrit la réplique du PJ alors qu'il n'a encore rien dit. */
+export function openingSpeaksForPlayer(content: string): boolean {
+  const t = stripOpeningComments(content);
+  return /\b(réponds[- ]tu|dis[- ]tu|lances[- ]tu)\b/i.test(t);
+}
+
+/** Menu 1/2/3 ou « Laisseras-tu / Chercheras-tu » au lieu d'une relance. */
+export function openingLooksLikeQcmMenu(content: string): boolean {
+  if (/\b#{1,3}\s*Questions\b/i.test(content)) return true;
+  const futures = content.match(/\b[\p{L}]+eras[- ]tu\b/giu) ?? [];
+  if (futures.length >= 2) return true;
+  const numbered = content.match(/^\s*\d+\.\s+\S.{8,}\?\s*$/gm);
+  return Boolean(numbered && numbered.length >= 3);
 }
 
 /** La première phrase n'adresse pas le PJ : on saute la pose du lieu. */
@@ -631,7 +663,9 @@ export function isCampaignOpeningUnplayable(
   if (openingLooksLikeQuestMcGuffin(content)) return true;
   if (openingLooksLikeStockHook(content)) return true;
   if (openingTreatsGuestAsStaff(content, opts?.sheet)) return true;
-  if (openingInventedPriorFavor(content)) return true;
+  if (openingInventedPriorFavor(content, opts?.sheet)) return true;
+  if (openingSpeaksForPlayer(content)) return true;
+  if (openingLooksLikeQcmMenu(content)) return true;
   if (openingSkipsPlaceSetup(content)) return true;
   if (openingDumpsEncyclopedia(content)) return true;
   if (openingTooManyPlaces(content, opts?.mjProse)) return true;
@@ -688,7 +722,9 @@ function playableOpeningBeat(text: string, ctx: CampaignOpeningContext): string 
   if (openingLooksLikeQuestMcGuffin(t)) return "";
   if (openingLooksLikeStockHook(t)) return "";
   if (openingTreatsGuestAsStaff(t, ctx.hostSheet)) return "";
-  if (openingInventedPriorFavor(t)) return "";
+  if (openingInventedPriorFavor(t, ctx.hostSheet)) return "";
+  if (openingSpeaksForPlayer(t)) return "";
+  if (openingLooksLikeQcmMenu(t)) return "";
   if (openingDumpsEncyclopedia(t)) return "";
   return t;
 }

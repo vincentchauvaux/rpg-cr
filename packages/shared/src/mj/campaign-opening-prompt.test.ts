@@ -15,6 +15,8 @@ import {
   openingTreatsGuestAsStaff,
   openingInventedPriorFavor,
   openingTreatsHostAsNpc,
+  openingSpeaksForPlayer,
+  openingLooksLikeQcmMenu,
   parseCampaignOpeningPlan,
   renderFallbackOpeningNarrative,
   type CampaignOpeningPlan,
@@ -301,6 +303,34 @@ La tenancière essuie trop longtemps le même verre. Ton banc d'habitude n'est p
 Que fais-tu ?
 `;
   assert.equal(openingTreatsGuestAsStaff(text, sheet), false);
-  assert.equal(openingInventedPriorFavor(text), false);
+  assert.equal(openingInventedPriorFavor(text, sheet), false);
   assert.equal(isCampaignOpeningUnplayable(text, "Kael Sans-Carte", { sheet }), false);
+});
+
+const YODELI_KITCHEN_OPENING = `
+Tu es dans la grande salle de l'Auberge du Griffon. Tu t'actives en préparant un repas simple pour les voyageurs attendus. Tes mains manipulent des légumes et une cuillère de bois.
+Tu es en train de couper des pommes de terre lorsque le propriétaire, un homme nommé Gauthier, s'approche.
+« Yodeli yodelou, as-tu déjà entendu parler d'une dette ? »
+Tu connais bien cette voix, et tu sais qu'il te rappelle un vieux prêt que tu as oublié d'apurer.
+« Je… Bien sûr, » réponds-tu. « Quel montant devais-je t'avancer, Gauthier ? »
+### Questions
+1. Laisseras-tu Gauthier te rappeler devant tout le monde ?
+2. Chercheras-tu un moyen d'arranger les choses avec lui rapidement ?
+3. Essaieras-tu de trouver des clients en retard qui pourraient t'aider ?
+`;
+
+test("ouverture injouable : cuisine + dette inventée + réplique du PJ (Yodeli)", () => {
+  const sheet = {
+    rank: "Villageois",
+    creationBrief: { station: "peasant" as const, activity: "inn" as const, past: "local" as const },
+  };
+  assert.equal(openingTreatsGuestAsStaff(YODELI_KITCHEN_OPENING, sheet), true);
+  assert.equal(openingInventedPriorFavor(YODELI_KITCHEN_OPENING, sheet), true);
+  assert.equal(openingInventedNamedNpc(YODELI_KITCHEN_OPENING, "Yodeli yodelou", sheet), true);
+  assert.equal(openingSpeaksForPlayer(YODELI_KITCHEN_OPENING), true);
+  assert.equal(openingLooksLikeQcmMenu(YODELI_KITCHEN_OPENING), true);
+  assert.equal(
+    isCampaignOpeningUnplayable(YODELI_KITCHEN_OPENING, "Yodeli yodelou", { sheet }),
+    true
+  );
 });

@@ -191,6 +191,11 @@ export function formatCreationBriefForMj(brief?: CharacterCreationBrief | null):
     "### Brief de départ (choix du joueur — canon)",
     `- Qui : ${optionLabel(BRIEF_STATION_OPTIONS, b.station)}`,
     `- En ce moment : ${optionLabel(BRIEF_ACTIVITY_OPTIONS, b.activity)}`,
+    ...(b.activity === "inn"
+      ? [
+          "- Tu es **client** ce soir (table, chope) : tu ne travailles pas à l'auberge, tu n'es pas en cuisine.",
+        ]
+      : []),
     `- Histoire récente : ${optionLabel(BRIEF_PAST_OPTIONS, b.past)}`,
     "- N'invente **pas** de père secret, de prophétie ni de PNJ nommé hors fiche.",
     `- L'ouverture se passe **là où le joueur a dit être** (${optionLabel(BRIEF_ACTIVITY_OPTIONS, b.activity)}). Un seul lieu.`,

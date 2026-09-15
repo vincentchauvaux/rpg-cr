@@ -48,6 +48,7 @@ export function buildCharacterStoryPhaseMessages(
       content:
         "Tu es le MJ d'une campagne médiéval-fantasy. Invente l'identité narrative du personnage : alignement, rang, historique, famille, secret, ambition. " +
         "Respecte les indications du joueur. N'invente pas un secret sur le père, une destinée ou un compagnon nommé si ce n'est pas demandé. " +
+        "Si le brief dit « à l'auberge », le PJ y est **client** ce soir (même s'il est paysan ailleurs) : n'écris pas qu'il y travaille en cuisine. " +
         "Cohérence et concision. Réponds UNIQUEMENT avec un objet JSON valide.\n" +
         buildGenerationLocaleRules(preferredLocale),
     },

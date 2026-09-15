@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-15 (**graines Gmail** : fusion des doubles comptes NextAuth + journal LLM)
+> Dernière mise à jour : 2026-09-15 (**ouverture AUZB43** : client à l'auberge, pas cuisine/dette/réplique PJ)
 
 ## Vision
 
@@ -998,6 +998,19 @@ La carte n'est chargée en state client **que** si god mode actif.
 **Solution** : `openingTreatsGuestAsStaff` + `openingInventedPriorFavor` rendent l'intro injouable (retry / secours). Hint vocatif + `messageOrdersADrink` : servir, ne pas inverser. Action : un geste petit reste petit.
 
 **Fichiers** : `campaign-opening-prompt.ts`, `unaddressed-speech.ts`, `player-banter.ts`, `player-action.ts` (+ tests)
+
+### Table AUZB43 (Auberge du Griffon) — Yodeli yodelou, paysan, client
+
+**Constat** : brief paysan + « à l'auberge » ; le MJ le met **en cuisine** (légumes, pommes de terre, repas des voyageurs), invente **Gauthier** + une **dette**, écrit **la réplique du PJ**, puis un QCM (Laisseras-tu / Chercheras-tu). Les garde-fous VUKRS7 ne voyaient que « ranger les assiettes » et « tu te souviens d'hier ».
+
+**Solution** :
+- Staff : cuisine, repas à préparer, légumes, pommes de terre, fourneaux.
+- Faveur : voix connue, vieux prêt, dette à apurer (sauf brief « mauvaise passe »).
+- `openingSpeaksForPlayer` (`réponds-tu`) ; `openingLooksLikeQcmMenu` ; `nommé Gauthier`.
+- Prompt : hook **présent**, pas de dette inventée ; « Que fais-tu ? » ; brief MJ = **client**.
+- Fill-all : « à l'auberge » ≠ y travailler.
+
+**Fichiers** : `campaign-opening-prompt.ts`, `character-brief.ts`, `character-all-prompt.ts`, `character-all-phases-prompt.ts` (+ tests)
 
 ### Table KSED7T (Refuge du Héros Fatigué) — Gwen Pièce-d'Or, paysanne, Ollama 7B
 
