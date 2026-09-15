@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { listUserGrainsFromApi } from "@/lib/api";
 import type { UserGrain } from "@rpg-cr/shared";
 
+/** Émis quand des graines locales viennent d'être rattachées au compte. */
+export const GRAINS_LINKED_EVENT = "rpg-cr:grains-linked";
+
 export function GoogleAuthPanel() {
   const { data: session, status } = useSession();
   const [grains, setGrains] = useState<UserGrain[]>([]);
@@ -15,9 +18,15 @@ export function GoogleAuthPanel() {
       setGrains([]);
       return;
     }
-    void listUserGrainsFromApi(appUserId)
-      .then((data) => setGrains(data.grains))
-      .catch(() => setGrains([]));
+    const refresh = () => {
+      void listUserGrainsFromApi(appUserId)
+        .then((data) => setGrains(data.grains))
+        .catch(() => setGrains([]));
+    };
+    refresh();
+    // Le rattachement des graines locales se termine après ce premier appel.
+    window.addEventListener(GRAINS_LINKED_EVENT, refresh);
+    return () => window.removeEventListener(GRAINS_LINKED_EVENT, refresh);
   }, [appUserId]);
 
   if (status === "loading") {

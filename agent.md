@@ -24,7 +24,7 @@ Application SaaS de salons JDR rejoinables, avec MJ IA (LLM marché + fallback L
 3. **WebSocket** — `/ws?roomId&playerId&playerName`, broadcast messages, joueurs, scène, **épreuves de table** (`scene_check`) ; ping/pong ; reconnexion client + resync API
 4. **Interface** — accueil créer/rejoindre, page `/salon/[code]`, QR + lien, switch god mode (admin) ; **favicon** dé D20 or (`apps/web/src/app/icon.svg` + `apple-icon.tsx`)
    - **Création salon** : noms salon/hôte proposés aléatoirement (utilisables sans saisie) ; clic efface pour taper ; bouton 🎲 par champ + « Tout relancer » ; `markHostLlmSetupPending(roomId)` à la création
-   - **Onboarding hôte (graine)** : après création/reprise salon, tant que la fiche n'est pas `ready` — `HostSetupWizard` (**étape 1/3**) bloque le chat : `AdminLlmForm` (LLM + **curseur Style du récit MJ**) ; test obligatoire ; puis **QCM de départ** (`CharacterBriefForm`, étape 2/3) ; puis `CharacterCreationWizard` fiche (**étape 3/3**). Joueurs non-hôte : QCM puis fiche (pas d'étape LLM). Pendant l'étape 1, le formulaire LLM du god mode est masqué (évite doublon). QCM : **tout l’intérieur de l’étape défile** (titre, intro, choix, Continuer) dans `.char-wizard` (`overflow-y: auto` + `overscroll-behavior: contain` + `html.rpg-wizard-lock`) — plus de mini-scroller sur les seuls choix, plus de page vide sous le wizard.
+   - **Onboarding hôte (graine)** : après création/reprise salon, tant que la fiche n'est pas `ready` — `HostSetupWizard` (**étape 1/3**) bloque le chat : `AdminLlmForm` (LLM + **curseur Style du récit MJ**) ; test obligatoire ; puis **QCM de départ** (`CharacterBriefForm`, étape 2/3) ; puis `CharacterCreationWizard` fiche (**étape 3/3**). Joueurs non-hôte : QCM puis fiche (pas d'étape LLM). Pendant l'étape 1, le formulaire LLM du god mode est masqué (évite doublon). QCM : **tout l’intérieur de l’étape défile** (titre, intro, choix, Continuer) — l’ascenseur est **l’overlay** (`.char-wizard-overlay` : `overflow-y: auto`, `align-items: flex-start`, `overscroll-behavior: contain`), le wizard se centre par `margin: auto` sans `height: 100%`. Deux scrollers imbriqués + centrage en `overflow: hidden` écrasaient l’étape dans une fente de 85 px.
    - **God mode** : panneau admin = `localStorage` `rpg-cr-admin-panel:{playerId}` via `useSyncExternalStore` — **jamais** resync depuis refresh/WS/DB ; PATCH serveur fire-and-forget au toggle. Switch **sans titre dupliqué** (le titre d’onglet « Administration » suffit) pour éviter le débordement « God mo… » sur mobile.
    - **Layout salon** (`room-shell` + `room-layout`) : **une colonne** centrée ; **dock** (`RoomDockNav`) — sticky **haut** (bureau), fixe **bas** (mobile ≤640px) : **Fiche** + **Cercle** | **Accueil** (chat + scène + aide inline) | **Aide** + **Réglages** ; chaque onglet n’affiche **que** son panneau (plus de fiche/compagnons/réglages empilés sous Accueil). Masqué en plein écran récit / onboarding LLM. `sessionStorage` `rpg-cr-room-tab:{roomId}` (ancien `scene` → `main`). **Mentions @** : `ChatMentionInput` dans le **chat** et l’**aide personnelle** (`HeroAssistantPanel`) — joueurs à la table + PNJ du canon ; sous-titre **Lieu · …** (rencontre déduite des messages / scène, pas « Récit »). API `GET …/mention-suggestions`. **Compagnons** : `.companions-block` — `margin-top` 1rem (bureau) / 0,75rem (≤640px). **Récit** : nom du PJ **au-dessus** du Dire / de l’Action (colonne, plus à côté du texte).
    - **En-tête salon** (`RoomView`) : titre + **code seul** (sans préfixe « Code : ») — clic copie le code (`navigator.clipboard`) + retour visuel « Copié ! » + `aria-live` ; bouton **Sauvegarder et quitter** : libellé complet au bureau, **icône seule** en mobile **dans l’en-tête** (pas `position: fixed` — il défile avec la page). **Bas du récit** : bouton `↓` sur le journal si on n’est plus collé en bas (après un long message MJ ou lecture d’historique).
@@ -556,7 +556,7 @@ Pas de bouton « ajouter un compagnon » : le PJ **demande au PNJ** (Dire `@PNJ`
 
 - Colonnes `rooms.world_seed` (UUID unique) et `rooms.campaign_opening_done` (0/1).
 - `createRoom` : monde vierge — scène/trame null, `campaign_opening_done = 0` ; carte procédurale via `map_seed` dérivé de `world_seed`.
-- **Noms de royaumes** : générés de façon déterministe par `world_seed` / `map_seed` dans `packages/shared/src/map/world-names.ts` → stockés dans `rooms.map_json` (`countries`, `territories`, POI). Plus de liste figée Aldermar / Brumes / Khar-Vos pour les **nouveaux** salons.
+- **Noms de royaumes et de lieux** : générés de façon déterministe par `world_seed` / `map_seed` dans `packages/shared/src/map/world-names.ts` → stockés dans `rooms.map_json` (`countries`, `territories`, POI). Plus de liste figée Aldermar / Brumes / Khar-Vos pour les **nouveaux** salons. Les POI portent des noms FR (`generateProceduralSettlementName`, `formatCapitalName`, dédoublonnés) — les anciens libellés « city 2 » sont filtrés côté prompt et refusés comme lieu de scène.
 - **Déclenchement unique** quand l'**hôte** (admin humain) finalise sa fiche (`POST …/character/finalize`) ou passe `ready` + `story_locked` : `scheduleCampaignOpening` → `bootstrapCampaignOpening` (`apps/api/src/campaign-opening.ts`).
 - Deux appels LLM : plan JSON (`packages/shared/src/mj/campaign-opening-prompt.ts`) puis récit MJ long (Acte I, hook, enjeu) intégrant la fiche hôte — **pas** de second message d'intégration pour l'hôte. Le prompt d'ouverture injecte les pays / territoires / POI de la carte et interdit les noms legacy sauf s'ils sont déjà dans `map_json` (anciennes parties).
 - **Voix PJ** : 2e personne ; `isCampaignOpeningUnplayable` (trop court, trop romancé, trop de lieux, hôte=PNJ y compris « visages de X » / « X se trouve » / « X doit décider », Sir/Dame/**Maître** hors fiche, secret du père, **McGuffin** : parchemin, sac perdu, **étranger + sac de provisions**, **voisin en larmes + brigands + récolte**, dump **Enjeu :** / République, **moule taverne** : « Le vieux » + chope + inconnu). Retry puis récit de secours **jouable** (pose tu/vous + lieu + heure issus de la **palette de graine**, pas de « Tes hommes : Aucun », pas de fiche « je … » collée, pas d'encyclopédie). `openingHardRules` : **pose d'abord** le lieu et ce que tu fais, **puis** un incident petit ; **in medias res** ≠ sauter l'intro ; interdit le cliché vieux/sac. Palette déterministe `buildOpeningPalette` (heure, météo, incident, nom de carte). Maîtrise : ne **pas parler pour le PJ** ; s'il réduit le geste, on réduit ; un verre = quelqu'un boit ; sort sans ennemi ≠ bataille. Source métier : [blog Le Rôliste](https://www.blog.leroliste.com/).
@@ -661,11 +661,12 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 ## Comptes joueurs (Google OAuth — MVP)
 
 - **Table** `users` (SQLite) : `google_sub`, `email`, `display_name`, `avatar_url` ; colonne `players.user_id` optionnelle.
-- **Auth** : NextAuth v5 (`apps/web/src/auth.ts`) — provider Google ; sync API `POST /api/auth/sync` (secret interne `AUTH_INTERNAL_SECRET`).
+- **Auth** : NextAuth v5 (`apps/web/src/auth.ts`) — provider Google ; sync API `POST /api/auth/sync` (secret interne `AUTH_INTERNAL_SECRET`). La synchro est **retentée** à chaque rafraîchissement de session tant que `token.appUserId` manque (repli `token.sub` pour les jetons anciens).
 - **UI accueil** : `GoogleAuthPanel` — connexion / déconnexion ; graines fusionnées local + `GET /api/users/:id/grains`.
 - **Création / join** : body optionnel `userId` sur `POST /api/rooms` et `POST …/join` ; reprise graine → `POST …/link-user`.
 - **Un seul héros par compte et par salon** : `joinRoom` cherche un joueur humain déjà lié à `userId` dans ce salon (après le test `existingPlayerId` du localStorage) et le **reprend** (`rejoined: true`, pas de message « a rejoint ») — plus de second personnage quand on ouvre le même code depuis le téléphone. `SalonRoomClient` interroge `GET /api/users/:id/grains` quand aucune graine locale ne correspond : la page reprend la session **sans** demander de nom.
-- **Limite connue** : un salon créé **hors connexion** garde `players.user_id = NULL` — il n'apparaît sur les autres appareils qu'après une visite de l'accueil **connecté** sur l'appareil d'origine (auto-link des graines locales).
+- **Rattrapage** : un salon créé **hors connexion** garde `players.user_id = NULL` — il se rattache dès qu'on ouvre ce salon **connecté** (effet de `SalonRoomClient`) ou qu'on passe par l'accueil connecté (auto-link des graines locales).
+- **Réseau prod** : le conteneur web joint l'API par `host.docker.internal:4010` (`extra_hosts: host-gateway`) car l'API est en `network_mode: host` ; ufw doit autoriser `172.16.0.0/12` vers 4010, sinon la synchro des comptes échoue silencieusement (`[auth] sync API failed`).
 - **Sync automatique graines** : dès la connexion Google, toutes les graines localStorage sont automatiquement liées au compte (`linkPlayerToUserApi`) — les campagnes deviennent accessibles sur tous les appareils. Un `useRef` évite le re-linking à chaque render. Le refresh des graines est déclenché après le linking pour afficher l'état à jour.
 - **Tunnel auto hôte** : `ensureHostTunnel()` — à la création salon, reprise graine (admin), entrée salon hôte et wizard MJ (mode VPS). Appelle l'assistant local `POST http://127.0.0.1:17434/start`, puis poll `GET /api/llm/tunnel-status` jusqu'à `reachable:true`. CLI : `npm run tunnel:ensure`.
 - **Auth.js** : `basePath` = `/rpg-cr/api/auth` en prod ; handler route réinjecte `/rpg-cr` (Next.js le retire). `AUTH_URL` = origine HTTPS **sans** `/rpg-cr`. Nginx conserve le préfixe vers le conteneur web.
@@ -957,6 +958,38 @@ La carte n'est chargée en state client **que** si god mode actif.
 **Solution** : `joinRoom` reprend le joueur déjà lié au `userId` dans ce salon ; `SalonRoomClient` retrouve la graine du compte (`/api/users/:id/grains`) et reprend la session sans redemander de nom.
 
 **Fichiers** : `rooms.ts`, `SalonRoomClient.tsx`
+
+### Le compte Google n'était lié à rien en production (cause racine)
+
+**Problème** : en prod la table `users` était **vide** et **0 joueur sur 22** portait un `user_id` — la liaison au compte n'avait jamais fonctionné, donc les graines ne pouvaient pas suivre d'un appareil à l'autre. Trois causes empilées :
+1. `syncUserToApi` ne tournait **qu'à la connexion** (`account` présent dans le callback `jwt`) : un jeton émis avant la fonctionnalité restait sans `appUserId` à vie.
+2. Le conteneur **web** (réseau bridge) appelait l'API via `127.0.0.1:4010`, or l'API tourne en `network_mode: host` — `127.0.0.1` désignait le conteneur web lui-même (`fetch failed`).
+3. ufw (`INPUT DROP`) bloquait le bridge Docker vers le port interne 4010.
+
+**Solution** :
+- `jwt` conserve `token.googleSub` (repli sur `token.sub`) et **retente** la synchro tant que `appUserId` manque, au plus une fois par minute (`SYNC_RETRY_MS`) — plus besoin de se reconnecter.
+- `API_INTERNAL_URL=http://host.docker.internal:4010` + `extra_hosts: host.docker.internal:host-gateway` sur le service web.
+- Règle ufw : `ufw allow from 172.16.0.0/12 to any port 4010 proto tcp` (plage des bridges Docker, non routable depuis Internet).
+- `SalonRoomClient` rattache le héros de la session au compte à chaque ouverture de salon connecté (rattrapage des personnages orphelins).
+- Panneau compte : compteur rafraîchi via l'événement `rpg-cr:grains-linked` ; l'onglet « Mes graines » dit « liées à votre compte » quand on est connecté.
+
+**Fichiers** : `auth.ts`, `SalonRoomClient.tsx`, `GoogleAuthPanel.tsx`, `HomePageContent.tsx`, `docker-compose.prod.yml`, `deploy/.env.production.example`
+
+### QCM de création écrasé dans une fente de 85 px
+
+**Problème** : l'étape 2/3 n'affichait qu'une bande de deux choix, avec un grand vide noir en dessous. `.char-wizard-overlay` centrait (`align-items: center`) un contenu plus haut que lui en `overflow: hidden`, et le focus d'un radio faisait défiler cet overlay non scrollable : le haut de l'étape devenait inatteignable.
+
+**Solution** : un **seul** ascenseur — l'overlay défile (`overflow-y: auto`, `align-items: flex-start`), le wizard se centre par `margin: auto` et n'est plus contraint à `height: 100%`.
+
+**Fichiers** : `globals.css`
+
+### Lieux de carte nommés « city 2 »
+
+**Problème** : le MJ annonçait « vérifier que tu es bien sur la bonne voie vers **city 2** » et la scène s'archivait en « Sentier entre la capitale de la Thalassocratie de Kethune et city 2 » : `generateProceduralMap` nommait les POI `${type} ${i+1}` (libellé technique anglais), et le prompt d'ouverture demande de citer un nom de carte.
+
+**Solution** : `generateProceduralSettlementName` (Cité de…, Hameau de…, Abbaye de…, Halte de…) ; `formatCapitalName` évite « Capitale de Marche du … » ; dédoublonnage des noms de POI d'une même carte. Pour les cartes **déjà générées** : filtre `PLACEHOLDER_PLACE_RE` dans le contexte MJ et rejet du lieu par `scrubScenePatchLocation`.
+
+**Fichiers** : `map/world-names.ts`, `map/procedural.ts`, `campaign-opening-prompt.ts`, `scene-extract-prompt.ts` (+ tests `mj-coherence.test.ts`)
 
 ### Ouverture rustre et toujours la même (Ching, le vieux au comptoir)
 

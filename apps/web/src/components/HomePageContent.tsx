@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom, getRoom, joinRoom, listCampaigns, listUserGrainsFromApi, linkPlayerToUserApi } from "@/lib/api";
-import { GoogleAuthPanel, useAppUserId } from "@/components/GoogleAuthPanel";
+import {
+  GoogleAuthPanel,
+  GRAINS_LINKED_EVENT,
+  useAppUserId,
+} from "@/components/GoogleAuthPanel";
 import { useAutoHostTunnel } from "@/hooks/use-auto-host-tunnel";
 import {
   ensureHostTunnel,
@@ -147,6 +151,7 @@ export function HomePageContent() {
       }
       // Refresh grains after linking to show updated state
       void refreshGrains();
+      window.dispatchEvent(new Event(GRAINS_LINKED_EVENT));
     })();
   }, [appUserId, refreshGrains]);
 
@@ -413,8 +418,9 @@ export function HomePageContent() {
         ) : (
           <div className="grains-panel">
             <p className="muted" style={{ marginBottom: "1rem" }}>
-              Vos campagnes visitées sur cet appareil. Reprendre restaure votre
-              identité ; les chroniques .md vivent sur le serveur.
+              {appUserId
+                ? "Vos campagnes liées à votre compte Google — elles suivent sur tous vos appareils. Reprendre restaure votre identité ; les chroniques .md vivent sur le serveur."
+                : "Vos campagnes visitées sur cet appareil. Connectez-vous pour les retrouver sur votre téléphone ; les chroniques .md vivent sur le serveur."}
             </p>
             {!grains.length ? (
               <p className="muted">
