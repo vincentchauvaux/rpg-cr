@@ -1673,56 +1673,7 @@ export function RoomView({ code }: Props) {
           ) : (
             <>
             <div className="chat-composer">
-              {chatReady &&
-                !awaitingIntroduction &&
-                liveChoiceMessageId &&
-                liveChoices.length >= 2 && (
-                <div className="mj-live-choices-block">
-                  <label className="muted quick-use-label" htmlFor="mj-live-choice-select">
-                    Pistes du MJ
-                  </label>
-                  <select
-                    id="mj-live-choice-select"
-                    className="mj-choice-select"
-                    disabled={
-                      sceneCheckBusy ||
-                      mjThinking ||
-                      mjPromptBusy ||
-                      Boolean(
-                        session &&
-                          sceneCheck &&
-                          playerHasPickedSceneCheck(sceneCheck, session.playerId)
-                      )
-                    }
-                    value={
-                      (sceneCheck &&
-                      sceneCheck.sourceMessageId === liveChoiceMessageId
-                        ? sceneCheck.picks?.find(
-                            (p) =>
-                              p.kind === "choice" &&
-                              p.playerId === session?.playerId &&
-                              p.choice
-                          )?.choice
-                        : undefined) || liveChoicePicked
-                    }
-                    aria-label="Pistes proposées par le MJ"
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      if (!next || !liveChoiceMessageId) return;
-                      setLiveChoicePicked(next);
-                      void handleSceneChoice(liveChoiceMessageId, next);
-                    }}
-                  >
-                    <option value="">Choisir une piste…</option>
-                    {liveChoices.map((choice) => (
-                      <option key={choice} value={choice}>
-                        {choice}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
+              {/* Les pistes du MJ vivent dans son message (MjMessageMarkdown) — pas de doublon ici. */}
               <div className="speech-mode-row" role="group" aria-label="Mode d'envoi">
                 <button
                   type="button"

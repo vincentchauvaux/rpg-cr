@@ -1,4 +1,5 @@
 import type { ChatMessage, Player } from "../types.js";
+import { sayAddressesSomeonePresent } from "./unaddressed-speech.js";
 
 /** Fenêtre de messages récents pour le mode « dialogue entre joueurs ». */
 export const PLAYER_DIALOGUE_RECENT_WINDOW = 3;
@@ -100,6 +101,8 @@ export function messageAddressesMjOrWorld(content: string): boolean {
   if (!t) return false;
   if (MJ_MENTION_RE.test(t) || MJ_TITLE_RE.test(t)) return true;
   if (messageAsksTableOrientation(t)) return true;
+  // « Tenancière, le forgeron n'est pas là ? » : parole in-world, pas une question de table.
+  if (sayAddressesSomeonePresent(t)) return false;
   if (WORLD_QUESTION_RE.test(t)) return true;
   if (/\?/.test(t)) {
     const pcDirected =
@@ -149,6 +152,7 @@ export function shouldSkipAutoMjForPlayerBanter(
   if (!trimmed) return true;
 
   if (ctx.addressedNpcNames?.some((n) => n.trim())) return false;
+  if (sayAddressesSomeonePresent(trimmed)) return false;
   if (messageAddressesMjOrWorld(trimmed)) return false;
   if (messageDemandsMjResolution(trimmed, kind)) return false;
 

@@ -2,6 +2,7 @@
 export const MJ_PLAYER_VOICE_RULES = `## Voix : PJ vs PNJ (priorité haute)
 - Les **personnages joueurs** (noms des fiches / « Noms PJ à la table ») sont des **héros contrôlés par des humains**, jamais des PNJ ni du décor.
 - Adresse-toi à la table à la **2e personne** : « vous » pour le groupe ; « tu » (ou le prénom + tu) pour le PJ qui vient d'agir. Ex. « Tu poses la main sur la table. Autour de vous, la salle se tait. »
+- **Garde la même adresse d'un tour à l'autre** : si l'ouverture et les récits précédents tutoient, continue à tutoyer. Interdit d'alterner « tu » puis « vous » pour le même héros seul.
 - **Interdit** de raconter un PJ à la 3e personne comme un figurant (« Thorin s'approche tandis que vous… », « votre compagnon décide… », « il entre dans la pièce » en parlant d'un PJ). Surtout si un nouveau joueur vient d'arriver : les PJ déjà là restent des « vous », ils ne deviennent pas des PNJ.
 - N'invente pas les actes, pensées ou répliques d'un PJ : uniquement ce qu'ils ont dit en [DIRE] ou fait en [ACTION]. À l'ouverture, le PJ n'a encore rien dit : **aucune** réplique entre guillemets pour lui, et **interdit** « suivez [nom du PJ] ».
 - Les marionnettes IA / vrais PNJ se racontent à la 3e personne ; les PJ, jamais.
@@ -47,7 +48,12 @@ export interface EstablishedCanonInput {
 export function formatEstablishedCanonSummary(input: EstablishedCanonInput): string {
   const parts: string[] = [];
 
-  if (input.playerNames.length) {
+  if (input.playerNames.length === 1) {
+    parts.push(
+      `**Table solo** : un seul héros, **${input.playerNames[0]}** (joueur humain, jamais un PNJ). ` +
+        `Adresse-toi à lui au **tu** du début à la fin — pas de « vous » de groupe, pas de « votre compagnie ».`
+    );
+  } else if (input.playerNames.length) {
     parts.push(
       `**Noms PJ à la table** (héros contrôlés par des joueurs — **jamais** des PNJ ; tutoiement / vouvoiement) : ${input.playerNames.join(", ")}.`
     );

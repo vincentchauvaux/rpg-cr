@@ -5,6 +5,8 @@ import {
   shouldNarrateUnaddressedSay,
   buildUnaddressedSayHint,
   sayLooksDirectedAtHearers,
+  extractSpokenVocative,
+  sayAddressesSomeonePresent,
 } from "./mj/unaddressed-speech.js";
 import { buildPlayerSayNarration } from "./mj/narration/builders/player-say.js";
 import { buildPlayerTableAskNarration } from "./mj/narration/builders/player-table-ask.js";
@@ -69,6 +71,28 @@ test("vous / votre : les présents réagissent au contenu, pas à l'adresse", ()
   );
   assert.match(hint, /contenu exact/);
   assert.match(hint, /Interdit de demander/);
+});
+
+test("« Tenancière, … ? » = parole in-world, pas question de table", () => {
+  const speech = "Tenancière, le forgeron n'est pas à sa table ce matin ?";
+  assert.equal(extractSpokenVocative(speech), "tenancière");
+  assert.equal(sayAddressesSomeonePresent(speech), true);
+  assert.equal(messageAddressesMjOrWorld(speech), false);
+  assert.equal(shouldNarrateUnaddressedSay([], false, speech), true);
+  const hint = buildUnaddressedSayHint([], true, speech);
+  assert.match(hint, /tenancière/i);
+  assert.match(hint, /répond/);
+  assert.match(hint, /Interdit/);
+});
+
+test("apostrophe en fin de réplique et « Patron ! »", () => {
+  assert.equal(
+    extractSpokenVocative("Le forgeron n'est pas venu, patron ?"),
+    "patron"
+  );
+  assert.equal(extractSpokenVocative("Hé, l'aubergiste ! deux chopes"), "l'aubergiste");
+  assert.equal(extractSpokenVocative("Je regarde la salle et je me tais"), null);
+  assert.equal(extractSpokenVocative("Donc on est où là ?"), null);
 });
 
 test("Donc on est où là = question table, pas parole de taverne", () => {

@@ -931,6 +931,22 @@ La carte n'est chargée en state client **que** si god mode actif.
 
 ## Correctifs 2026-09-15
 
+### Partie testée en prod (Refuge du Griffon) : 4 défauts corrigés
+
+**Problème** (relevés en jouant le salon `X4RCXC`) :
+1. « Tenancière, le forgeron n'est pas à sa table ? » → le MJ répondait **en narrateur** (« Vous êtes dans le Refuge du Griffon… Que souhaitez-vous faire ? ») : toute question sans « tu/vous » partait en **[QUESTION TABLE]**, donc aucun PNJ ne répondait.
+2. Le lieu archivé devenait **« Taverne du Coin »** — nom absent du récit — puis **« salle »** à la place de « Refuge du Griffon ».
+3. Ouverture au **tu**, tour suivant au **vous** pour le même héros solo.
+4. Relance méta « Quelles seront vos prochaines actions ? » et **sélecteur de pistes affiché deux fois** (dans le message MJ + au-dessus de la saisie).
+
+**Solution** :
+- `extractSpokenVocative` / `sayAddressesSomeonePresent` : une apostrophe par rôle (« Tenancière, … », « Hé, l'aubergiste ! », « …, patron ? ») est une **parole in-world** → `messageAddressesMjOrWorld` renvoie `false`, le hint impose une **réplique** du PNJ apostrophé (nom simple permis, interdit d'éluder ou de demander « à qui parles-tu ? »).
+- `scrubScenePatchAgainstSourceText` : un `location` dont les mots n'apparaissent pas dans le récit analysé est **rejeté** (anti-invention) ; `locationIsVaguerThan` empêche « salle / pièce / comptoir / coin » de remplacer un lieu nommé.
+- `formatEstablishedCanonSummary` : table à **un seul héros** → bloc « Table solo » qui impose le **tu** ; règle de voix « garde la même adresse d'un tour à l'autre ».
+- `rewriteTableMetaClosers` dans `sanitizeMjResponse` : les relances méta deviennent « Que fais‑tu ? ». Le doublon `mj-live-choices-block` est supprimé (les pistes restent dans le message MJ).
+
+**Fichiers** : `unaddressed-speech.ts`, `player-banter.ts`, `scene-extract-prompt.ts`, `sanitize-response.ts`, `canon-continuity.ts`, `room-scene.ts`, `RoomView.tsx` (+ tests `unaddressed-speech.test.ts`, `mj-coherence.test.ts`)
+
 ### Graines différentes entre l'ordi et le téléphone
 
 **Problème** : « Mes graines » = localStorage du navigateur + salons liés au compte. Les salons ouverts hors connexion restaient sur un seul appareil, et taper le code depuis le téléphone créait un **second personnage** à côté du héros existant.

@@ -56,6 +56,44 @@ export function locationsEquivalent(a: string, b: string): boolean {
   return false;
 }
 
+const LOCATION_PARTICLE_RE =
+  /^(?:dans|avec|pres|cote|vers|sous|sur|entre|devant|derriere|autour|chez|pour)$/u;
+
+/**
+ * Un lieu extrait doit apparaître dans le récit analysé : sinon c'est une invention
+ * (ex. « Taverne du Coin » alors que le texte ne parle que de la tenancière).
+ */
+export function locationSupportedByText(location: string, text: string): boolean {
+  const hay = normalizeSceneLocation(text);
+  if (!hay) return false;
+  const words = normalizeSceneLocation(location)
+    .split(" ")
+    .filter((w) => w.length >= 4 && !LOCATION_PARTICLE_RE.test(w));
+  if (!words.length) return true;
+  return words.every((w) => hay.includes(w.replace(/s$/u, "")));
+}
+
+/** Retire un `location` absent du texte source (garde ambiance / tension). */
+export function scrubScenePatchAgainstSourceText(
+  patch: ScenePatchInput,
+  text: string
+): ScenePatchInput {
+  if (!patch.location?.trim()) return patch;
+  if (locationSupportedByText(patch.location, text)) return patch;
+  const { location: _dropped, ...rest } = patch;
+  return rest;
+}
+
+/** Reformulations partielles d'un lieu déjà archivé (« la salle » pour l'auberge). */
+const VAGUE_LOCATION_RE =
+  /^(?:l[ae]\s+|les\s+|un[e]?\s+)?(?:salle(?:\s+commune)?|pi[èe]ce|int[eé]rieur|dedans|comptoir|table|sol|endroit|lieu|b[âa]timent|coin)$/iu;
+
+/** « salle » après « Refuge du Griffon » = reformulation, pas un déplacement. */
+export function locationIsVaguerThan(next: string, current: string): boolean {
+  if (!current.trim()) return false;
+  return VAGUE_LOCATION_RE.test(next.trim());
+}
+
 /** Types de lieux reconnus (FR médiéval-fantastique + maison / ferme / bar). */
 export const PLACE_TYPE_WORD =
   /\b(?:taverne|bar|estaminet|cabaret|brasserie|auberge|marché|carrefour|port|atelier|sanctuaire|tribunal|caravansérail|bergerie|moulin|ruines|forteresse|forêt|citadelle|crypte|village|château|caverne|temple|marais|montagne|plaine|donjon|place|échoppe|boutique|grange|écurie|repaire|manoir|palais|relais|halte|campement|grotte|mine|pont|quai|docks?|cimetière|bibliothèque|académie|guild|cellier|cave|salle|hall|ruelle|maison|demeure|chaumière|logis|foyer|grenier|cour|ferme|champs?|jardin|habitation)\b/i;
@@ -287,7 +325,10 @@ export function mergeScenePatch(
   }
 
   const locChanged =
-    patch.location != null && proposedLoc.length > 0 && !locationsEquivalent(proposedLoc, curLoc);
+    patch.location != null &&
+    proposedLoc.length > 0 &&
+    !locationsEquivalent(proposedLoc, curLoc) &&
+    !locationIsVaguerThan(proposedLoc, curLoc);
 
   const moodChanged =
     patch.mood != null &&

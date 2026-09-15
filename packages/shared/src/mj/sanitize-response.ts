@@ -87,6 +87,23 @@ export function collapseTrailingPhraseLoop(text: string): string {
   return out;
 }
 
+/** Relances méta de table (« quelles seront vos prochaines actions ? ») → relance in-world. */
+const META_CLOSER_PATTERNS: RegExp[] = [
+  /quelles?\s+(?:seront|sont|seraient)\s+(?:vos|tes)\s+prochaine?s?\s+actions?\s*\?/giu,
+  /quelles?\s+actions?\s+(?:souhaitez|voulez|comptez)[- ]vous\s+(?:entreprendre|mener|faire)\s*\?/giu,
+  /quelles?\s+actions?\s+(?:souhaites|veux|comptes)[- ]tu\s+(?:entreprendre|mener|faire)\s*\?/giu,
+  /quelle\s+est\s+(?:votre|ta)\s+prochaine\s+action\s*\?/giu,
+  /que\s+d[ée]cidez[- ]vous\s+d['’]entreprendre\s*\?/giu,
+];
+
+export function rewriteTableMetaClosers(text: string): string {
+  let out = text;
+  for (const re of META_CLOSER_PATTERNS) {
+    out = out.replace(re, "Que fais‑tu ?");
+  }
+  return out;
+}
+
 function trimTrailingLeakBlock(text: string): string {
   const trailing = text.match(
     /\n{2,}(?:\d+\.\s*\*\*(?:Analyze|Review|Consider|Draft|Plan|Final)[\s\S]*)$/i
@@ -114,6 +131,7 @@ export function sanitizeMjResponse(text: string): string {
 
   out = trimTrailingLeakBlock(out);
   out = collapseTrailingPhraseLoop(out);
+  out = rewriteTableMetaClosers(out);
 
   return out.replace(/\n{3,}/g, "\n\n").trim();
 }

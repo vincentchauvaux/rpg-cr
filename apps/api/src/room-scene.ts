@@ -15,6 +15,7 @@ import {
   isHomeLocation,
   isTransientPathLocation,
   scrubScenePatchLocation,
+  scrubScenePatchAgainstSourceText,
   hasExplicitPerilInTexts,
   isPerilMoodLabel,
   scrubScenePatchMoodAndTension,
@@ -340,6 +341,10 @@ export async function extractSceneFromText(
     })
   );
   let parsed = parseExtractedScene(result.content);
+  if (parsed && !parsed.unchanged) {
+    parsed = scrubScenePatchAgainstSourceText(parsed, mjText);
+    if (!parsed.location && !parsed.mood && parsed.tension == null) parsed = null;
+  }
   if (!parsed) parsed = heuristicSceneFromMjText(mjText, current);
   const applied = parsed ? applySceneUpdate(roomId, parsed, sourceMessageId) : null;
   if (applied) return applied;
