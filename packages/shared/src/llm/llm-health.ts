@@ -23,6 +23,8 @@ export type LlmQuotaHint = {
   requested?: number;
   remaining?: number;
   retryAfterMs?: number;
+  /** Groq TPD = jour ; TPM = minute. */
+  window?: "minute" | "day";
 };
 
 export type LlmLastCall = {
@@ -54,6 +56,7 @@ export function mergeLlmQuota(
     if (p.requested != null) out.requested = p.requested;
     if (p.remaining != null) out.remaining = p.remaining;
     if (p.retryAfterMs != null) out.retryAfterMs = p.retryAfterMs;
+    if (p.window) out.window = p.window;
   }
   if (
     out.remaining == null &&
@@ -112,7 +115,12 @@ export function parseLlmQuotaFromText(text: string): LlmQuotaHint | undefined {
     Number.isFinite(retrySec) && retrySec > 0
       ? Math.ceil(retrySec * 1000)
       : undefined;
-  return mergeLlmQuota({ limit, used, requested, remaining, retryAfterMs });
+  const window: LlmQuotaHint["window"] = /\bTPD\b|tokens per day/i.test(t)
+    ? "day"
+    : /\bTPM\b|tokens per minute/i.test(t)
+      ? "minute"
+      : undefined;
+  return mergeLlmQuota({ limit, used, requested, remaining, retryAfterMs, window });
 }
 
 export function parseLlmQuotaFromHeaders(
@@ -177,13 +185,17 @@ function formatWait(ms: number | undefined): string {
 /** Phrase FR : restant / utilisés / demandé. */
 export function formatQuotaLineFr(quota: LlmQuotaHint | undefined): string {
   if (!quota) return "";
+  if (quota.limit === 0 && (quota.remaining === 0 || quota.used === 0)) {
+    return "";
+  }
+  const period = quota.window === "day" ? "aujourd'hui" : "cette minute";
   const bits: string[] = [];
   if (quota.remaining != null && quota.limit != null) {
-    bits.push(`il reste ${quota.remaining} / ${quota.limit} jetons cette minute`);
+    bits.push(`il reste ${quota.remaining} / ${quota.limit} jetons ${period}`);
   } else if (quota.remaining != null) {
     bits.push(`il reste ${quota.remaining} jeton(s)`);
   } else if (quota.used != null && quota.limit != null) {
-    bits.push(`quota minute ${quota.used} / ${quota.limit}`);
+    bits.push(`quota ${quota.window === "day" ? "du jour" : "minute"} ${quota.used} / ${quota.limit}`);
   }
   if (quota.requested != null) {
     bits.push(`ce tour en réservait ${quota.requested}`);
@@ -207,15 +219,19 @@ export function formatLlmSilenceDetail(message: string): string {
         quota.used != null &&
         quota.used >= quota.limit);
     const head = zero
-      ? "Plus aucun jeton restant pour cette minute (plafond TPM)."
-      : "Le quota de jetons à la minute est saturé.";
+      ? quota?.window === "day"
+        ? "Plus aucun jeton restant pour aujourd'hui (plafond TPD cloud)."
+        : "Plus aucun jeton restant pour cette minute (plafond TPM cloud)."
+      : quota?.window === "day"
+        ? "Le quota de jetons du jour du MJ cloud est saturé."
+        : "Le quota de jetons à la minute du MJ cloud est saturé.";
     const extra =
       quota?.requested != null &&
       quota.remaining != null &&
       quota.requested > quota.remaining
         ? ` Ce tour demandait ${quota.requested} jetons, plus que le restant.`
         : "";
-    return `${head}${extra}${quotaLine ? ` ${quotaLine}` : formatWait(quota?.retryAfterMs)} Puis Réclamer.`;
+    return `${head}${extra}${quotaLine ? ` ${quotaLine}` : formatWait(quota?.retryAfterMs)} Ce plafond vient d'OpenRouter / Groq, pas d'Ollama sur le VPS. En god mode, enregistrez Ollama puis Réclamer.`;
   }
 
   if (outcome === "auth") {

@@ -80,8 +80,8 @@ export async function formatFetchError(
       (aborted
         ? "Délai dépassé (4 min) — la génération complète a été interrompue."
         : "La génération IA de la fiche a échoué alors que l'API répond.") +
-      " Le modèle met trop de temps (ex. gemma-4-e2b). Attendez READY dans LM Studio, " +
-      "ou utilisez un modèle plus léger (qwen 7b). Remplissez à la main en attendant."
+      " Sur le VPS, Ollama (qwen 7b) n'a pas de plafond OpenRouter / Groq. " +
+      "Remplissez à la main si le modèle local n'est pas encore chargé."
     );
   }
 

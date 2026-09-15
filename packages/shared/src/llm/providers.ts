@@ -1,5 +1,5 @@
 import { getCatalogEntry, isOpenRouterProvider } from "./catalog.js";
-import { estimatePromptChars, resolveLlmTimeoutMs, isLlmRateLimitError, parseLlmRetryAfterMs, resolveMjMaxTokens } from "./context-budget.js";
+import { estimatePromptChars, resolveLlmTimeoutMs, isLlmQuotaOrCreditError, isLlmRateLimitError, parseLlmRetryAfterMs, resolveMjMaxTokens } from "./context-budget.js";
 import {
   appendQuotaToLlmError,
   isLlmAuthError,
@@ -406,8 +406,8 @@ async function openAiCompatibleChatOnce(
       );
     }
     const quota =
-      res.status === 401
-        ? undefined
+      res.status === 401 || res.status === 402 || res.status === 403
+        ? parseLlmQuotaFromText(bodyText)
         : mergeLlmQuota(
             parseLlmQuotaFromHeaders(res.headers),
             parseLlmQuotaFromText(bodyText)
@@ -680,6 +680,14 @@ async function completeAgainstConfig(
   return { ...payload, providerId: config.providerId, modelId };
 }
 
+function isCloudFailureWorthLocalFallback(error: unknown): boolean {
+  return (
+    isLlmAuthError(error) ||
+    isLlmQuotaOrCreditError(error) ||
+    isLlmRateLimitError(error)
+  );
+}
+
 function formatChainedLlmFailure(
   primary: unknown,
   fallbackProvider: string,
@@ -817,12 +825,13 @@ export async function completeChat(
     }
   }
 
-  const authFail =
-    isLlmAuthError(primaryError) ||
-    (namedFallbackError != null && isLlmAuthError(namedFallbackError));
+  const cloudDead =
+    isCloudFailureWorthLocalFallback(primaryError) ||
+    (namedFallbackError != null &&
+      isCloudFailureWorthLocalFallback(namedFallbackError));
   const allowLocal =
     !isLocalLlmProvider(effective.providerId) &&
-    (authFail || Boolean(config.useFallbackLmStudio));
+    (cloudDead || Boolean(config.useFallbackLmStudio));
 
   if (!allowLocal) {
     if (namedFallback && namedFallbackError) {

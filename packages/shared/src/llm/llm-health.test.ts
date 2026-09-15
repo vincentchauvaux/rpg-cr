@@ -36,6 +36,8 @@ test("Groq 429 : restant = limite − utilisés, pas +10", () => {
   assert.match(detail, /5551 \/ 8000/);
   assert.match(detail, /6687/);
   assert.match(detail, /Réessayez dans/);
+  assert.match(detail, /OpenRouter \/ Groq/);
+  assert.match(detail, /Ollama/);
 });
 
 test("0 jeton restant", () => {
@@ -67,6 +69,22 @@ test("quota line FR", () => {
   assert.match(line, /il reste 0 \/ 8000/i);
   assert.match(line, /1400/);
   assert.match(line, /5 s/);
+});
+
+test("403 : pas de faux 0 / 0 jetons", () => {
+  assert.equal(formatQuotaLineFr({ remaining: 0, limit: 0 }), "");
+});
+
+test("Groq TPD : aujourd'hui, pas cette minute", () => {
+  const msg =
+    "LLM 429 (openai/gpt-oss-20b) : Rate limit reached on tokens per day (TPD): Limit 200000, Used 199477, Requested 761. Please try again in 103s.";
+  const q = parseLlmQuotaFromText(msg);
+  assert.equal(q?.window, "day");
+  assert.equal(q?.remaining, 523);
+  const line = formatQuotaLineFr(q);
+  assert.match(line, /aujourd'hui/);
+  assert.doesNotMatch(line, /cette minute/);
+  assert.match(formatLlmSilenceDetail(msg), /du jour/);
 });
 
 test("plan recovery : TPM → attendre puis micro", () => {

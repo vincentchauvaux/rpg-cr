@@ -85,7 +85,7 @@ export function isLlmTimeoutError(error: unknown): boolean {
 
 export function isLlmRateLimitError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  return /LLM 429|rate limit|tokens per minute|\bTPM\b|Please try again in/i.test(
+  return /LLM 429|rate limit|tokens per minute|tokens per day|\bTPM\b|\bTPD\b|Please try again in/i.test(
     error.message
   );
 }

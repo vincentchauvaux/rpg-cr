@@ -118,6 +118,12 @@ export function applyEnvAiOverride(
   const provider = normalizeAiProviderId(settings.provider);
   if (!provider) return config;
 
+  // God mode Ollama / LM Studio : ne pas masquer par AI_PROVIDER=openrouter
+  // (sinon TPM cloud 200k alors que l'UI dit « Ollama VPS »).
+  if (isLocalLlmProvider(config.providerId) && !isLocalLlmProvider(provider)) {
+    return config;
+  }
+
   if (provider === "groq" || provider === "gemini") {
     const entry = getCatalogEntry(provider);
     const model =

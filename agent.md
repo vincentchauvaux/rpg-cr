@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-15 (**table VUKRS7** : ouverture serveur/faveur d'hier refusée, commande de verre non inversée)
+> Dernière mise à jour : 2026-09-15 (**V7B7ZP** : OpenRouter clé à 0 + Groq TPD → secours Ollama ; plus de hint LM Studio gemma)
 
 ## Vision
 
@@ -714,7 +714,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 ## Notes agent
 
 - La clé API LLM OpenAI/OpenRouter peut être saisie côté client (god mode) et transmise à l’appel MJ ; non persistée en base. **Groq / Gemini : jamais le frontend** — `GROQ_API_KEY` / `GEMINI_API_KEY` + `AI_PROVIDER` / `AI_MODEL` / `AI_FALLBACK_PROVIDER` dans `.env` (docker-compose.prod.yml).
-- **Routage LLM** : `completeChat` + `taskKind` `narration` | `tool` ; si `AI_PROVIDER=groq|gemini` le serveur surcharge la config salon ; fallback `AI_FALLBACK_PROVIDER` puis LM Studio / Ollama (`LM_STUDIO_BASE_URL`). Cloud défaut hors VPS sans env = GPT-4o (MJ) + GPT-4o mini ; local = un seul modèle chargé.
+- **Routage LLM** : `completeChat` + `taskKind` `narration` | `tool` ; `AI_PROVIDER=groq|gemini|openrouter` surcharge un salon **cloud** ; un salon enregistré **Ollama / LM Studio** n’est **pas** redirigé (sinon TPM OpenRouter alors que l’UI dit VPS). Fallback `AI_FALLBACK_PROVIDER` puis LM Studio / Ollama (`LM_STUDIO_BASE_URL`) pour les salons cloud. Cloud défaut hors VPS sans env = GPT-4o (MJ) + GPT-4o mini ; local = un seul modèle chargé.
 - **Réclamer hôte** : `pickHostMjPromptType` + `handleHostReclaim` dans `RoomView` (préambule / récap / reclaim) — déjà en place ; pas de travail dupliqué côté sous-agent `3dd156bd` si non retrouvé dans l'historique.
 - `getRoomByCode` compare en NOCASE (codes 6 caractères).
 - Pour LM Studio dans Docker : `host.docker.internal:1234`.
@@ -739,7 +739,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 
 ### Groq / Gemini (cloud gratuit, serveur)
 
-`AI_PROVIDER` **surcharge** la config salon (god mode) tant qu’il vaut `groq` ou `gemini`. Clés uniquement dans `.env` / Docker — jamais `NEXT_PUBLIC_*`.
+`AI_PROVIDER` **surcharge** un salon cloud (`openrouter` / `openai` / `groq` / `gemini`). Un salon **enregistré** en Ollama ou LM Studio **garde** ce backend — le `.env` OpenRouter ne doit plus afficher un TPM 200k. Clés uniquement dans `.env` / Docker — jamais `NEXT_PUBLIC_*`.
 
 ```
 GROQ_API_KEY=…
@@ -756,7 +756,7 @@ AI_FALLBACK_PROVIDER=groq
 - Groq : API `https://api.groq.com/openai/v1` ; si un id disparaît : `GET /openai/v1/models`.
 - Gemini : API officielle OpenAI-compatible Google ; défaut Flash `gemini-3.8-flash` (ou `AI_MODEL=gemini-flash-latest`).
 - Chaîne : provider env → `AI_FALLBACK_PROVIDER` → LM Studio/Ollama (`LM_STUDIO_BASE_URL`) si `useFallbackLmStudio`.
-- Revenir au local : commenter `AI_PROVIDER` (ou `AI_PROVIDER=lmstudio` / `ollama`) puis god mode comme ci-dessous.
+- Revenir au local : **Enregistrer** Ollama / LM Studio en god mode (plus besoin de commenter `AI_PROVIDER`). Commenter `AI_PROVIDER` seulement pour forcer le local sur un salon encore configuré OpenRouter.
 - Tests : `packages/shared/src/companion-pact.test.ts` (invitation, parser bloc, strip récit) ; `npm run test:ai` (mocks + live si les clés sont dans l’env).
 
 ### Architecture
@@ -875,7 +875,7 @@ Quand le MJ ne répond plus, le salon affiche **pourquoi** (plus un simple « MJ
 
 | Signal | Signification |
 |--------|----------------|
-| Badge **MJ : 0 jeton** / **quota minute** | Plafond **TPM** (jetons / minute, surtout Groq). Le reste = `limite − utilisés`. Un tour MJ peut réserver 1–2k jetons d’un coup alors qu’il en reste moins. |
+| Badge **MJ : 0 jeton** / **quota minute** | Plafond **TPM** (minute) ou **TPD Groq 200k/jour**. Ollama n’a **pas** ce plafond. Salon OpenRouter dont la clé est à 0 (403) : secours Groq puis **Ollama** même si `useFallbackLmStudio` est faux. Un salon enregistré Ollama n’est plus redirigé vers `AI_PROVIDER=openrouter`. |
 | Badge **MJ : crédit 0** | Compte cloud **à 0** (OpenRouter 402, plafond de clé). Ce n’est pas le TPM. |
 | Badge **MJ : délai** | Timeout HTTP (cloud ~90–120 s, Ollama/LM Studio plus long). |
 | **Ollama local** | Pas de « solde de jetons » : le modèle tourne sur le VPS, silence = timeout, crash, ou CPU saturé. |

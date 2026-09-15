@@ -330,7 +330,10 @@ export function AdminLlmForm({
               )}
               <p className="llm-hint muted" style={{ marginTop: "0.35rem" }}>
                 Utilisez un modèle <strong>chat/instruct</strong> (contexte 8k+), pas un modèle{" "}
-                <strong>embedding</strong> ni un modèle <strong>vision (VL)</strong>.
+                <strong>embedding</strong> ni un modèle <strong>vision (VL)</strong>.{" "}
+                Ollama sur le VPS n&apos;a <strong>pas</strong> de plafond de jetons/minute :
+                ce quota n&apos;existe que pour OpenRouter / Groq. Enregistrez cette config
+                pour que le MJ l&apos;utilise vraiment.
               </p>
               {modelLikelyWrongFormat && (
                 <p className="form-error" role="alert">

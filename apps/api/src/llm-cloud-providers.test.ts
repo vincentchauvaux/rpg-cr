@@ -46,6 +46,13 @@ const localRoom: LlmRoomConfig = {
   useFallbackLmStudio: true,
 };
 
+const cloudRoom: LlmRoomConfig = {
+  providerId: "openrouter",
+  modelId: "google/gemini-3.8-flash",
+  baseUrl: "https://openrouter.ai/api/v1",
+  useFallbackLmStudio: true,
+};
+
 function chatResponse(content: string, status = 200): Response {
   return new Response(
     JSON.stringify({
@@ -91,8 +98,8 @@ test("Gemini : la clé frontend est ignorée au profit de GEMINI_API_KEY", () =>
   assert.equal(resolved, "server-gemini-key");
 });
 
-test("AI_PROVIDER=groq surcharge la config salon locale", () => {
-  const effective = applyEnvAiOverride(localRoom, {
+test("AI_PROVIDER=groq surcharge un salon cloud, pas Ollama", () => {
+  const effective = applyEnvAiOverride(cloudRoom, {
     provider: "groq",
     model: DEFAULT_GROQ_MODEL,
     fallbackProvider: "gemini",
@@ -104,8 +111,8 @@ test("AI_PROVIDER=groq surcharge la config salon locale", () => {
   assert.equal(usesTightGroqTpm(effective), true);
 });
 
-test("AI_PROVIDER=gemini surcharge la config salon locale", () => {
-  const effective = applyEnvAiOverride(localRoom, {
+test("AI_PROVIDER=gemini surcharge un salon cloud, pas Ollama", () => {
+  const effective = applyEnvAiOverride(cloudRoom, {
     provider: "gemini",
     model: DEFAULT_GEMINI_MODEL,
     fallbackProvider: "groq",
@@ -115,8 +122,20 @@ test("AI_PROVIDER=gemini surcharge la config salon locale", () => {
   assert.equal(effective.baseUrl, "https://generativelanguage.googleapis.com/v1beta/openai");
 });
 
+test("salon Ollama : AI_PROVIDER cloud n'impose plus de TPM OpenRouter", () => {
+  for (const provider of ["openrouter", "groq", "gemini", "openai"] as const) {
+    const effective = applyEnvAiOverride(localRoom, {
+      provider,
+      model: provider === "groq" ? DEFAULT_GROQ_MODEL : "google/gemini-3.8-flash",
+      fallbackProvider: "groq",
+    });
+    assert.equal(effective.providerId, "ollama", provider);
+    assert.equal(effective.modelId, "qwen2.5:7b-instruct", provider);
+  }
+});
+
 test("Groq : sans AI_TOOL_MODEL, outils = même 20B (extraits auto coupés ailleurs)", () => {
-  const effective = applyEnvAiOverride(localRoom, {
+  const effective = applyEnvAiOverride(cloudRoom, {
     provider: "groq",
     model: "openai/gpt-oss-20b",
     fallbackProvider: "gemini",
@@ -166,7 +185,7 @@ test("connexion Groq (mock HTTP)", async () => {
     return chatResponse("OK");
   };
 
-  const result = await completeChat(localRoom, [
+  const result = await completeChat(cloudRoom, [
     { role: "user", content: "Dis simplement : OK." },
   ]);
   assert.match(calledUrl, /api\.groq\.com\/openai\/v1\/chat\/completions/);
@@ -189,7 +208,7 @@ test("connexion Gemini (mock HTTP)", async () => {
     return chatResponse("OK");
   };
 
-  const result = await completeChat(localRoom, [
+  const result = await completeChat(cloudRoom, [
     { role: "user", content: "Dis simplement : OK." },
   ]);
   assert.match(calledUrl, /generativelanguage\.googleapis\.com/);
@@ -217,7 +236,7 @@ test("génération de personnage : JSON structuré puis normalisation", async ()
   });
   globalThis.fetch = async () => chatResponse(`Voici la fiche :\n${llmJson}`);
 
-  const result = await completeChat(localRoom, [
+  const result = await completeChat(cloudRoom, [
     { role: "system", content: "Réponds uniquement en JSON." },
     { role: "user", content: "Génère la fiche." },
   ], { taskKind: "tool", jsonMode: true });
@@ -246,7 +265,7 @@ test("erreur API Groq : message sans clé", async () => {
   process.env.GROQ_API_KEY = "test-groq-key-unit";
   process.env.AI_PROVIDER = "groq";
   delete process.env.AI_FALLBACK_PROVIDER;
-  const room: LlmRoomConfig = { ...localRoom, useFallbackLmStudio: false };
+  const room: LlmRoomConfig = { ...cloudRoom, useFallbackLmStudio: false };
   globalThis.fetch = async () => errorResponse(401, "Invalid API key");
 
   await assert.rejects(
@@ -266,7 +285,7 @@ test("erreur API Groq : message sans clé", async () => {
 test("timeout LLM : Délai dépassé", async () => {
   process.env.GROQ_API_KEY = "test-groq-key-unit";
   process.env.AI_PROVIDER = "groq";
-  const room: LlmRoomConfig = { ...localRoom, useFallbackLmStudio: false };
+  const room: LlmRoomConfig = { ...cloudRoom, useFallbackLmStudio: false };
   globalThis.fetch = async () => {
     await new Promise<void>((_, reject) => {
       setTimeout(() => {
@@ -312,7 +331,7 @@ test("Groq 429 : attend le délai puis réessaie", async () => {
     return chatResponse("OK after wait");
   };
   const result = await completeChat(
-    { ...localRoom, useFallbackLmStudio: false },
+    { ...cloudRoom, useFallbackLmStudio: false },
     [{ role: "user", content: "OK" }]
   );
   assert.equal(calls, 2);
@@ -325,7 +344,7 @@ test("AI_FALLBACK_PROVIDER=gemini après échec Groq", async () => {
   process.env.GEMINI_API_KEY = "test-gemini-key-unit";
   process.env.AI_PROVIDER = "groq";
   process.env.AI_FALLBACK_PROVIDER = "gemini";
-  const room: LlmRoomConfig = { ...localRoom, useFallbackLmStudio: false };
+  const room: LlmRoomConfig = { ...cloudRoom, useFallbackLmStudio: false };
   let calls = 0;
   globalThis.fetch = async (input) => {
     calls += 1;
@@ -345,7 +364,7 @@ test("AI_FALLBACK_PROVIDER=gemini après échec Groq", async () => {
 });
 
 test("OpenRouter : outils = même modèle que le récit (pas gpt-4o-mini silencieux)", () => {
-  const effective = applyEnvAiOverride(localRoom, {
+  const effective = applyEnvAiOverride(cloudRoom, {
     provider: "openrouter",
     model: "google/gemini-3.8-flash",
     fallbackProvider: "groq",
@@ -400,7 +419,7 @@ test("secours Groq : max_tokens plafonné (TPM)", async () => {
   };
 
   const result = await completeChat(
-    { ...localRoom, useFallbackLmStudio: false },
+    { ...cloudRoom, useFallbackLmStudio: false },
     [{ role: "user", content: "OK" }],
     { taskKind: "narration", maxTokens: 2048 }
   );
@@ -425,7 +444,7 @@ test("primary + secours en échec : les deux erreurs sont visibles", async () =>
   await assert.rejects(
     () =>
       completeChat(
-        { ...localRoom, useFallbackLmStudio: false },
+        { ...cloudRoom, useFallbackLmStudio: false },
         [{ role: "user", content: "OK" }]
       ),
     (error: unknown) => {
@@ -436,6 +455,28 @@ test("primary + secours en échec : les deux erreurs sont visibles", async () =>
       return true;
     }
   );
+});
+
+test("salon Ollama : completeChat n'appelle pas OpenRouter malgré AI_PROVIDER", async () => {
+  process.env.AI_PROVIDER = "openrouter";
+  process.env.AI_MODEL = "google/gemini-3.8-flash";
+  process.env.OPENROUTER_API_KEY = "sk-or-test";
+  let calledUrl = "";
+  globalThis.fetch = async (input) => {
+    calledUrl = String(input);
+    if (String(input).includes("openrouter")) {
+      throw new Error("OpenRouter ne doit pas être appelé pour un salon Ollama");
+    }
+    return chatResponse("OK ollama");
+  };
+
+  const result = await completeChat(localRoom, [{ role: "user", content: "OK" }], {
+    timeoutMs: 5_000,
+  });
+  assert.match(calledUrl, /11434/);
+  assert.equal(result.providerId, "ollama");
+  assert.equal(result.usedFallback, false);
+  assert.equal(result.content, "OK ollama");
 });
 
 test("OpenRouter sans clé : secours Ollama (pas un quota 0)", async () => {
@@ -469,6 +510,44 @@ test("OpenRouter sans clé : secours Ollama (pas un quota 0)", async () => {
   assert.match(result.content, /tavernier/);
 });
 
+test("OpenRouter 403 + Groq TPD : secours Ollama même sans useFallbackLmStudio", async () => {
+  process.env.AI_PROVIDER = "openrouter";
+  process.env.AI_MODEL = "google/gemini-3.8-flash";
+  process.env.OPENROUTER_API_KEY = "sk-or-test";
+  process.env.GROQ_API_KEY = "gsk-test";
+  process.env.AI_FALLBACK_PROVIDER = "groq";
+  const room: LlmRoomConfig = {
+    providerId: "openrouter",
+    modelId: "openai/gpt-4o",
+    baseUrl: "https://openrouter.ai/api/v1",
+    useFallbackLmStudio: false,
+  };
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("openrouter")) {
+      return errorResponse(403, "Key limit exceeded (total limit)");
+    }
+    if (url.includes("api.groq.com")) {
+      return errorResponse(
+        429,
+        "Rate limit reached for model openai/gpt-oss-20b on tokens per day (TPD): Limit 200000, Used 199477, Requested 761. Please try again in 0.05s."
+      );
+    }
+    if (url.includes("11434")) {
+      return chatResponse("Villageois du coin.");
+    }
+    return errorResponse(500, url);
+  };
+
+  const result = await completeChat(room, [{ role: "user", content: "OK" }], {
+    timeoutMs: 5_000,
+    lmStudioBaseUrl: "http://127.0.0.1:11434/v1",
+  });
+  assert.equal(result.usedFallback, true);
+  assert.equal(result.providerId, "ollama");
+  assert.match(result.content, /Villageois/);
+});
+
 test(
   "live Groq : liste des modèles + ping chat",
   { skip: !LIVE_GROQ },
@@ -489,7 +568,7 @@ test(
     process.env.AI_PROVIDER = "groq";
     process.env.AI_MODEL = wanted;
     const result = await completeChat(
-      { ...localRoom, useFallbackLmStudio: false },
+      { ...cloudRoom, useFallbackLmStudio: false },
       [{ role: "user", content: "Réponds uniquement par OK." }],
       { timeoutMs: 45_000, maxTokens: 128, taskKind: "narration" }
     );
@@ -507,7 +586,7 @@ test(
     process.env.AI_MODEL =
       LIVE_AI_MODEL.startsWith("gemini") ? LIVE_AI_MODEL : DEFAULT_GEMINI_MODEL;
     const result = await completeChat(
-      { ...localRoom, useFallbackLmStudio: false },
+      { ...cloudRoom, useFallbackLmStudio: false },
       [{ role: "user", content: "Réponds uniquement par OK." }],
       { timeoutMs: 45_000, maxTokens: 128, taskKind: "narration" }
     );

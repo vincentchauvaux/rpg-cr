@@ -57,9 +57,40 @@ interface Props {
 
 type OverlayState = null | "loading" | { error: string; locked?: boolean };
 
-const LM_STUDIO_SLOW_HINT =
-  "Le modèle met trop de temps (ex. gemma-4-e2b). Attendez READY dans LM Studio, " +
-  "ou utilisez un modèle plus léger (qwen 7b). Remplissez à la main en attendant.";
+const LOCAL_SLOW_HINT =
+  "Sur le VPS, Ollama (qwen 7b) n'a pas ce plafond cloud. " +
+  "Si le modèle local met trop de temps, attendez qu'il soit chargé, " +
+  "ou remplissez à la main en attendant.";
+
+function looksLikeCloudLlmFailure(message: string): boolean {
+  return /LLM 402|LLM 403|LLM 429|openrouter|key limit|rate limit|\bTPM\b|\bTPD\b|groq|gemini/i.test(
+    message
+  );
+}
+
+function formatFillAllError(error: unknown): string {
+  if (isHttpError(error)) {
+    const base = error.message.replace(/\s*\(HTTP \d+\)\s*$/, "").trim();
+    if (error.status === 504 || error.status === 502) {
+      if (looksLikeCloudLlmFailure(base)) return base;
+      return `${base} ${LOCAL_SLOW_HINT}`;
+    }
+    if (error.status === 429) {
+      return base;
+    }
+    return error.message;
+  }
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return `Délai dépassé (4 min) — la génération a été interrompue. ${LOCAL_SLOW_HINT}`;
+  }
+  if (error instanceof Error) {
+    if (/aborted|abort|Délai dépassé/i.test(error.message)) {
+      return `${error.message} ${LOCAL_SLOW_HINT}`;
+    }
+    return error.message;
+  }
+  return "Génération fiche impossible";
+}
 
 const LOCK_POLL_INTERVAL_MS = 3000;
 const LOCK_POLL_MAX_MS = 90_000;
@@ -74,32 +105,6 @@ function isUserCancelledError(error: unknown): boolean {
   if (error instanceof DOMException && error.name === "AbortError") return true;
   if (error instanceof Error && /annulée|aborted|abort/i.test(error.message)) return true;
   return false;
-}
-
-function formatFillAllError(error: unknown): string {
-  if (isHttpError(error)) {
-    if (error.status === 504 || error.status === 502) {
-      const base = error.message.replace(/\s*\(HTTP \d+\)\s*$/, "").trim();
-      return `${base} ${LM_STUDIO_SLOW_HINT}`;
-    }
-    if (error.status === 429) {
-      return error.message.replace(/\s*\(HTTP \d+\)\s*$/, "").trim();
-    }
-    return error.message;
-  }
-  if (error instanceof DOMException && error.name === "AbortError") {
-    return `Délai dépassé (4 min) — la génération a été interrompue. ${LM_STUDIO_SLOW_HINT}`;
-  }
-  if (error instanceof Error) {
-    if (/aborted|abort|Délai dépassé/i.test(error.message)) {
-      return `${error.message} ${LM_STUDIO_SLOW_HINT}`;
-    }
-    if (/generate-all|LM Studio|gemma/i.test(error.message)) {
-      return error.message;
-    }
-    return error.message;
-  }
-  return "Génération fiche impossible";
 }
 
 export function CharacterSheetFillAllButton({
