@@ -1,3 +1,4 @@
+export * from "./google-subject.js";
 export * from "./types.js";
 export * from "./companion-pact.js";
 export * from "./companion-active.js";

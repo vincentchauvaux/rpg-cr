@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import { pickGoogleSubject } from "@rpg-cr/shared";
 import { withBasePath } from "@/lib/config";
 import { authBasePath } from "@/lib/auth-path";
 
@@ -58,18 +59,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, account, profile }) {
-      const googleSub =
-        (account?.provider === "google" ? account.providerAccountId : null) ??
-        (token.googleSub as string | undefined) ??
-        (typeof token.sub === "string" ? token.sub : undefined);
+      const googleSub = pickGoogleSubject([
+        account?.provider === "google" ? account.providerAccountId : null,
+        typeof profile?.sub === "string" ? profile.sub : null,
+        token.googleSub as string | undefined,
+      ]);
       if (googleSub) token.googleSub = googleSub;
 
-      // La synchro ne tournait qu'à la connexion : un jeton émis avant la
-      // fonctionnalité (ou pendant une panne de l'API) restait sans compte, donc
-      // aucune graine liée. On réessaie tant que le compte manque, sans spammer.
+      // La synchro ne tournait qu'à la connexion, et `token.sub` (UUID NextAuth)
+      // a créé un 2e compte Gmail. On resynchronise une fois (accountMerged v2).
       const lastTryAt = Number(token.appUserSyncAt ?? 0);
       const retryDue = Date.now() - lastTryAt > SYNC_RETRY_MS;
-      if (!token.appUserId && googleSub && retryDue) {
+      const signedIn = Boolean(account);
+      if (
+        googleSub &&
+        (signedIn ||
+          token.accountMerged !== "v2" ||
+          (!token.appUserId && retryDue))
+      ) {
         token.appUserSyncAt = Date.now();
         const appUserId = await syncUserToApi({
           googleSub,
@@ -81,7 +88,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             "Joueur",
           avatarUrl: (token.picture as string | undefined) ?? null,
         });
-        if (appUserId) token.appUserId = appUserId;
+        if (appUserId) {
+          token.appUserId = appUserId;
+          token.accountMerged = "v2";
+        }
       }
       return token;
     },

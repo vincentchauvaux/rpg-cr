@@ -198,6 +198,11 @@ export function initDb(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub);
+
+    CREATE TABLE IF NOT EXISTS user_id_aliases (
+      old_user_id TEXT PRIMARY KEY,
+      canonical_user_id TEXT NOT NULL
+    );
   `);
 
   ensureColumn("players", "user_id", "TEXT REFERENCES users(id)");

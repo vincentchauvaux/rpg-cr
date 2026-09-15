@@ -18,6 +18,7 @@ import {
   getUserById,
   linkPlayerToUser,
   listUserGrains,
+  mergeDuplicateUsersByEmail,
   upsertUserFromGoogle,
 } from "./users.js";
 import {
@@ -164,6 +165,7 @@ app.addHook("onSend", async (_req, reply, payload) => {
 });
 
 initDb();
+mergeDuplicateUsersByEmail();
 installLlmFileTrace();
 
 function requireAuthInternal(req: { headers: Record<string, unknown> }): boolean {

@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-15 (**journal LLM** JSONL + god mode, sans prompts ni clés)
+> Dernière mise à jour : 2026-09-15 (**graines Gmail** : fusion des doubles comptes NextAuth + journal LLM)
 
 ## Vision
 
@@ -661,7 +661,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 ## Comptes joueurs (Google OAuth — MVP)
 
 - **Table** `users` (SQLite) : `google_sub`, `email`, `display_name`, `avatar_url` ; colonne `players.user_id` optionnelle.
-- **Auth** : NextAuth v5 (`apps/web/src/auth.ts`) — provider Google ; sync API `POST /api/auth/sync` (secret interne `AUTH_INTERNAL_SECRET`). La synchro est **retentée** à chaque rafraîchissement de session tant que `token.appUserId` manque (repli `token.sub` pour les jetons anciens).
+- **Auth** : NextAuth v5 (`apps/web/src/auth.ts`) — provider Google ; sync API `POST /api/auth/sync` (secret interne `AUTH_INTERNAL_SECRET`). `pickGoogleSubject` prend `account.providerAccountId` / `profile.sub`, **jamais** l’UUID `token.sub`. Un jeton déjà lié est **resynchronisé une fois** (`accountMerged: v2`) pour fusionner les doubles comptes. Tant que `appUserId` manque, retry au plus une fois par minute.
 - **UI accueil** : `GoogleAuthPanel` — connexion / déconnexion ; graines fusionnées local + `GET /api/users/:id/grains`.
 - **Création / join** : body optionnel `userId` sur `POST /api/rooms` et `POST …/join` ; reprise graine → `POST …/link-user`.
 - **Un seul héros par compte et par salon** : `joinRoom` cherche un joueur humain déjà lié à `userId` dans ce salon (après le test `existingPlayerId` du localStorage) et le **reprend** (`rejoined: true`, pas de message « a rejoint ») — plus de second personnage quand on ouvre le même code depuis le téléphone. `SalonRoomClient` interroge `GET /api/users/:id/grains` quand aucune graine locale ne correspond : la page reprend la session **sans** demander de nom.
@@ -968,13 +968,24 @@ La carte n'est chargée en state client **que** si god mode actif.
 3. ufw (`INPUT DROP`) bloquait le bridge Docker vers le port interne 4010.
 
 **Solution** :
-- `jwt` conserve `token.googleSub` (repli sur `token.sub`) et **retente** la synchro tant que `appUserId` manque, au plus une fois par minute (`SYNC_RETRY_MS`) — plus besoin de se reconnecter.
+- `jwt` conserve `token.googleSub` via `pickGoogleSubject` (pas `token.sub`) et **retente** la synchro tant que `appUserId` manque, au plus une fois par minute (`SYNC_RETRY_MS`) — plus besoin de se reconnecter.
 - `API_INTERNAL_URL=http://host.docker.internal:4010` + `extra_hosts: host.docker.internal:host-gateway` sur le service web.
 - Règle ufw : `ufw allow from 172.16.0.0/12 to any port 4010 proto tcp` (plage des bridges Docker, non routable depuis Internet).
 - `SalonRoomClient` rattache le héros de la session au compte à chaque ouverture de salon connecté (rattrapage des personnages orphelins).
 - Panneau compte : compteur rafraîchi via l'événement `rpg-cr:grains-linked` ; l'onglet « Mes graines » dit « liées à votre compte » quand on est connecté.
 
 **Fichiers** : `auth.ts`, `SalonRoomClient.tsx`, `GoogleAuthPanel.tsx`, `HomePageContent.tsx`, `docker-compose.prod.yml`, `deploy/.env.production.example`
+
+### Téléphone : seulement FRDS7X pour le même Gmail
+
+**Problème** : `vincent.chauvaux@gmail.com` avait **deux** lignes `users` (UUID NextAuth pris pour `google_sub`). L’ordi = compte du 18:20 (VUKRS7, V7B7ZP, KSED7T, …) ; le téléphone = compte du 20:34 (FRDS7X, AUZB43). « Mes graines » filtre `players.user_id`.
+
+**Solution** :
+- `mergeDuplicateUsersByEmail` au démarrage API + à chaque sync : on garde le plus ancien, on réassigne les PJ, alias `user_id_aliases` pour l’ancien id (jeton téléphone encore valide).
+- `upsertUserFromGoogle` rattache aussi par e-mail ; `resolveStoredGoogleSub` n’écrase pas un sub par un UUID.
+- `jwt` : plus de repli `token.sub` ; resync `accountMerged: v2`.
+
+**Fichiers** : `google-subject.ts`, `users.ts`, `db.ts`, `auth.ts`, `index.ts`
 
 ### Table VUKRS7 (Taverne du Héros Fatigué) — Kael Sans-Carte, paysan, Ollama 7B
 
