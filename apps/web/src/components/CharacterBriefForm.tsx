@@ -73,6 +73,7 @@ export function CharacterBriefForm({ initial, hostStepLabel, onConfirm, busy }: 
         secret ou un compagnon nommé. Vous pourrez affiner la fiche ensuite.
       </p>
 
+      <div className="char-brief-choices">
       <ChoiceGrid
         legend="Vous êtes…"
         name="brief-station"
@@ -94,6 +95,7 @@ export function CharacterBriefForm({ initial, hostStepLabel, onConfirm, busy }: 
         value={past}
         onChange={setPast}
       />
+      </div>
 
       <div className="char-wizard-actions">
         <button

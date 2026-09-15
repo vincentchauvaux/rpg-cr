@@ -1197,6 +1197,13 @@ export function RoomView({ code }: Props) {
     (!hasLlmConfig || !isHostLlmSetupComplete(room!.id));
   const showCharacterWizard =
     needsCharacter && !showHostLlmSetup;
+
+  useEffect(() => {
+    if (!showHostLlmSetup && !showCharacterWizard) return;
+    document.documentElement.classList.add("rpg-wizard-lock");
+    return () => document.documentElement.classList.remove("rpg-wizard-lock");
+  }, [showHostLlmSetup, showCharacterWizard]);
+
   const awaitingIntroduction =
     me?.kind === "human" &&
     me.characterStatus === "ready" &&

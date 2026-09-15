@@ -32,6 +32,13 @@ body {
   line-height: 1.5;
 }
 
+html.rpg-wizard-lock,
+html.rpg-wizard-lock body {
+  overflow: hidden;
+  overscroll-behavior: none;
+  height: 100%;
+}
+
 h1,
 h2,
 h3 {
@@ -937,25 +944,53 @@ label {
 }
 
 .msg.say {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
   padding: 0.35rem 0.5rem;
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--speaker-color, var(--accent)) 6%, transparent);
   border-left: 2px solid color-mix(in srgb, var(--speaker-color, var(--accent)) 45%, transparent);
 }
 
+.msg.say .author,
+.msg.action .author {
+  display: flex;
+  margin-right: 0;
+  margin-bottom: 0;
+}
+
+.msg.say .msg-body {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .msg.action {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
   font-size: 0.92rem;
   padding: 0.25rem 0.35rem;
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--speaker-color, var(--success)) 5%, transparent);
 }
 
+.msg.action .msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+}
+
 .msg.action .action-tag {
   opacity: 0.85;
+  flex-shrink: 0;
 }
 
 .msg.action .author {
@@ -964,16 +999,18 @@ label {
   font-style: normal;
 }
 
-.msg.action .author::after {
-  content: " —";
-  font-weight: 400;
-  color: var(--text-muted);
+.msg.action .msg-author-row {
+  display: flex;
+  width: 100%;
 }
 
 .msg.action .action-body {
-  flex: 1;
+  display: block;
+  min-width: 0;
+  width: 100%;
   font-style: italic;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   color: color-mix(in srgb, var(--speaker-color, #8fbc8f) 75%, var(--text));
 }
 
@@ -1468,6 +1505,14 @@ label {
   pointer-events: none;
 }
 
+/* Hôte : wizard sur la colonne chat ; panneau admin (god mode / LLM) reste cliquable. */
+.chat-section-wizard-host {
+  position: relative;
+  height: min(80dvh, 720px);
+  max-height: calc(100dvh - 7rem);
+  min-height: 18rem;
+}
+
 .char-wizard-overlay {
   position: fixed;
   inset: 0;
@@ -1477,12 +1522,8 @@ label {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-}
-
-/* Hôte : wizard sur la colonne chat ; panneau admin (god mode / LLM) reste cliquable. */
-.chat-section-wizard-host {
-  position: relative;
-  min-height: min(70vh, 520px);
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .char-wizard-overlay--section {
@@ -1494,6 +1535,7 @@ label {
 
 .char-wizard-overlay--section .char-wizard {
   max-height: 100%;
+  height: 100%;
 }
 
 .char-wizard-host-llm-hint {
@@ -1571,10 +1613,36 @@ label {
 }
 
 .char-wizard {
+  display: flex;
+  flex-direction: column;
   max-width: 600px;
   width: 100%;
-  max-height: 90vh;
+  max-height: min(90dvh, calc(100dvh - 2rem));
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.char-wizard:has(.char-brief) {
+  overflow: hidden;
+}
+
+.char-brief {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.char-brief-choices {
+  flex: 1 1 auto;
+  min-height: 8rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 0.15rem;
 }
 
 .char-wizard-actions {
@@ -1582,6 +1650,7 @@ label {
   gap: 0.75rem;
   justify-content: flex-end;
   margin-top: 1rem;
+  flex-shrink: 0;
 }
 
 .brief-fieldset {
@@ -1849,10 +1918,12 @@ label {
 }
 
 .msg-author-row {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.35rem;
   flex-wrap: wrap;
+  min-width: 0;
+  width: 100%;
   max-width: 100%;
 }
 
@@ -1969,7 +2040,7 @@ label {
 
 .msg.msg--translating .action-body,
 .msg.msg--translating .chat-msg-mj,
-.msg.msg--translating.msg.say > span:not(.author):not(.msg-author-row):not(.action-tag) {
+.msg.msg--translating .msg-body {
   animation: msg-body-translating 1.3s ease-in-out infinite;
 }
 
@@ -1989,7 +2060,7 @@ label {
   .msg-translate-dots span,
   .msg.msg--translating .action-body,
   .msg.msg--translating .chat-msg-mj,
-  .msg.msg--translating.msg.say > span:not(.author):not(.msg-author-row):not(.action-tag) {
+  .msg.msg--translating .msg-body {
     animation: none;
   }
 

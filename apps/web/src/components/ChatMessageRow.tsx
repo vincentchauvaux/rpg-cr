@@ -194,6 +194,7 @@ export function ChatMessageRow({
         data-message-id={m.id}
         style={{ "--speaker-color": speakerColor } as React.CSSProperties}
       >
+        <div className="msg-meta">
         <span className="action-tag" aria-hidden>
           ⚔
         </span>
@@ -210,6 +211,7 @@ export function ChatMessageRow({
           {m.playerName}
           {translationControls}
         </span>
+        </div>
         <span className="action-body">{body}</span>
       </div>
     );
@@ -234,7 +236,7 @@ export function ChatMessageRow({
         {m.playerName} :
         {translationControls}
       </span>
-      <span>{body}</span>
+      <span className="msg-body">{body}</span>
     </div>
   );
 }
