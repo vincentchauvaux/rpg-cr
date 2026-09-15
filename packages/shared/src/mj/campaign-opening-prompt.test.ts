@@ -116,6 +116,7 @@ test("réécriture d'ouverture : le prompt cite le texte raté", () => {
   assert.match(prompt, /RÉÉCRITURE/);
   assert.match(prompt, /suivre Thorin/);
   assert.match(prompt, /JOUEUR/);
+  assert.match(prompt, /In medias res/);
 });
 
 const SERA_OPENING = `
@@ -134,6 +135,25 @@ test("ouverture injouable : parchemin crypté d'un inconnu qui disparaît", () =
     "Trouvez le phare d'argent. » Que faites-vous ?";
   assert.equal(openingLooksLikeQuestMcGuffin(text), true);
   assert.equal(isCampaignOpeningUnplayable(text, "Bibhou"), true);
+});
+
+const BABU_BAG_OPENING = `
+Sous le grand chêne qui tranche la route, le crépitement d'un petit feu éclaire les visages fatigués de Babu.
+Un homme aux habits sales s'avance. « Nous avons perdu notre sac, pouvons-nous compter sur votre aide pour le retrouver ? »
+Babu doit décider : partager ce qu'il a, aider les voyageurs, ou les repousser.
+`;
+
+test("ouverture injouable : étrangers qui ont perdu un sac", () => {
+  assert.equal(openingLooksLikeQuestMcGuffin(BABU_BAG_OPENING), true);
+  assert.equal(openingTreatsHostAsNpc(BABU_BAG_OPENING, "Babu"), true);
+  assert.equal(isCampaignOpeningUnplayable(BABU_BAG_OPENING, "Babu"), true);
+  assert.equal(
+    openingTreatsHostAsNpc(
+      "Tu es Babu. Tes mains sont froides. Un voisin que tu connais t'appelle. Que fais-tu ?",
+      "Babu"
+    ),
+    false
+  );
 });
 
 test("ouverture injouable : Sir Aldric et secret du père hors fiche", () => {

@@ -150,6 +150,10 @@ test("ignore / verre / rentrer chez soi : pas de d20", () => {
   );
   assert.equal(isAutomaticSceneChoice("Je me lève et rentre chez moi"), true);
   assert.equal(isAutomaticSceneChoice("je rentre"), true);
+  assert.equal(
+    isAutomaticSceneChoice("Accepter de partir à la recherche du sac de provisions."),
+    true
+  );
   assert.equal(isAutomaticSceneChoice("Examinez le parchemin de plus près"), false);
 });
 

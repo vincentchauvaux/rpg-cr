@@ -88,3 +88,18 @@ test("prompt Action invitation compagnon", () => {
   });
   assert.match(prompt, /<!--companion/);
 });
+
+test("prompt épreuve : l'échec narre cette action, pas un beat précédent", () => {
+  const prompt = buildPlayerActionNarration({
+    kind: "player_action",
+    playerName: "Babu",
+    actionText:
+      "**Babu** tente : *« Accepter de partir à la recherche du sac. »*\n\n" +
+      "**Épreuve** : Sagesse (Perception) contre DD 13.\n" +
+      "• **Jet** : d20(9) +0 = **9**\n\n" +
+      "**→ échec (9 < DD 13).**",
+  });
+  assert.match(prompt, /Épreuve déjà résolue/);
+  assert.match(prompt, /interdit/);
+  assert.match(prompt, /qui aider/);
+});

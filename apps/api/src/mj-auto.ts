@@ -252,6 +252,7 @@ function buildPlayerSayUnaddressedContext(
     playerName,
     actionText: content,
     sceneSummary: formatSceneForMj(scene),
+    tableNowSummary: formatTableNowBlockForMj(roomId),
     companionsPresent: listPresentCompanionLines(roomId, playerId),
     nearbyListeners,
     crowdPresent,
@@ -273,6 +274,7 @@ function buildPlayerSayNpcNarrationContext(
     actionText: content,
     addressedNpcNames: npcNames,
     sceneSummary: formatSceneForMj(scene),
+    tableNowSummary: formatTableNowBlockForMj(roomId),
     companionsPresent: listPresentCompanionLines(roomId, playerId),
     companionInvite: messageLooksLikeCompanionInvite(content),
   };
@@ -998,6 +1000,8 @@ export function scheduleSayNpcMj(
   const trimmed = content.trim();
   if (!trimmed) return;
   if (isTrivialPlayerMessage(trimmed)) return;
+
+  applyTableNowFromPlayerAction(roomId, playerId, trimmed);
 
   const room = getRoomById(roomId);
   if (!room?.llmConfig) return;

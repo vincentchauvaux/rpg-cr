@@ -350,6 +350,17 @@ export function isAutomaticSceneChoice(choice: string): boolean {
   if (!raw) return true;
   const t = normalizeForMatch(raw);
 
+  if (
+    /^(accepter|refuse[rz]|proposer de|d['’]accord)\b/iu.test(raw) &&
+    !/\b(forc|crochet|attaqu|combat|duel|effract)\b/iu.test(t)
+  ) {
+    return true;
+  }
+  if (
+    /\b(accepter de|refuser|rester et d['’]aider|préférant rester seul)\b/iu.test(t)
+  ) {
+    return true;
+  }
   if (/^(demande|demander|parle|parler|discuter|signale|signaler|interroge|interroger)\b/iu.test(raw)) {
     return true;
   }

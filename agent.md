@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-14 (**UI** : pistes MJ dans le compositeur ; **« je rentre »** = entrer ici, pas chez soi)
+> Dernière mise à jour : 2026-09-15 (**MJ** : métier Le Rôliste distillé — impro, in medias res, monde qui tourne)
 
 ## Vision
 
@@ -168,7 +168,7 @@ Les listes markdown (`- …`) du **dernier** récit MJ encore **en vigueur** (2�
 
 | Élément | Détail |
 |---------|--------|
-| Parse + inférence | `packages/shared/src/scene-choice.ts` — dernière liste ; carac/compétence selon le libellé (chercher → INT Investigation, explorer → SAG Perception, convaincre → CHA Persuasion contesté, etc.) ; DD 10–15 selon la tension de scène |
+| Parse + inférence | `packages/shared/src/scene-choice.ts` — dernière liste ; carac/compétence selon le libellé (chercher / recherche → INT Investigation, explorer → SAG Perception, convaincre → CHA Persuasion contesté, etc.) ; DD 10–15 selon la tension ; **accepter / refuser / demander** = pas de d20 |
 | Pile / tour | 1er clic ouvre le tour ; les autres PJ **choisissent aussi** (autre option, même option = aide), **aident**, **s'opposent** ou **laissent faire** (défaut / timeout). Résolution quand **tout le monde a répondu**, timeout **25 s**, ou **On y va**. Un seul message Action agrégé + un tour MJ |
 | Laisser faire | Pas d'opposition automatique entre PJ. Timeout = laisser faire. L'aide / l'opposition restent optionnelles |
 | Périmé | Dès qu'un tour se résout, **toute** la liste source est consommée (les options non cliquées n'ont pas eu lieu). Un nouveau récit MJ ou une Action hors liste invalide l'ancienne liste. `liveChoiceMessageId` (GET + WS) |
@@ -180,7 +180,7 @@ Les listes markdown (`- …`) du **dernier** récit MJ encore **en vigueur** (2�
 | Mémoire | In-memory par salon (comme le verrou fill-all) — pas de SQLite |
 | MJ | Un seul message **Action** (`Tour de table` si plusieurs avis) puis **un** `scheduleActionMj`. Voix **2e personne** (tu / vous) : les PJ ne sont jamais narrés comme des PNJ, y compris quand un nouveau joueur arrive |
 | UI | `MjMessageMarkdown` (select sous le récit) + **select « Pistes du MJ » dans le compositeur** (toujours visible, distinct de « Utiliser » / objets) ; `SceneCheckBanner` (Laisser faire / Aider / S'opposer / On y va) ; **scroll figé sur le jet** |
-| Prompt | `system-prompt.ts` + `MJ_PLAYER_VOICE_RULES` : 2e personne, pile de table, options non retenues ignorées. `player-action.ts` : narre le beat unique selon les totaux |
+| Prompt | `system-prompt.ts` + `MJ_PLAYER_VOICE_RULES` : 2e personne, pile de table, options non retenues ignorées. `player-action.ts` : narre **cette** action et **ce** jet (échec ≠ recycler un beat précédent). `player-say.ts` : contenu littéral de la réplique |
 
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.
 
@@ -191,7 +191,7 @@ Les listes markdown (`- …`) du **dernier** récit MJ encore **en vigueur** (2�
 5. **LLM** — catalogue avec rôles `narration` / `tool` / `both` ; config par salon (`modelId` MJ + `toolModelId` optionnel cloud) ; `completeChat` + profils (`task-profile.ts`) ; **MJ auto Dire** : `@PNJ` **ou** parole sans @ s'il y a des auditeurs / de la foule (`scheduleSayNpcMj`) ; **MJ auto Action** actif (`scheduleActionMj`) ; Réclamer / routes hôte ; endpoint `POST /api/rooms/:id/mj` conservé (API interne / v2)
 6. **Carte** — génération procédurale (simplex noise, biomes, effets toxic/fog/evil/buff, POI, territoires, SVG)
 7. **Modèles** — tables SQLite : messages, quêtes, journal, propositions archivées (+ endpoints REST)
-8. **Prompt MJ** — `packages/shared/src/mj/system-prompt.ts` + contexte monde + éléments établis (`established-canon.ts`)
+8. **Prompt MJ** — `system-prompt.ts` + **maîtrise d'écrivain** (`mj-craft.ts` : monde vivant pas un rail ; **règle des deux** + un sens + un mouvement ; [DIRE] dit dans le monde ; PNJ incarnés) + contexte monde + canon (`canon-continuity.ts`)
 9. **Docker** — `Dockerfile`, `docker-compose.yml`
 10. **Graines / campagnes** — quitter sans supprimer le salon ; export Markdown fractionné ; liste « Mes graines » sur l'accueil ; reprise avec autre LLM via fichiers .md
 
@@ -559,7 +559,7 @@ Pas de bouton « ajouter un compagnon » : le PJ **demande au PNJ** (Dire `@PNJ`
 - **Noms de royaumes** : générés de façon déterministe par `world_seed` / `map_seed` dans `packages/shared/src/map/world-names.ts` → stockés dans `rooms.map_json` (`countries`, `territories`, POI). Plus de liste figée Aldermar / Brumes / Khar-Vos pour les **nouveaux** salons.
 - **Déclenchement unique** quand l'**hôte** (admin humain) finalise sa fiche (`POST …/character/finalize`) ou passe `ready` + `story_locked` : `scheduleCampaignOpening` → `bootstrapCampaignOpening` (`apps/api/src/campaign-opening.ts`).
 - Deux appels LLM : plan JSON (`packages/shared/src/mj/campaign-opening-prompt.ts`) puis récit MJ long (Acte I, hook, enjeu) intégrant la fiche hôte — **pas** de second message d'intégration pour l'hôte. Le prompt d'ouverture injecte les pays / territoires / POI de la carte et interdit les noms legacy sauf s'ils sont déjà dans `map_json` (anciennes parties).
-- **Voix PJ** : 2e personne ; `isCampaignOpeningUnplayable` (trop court, trop romancé, trop de lieux, hôte=PNJ, Sir/Dame hors fiche, secret du père, **McGuffin parchemin d'inconnu**). Retry = réécriture courte, puis récit de secours. Style salon = **une** injection (`formatMjProseRules` dans le system MJ). Contraintes d'Acte I = `openingHardRules` (plan + récit) : hook **personnel** (vie du PJ), pas un messager crypté qui disparaît.
+- **Voix PJ** : 2e personne ; `isCampaignOpeningUnplayable` (trop court, trop romancé, trop de lieux, hôte=PNJ y compris « visages de X » / « X doit décider », Sir/Dame hors fiche, secret du père, **McGuffin** : parchemin d'inconnu **ou** étrangers qui ont perdu un sac). Retry = réécriture courte, puis récit de secours. Style salon = **une** injection (`formatMjProseRules` dans le system MJ). Contraintes d'Acte I = `openingHardRules` : hook **personnel**, **in medias res**, lieu qui **vit**. Maîtrise (`mj-craft.ts`) distillée (pas copiée) des dossiers MJ du [blog Le Rôliste](https://www.blog.leroliste.com/) : 12 conseils, descriptions, impro, scénario, implication.
 - **Style** : `llm_config.mjProse` (0–100, défaut 20) — curseur admin « Droit au but / Sobre / Romancé » injecté dans tous les tours MJ (`formatMjProseRules`).
 - **Brief de départ** : QCM `creationBrief` (qui / en ce moment / passé) avant la fiche ; préremplit rang/habitat/suite ; paysan local → **Maison au village** ; contraint l'ouverture à **un lieu** calé sur le choix.
 - Finalisation **hôte** : « X a scellé sa fiche. » (sans « présentez-vous ») ; les autres PJ gardent l'invite à se présenter.
@@ -953,7 +953,7 @@ La carte n'est chargée en state client **que** si god mode actif.
 
 **Problème** : l'Acte I tenait en une question + des choix « Rejoins Timmy… ». Le MJ niait le rang et les hommes (fiche non injectée : `servants` / background absents). Cliquer « chercher dans ta ceinture » lançait un jet de **Force contesté** (`ceintur` dans le parseur). Le MJ inventait fusil, éclat magique et « autres compagnons ».
 
-**Solution** : fiche MJ = rang + suite + histoire ; ouverture à la 2e personne (jamais « rejoins le PJ ») ; ouverture trop courte → retry puis récit de secours ; questions « où sont mes hommes » = orientation table ; choix sûrs (ceinture, rejoindre, demander, ignorer, verre, rentrer chez soi) **sans d20**.
+**Solution** : fiche MJ = rang + suite + histoire ; ouverture à la 2e personne (jamais « rejoins le PJ ») ; ouverture trop courte → retry puis récit de secours ; questions « où sont mes hommes » = orientation table ; choix sûrs (ceinture, rejoindre, demander, **accepter / refuser**, ignorer, verre, rentrer chez soi) **sans d20**. Un Dire avec « vous / votre » force la réaction au **contenu**, pas « à qui tu parles ».
 
 **Fichiers** : `character-sheet.ts`, `campaign-opening-prompt.ts`, `campaign-opening.ts`, `scene-choice.ts`, `scene-check.ts`, `player-table-ask.ts`, `system-prompt.ts`
 

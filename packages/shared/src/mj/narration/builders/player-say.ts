@@ -14,19 +14,26 @@ export function buildPlayerSayNarration(ctx: NarrationContext): string {
       : "";
   const unaddressed = buildUnaddressedSayHint(
     ctx.nearbyListeners ?? [],
-    ctx.crowdPresent === true
+    ctx.crowdPresent === true,
+    content
   );
+  const tableNowBlock = ctx.tableNowSummary?.trim()
+    ? `\n### Script de table (source de vérité)\n${ctx.tableNowSummary.trim()}`
+    : "";
 
   return (
     `[DIRE — sans destinataire nommé]\n` +
     `${name} prend la parole sans apostropher personne : « ${content} »\n\n` +
     `## Consignes MJ\n` +
-    `- Ce sont des **paroles entendues** dans la scène (pas une Action, pas un aparté système).\n` +
+    `- Ce sont des **paroles entendues** dans la scène (pas une Action, pas un aparté système). Elles **pèsent** : gêne, mensonge, rire, dette — pas un totem d'immunité.\n` +
+    `- **Résous le contenu littéral** de la réplique. Si le PJ désigne un objet (« le sac est sous ta main »), marchande, accuse ou refuse : les PNJ **réagissent à ça** — tu n'inventes pas qu'il n'a parlé à personne.\n` +
+    `- Interdit de proposer un **nouveau menu de quête** (retrouver un objet, partir en forêt) si le PJ vient de traiter la demande autrement.\n` +
     `- Parle à **${name}** à la **2e personne**. Ne parle pas à la place des autres PJ.\n` +
     `- Si c'est un échange **entre PJ** sans enjeu monde, reste bref ou silencieux.\n` +
     (unaddressed ||
       `- Personne d'évident à portée : au plus un détail d'ambiance, pas d'interlocuteur inventé nommé.\n`) +
-    `- 1–2 paragraphes sobres, français, dialogues en « … ». Ce que tu établis devient canon.` +
+    `- 1–2 paragraphes sobres, français, dialogues en « … ». Options \`- \` seulement si un dilemme **nouveau** reste ouvert après cette réplique. Ce que tu établis devient canon.` +
+    tableNowBlock +
     sceneBlock +
     companions
   );

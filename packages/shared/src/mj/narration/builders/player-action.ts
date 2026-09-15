@@ -21,13 +21,13 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
         `Les dés D&D 5e ont **déjà été lancés** par le système (test de caractéristique, avantage si aide, jet contesté si opposition).\n\n` +
         `**Instructions** :\n` +
         `1. Le résultat final est déjà donné (ex: "**→ réussite**" ou "**→ échec**"). **Pars de ce résultat** — ne lance pas d'autre dé.\n` +
-        `2. **Raconte immédiatement** ce qui se passe : réussite = l'action aboutit (selon le degré) ; échec = complication, refus, ou coût ; égalité = statu quo.\n` +
+        `2. **Raconte immédiatement** ce qui se passe : réussite = l'action aboutit (selon le degré) ; échec = complication, refus, ou coût **de cette tentative** ; égalité = statu quo.\n` +
         `3. Si d'autres PJ ont aidé/opposé/laissé faire : fais-les exister brièvement (un geste, un regard). "Laissé faire" ≠ opposition.\n` +
         (isRound
           ? `4. **Tour de table** : narre **un beat unique** avec toutes les actions déclarées simultanément. Les "Options non retenues" **n'ont pas eu lieu** — ne les mentionne pas.\n`
           : `4. Ne redemande pas de jet ; concentre-toi sur les conséquences narratives.\n`) +
         `5. Vouvoie/tutoie les PJ — ce sont des **héros**, pas des PNJ du décor.\n` +
-        `6. Narre **l'action cliquée** (fouiller sa ceinture, crocheter, frapper). Un échec n'est pas un tentacule ni un bras de fer abstrait avec « le monde ».\n`
+        `6. Narre **l'action entre guillemets** (chercher le sac, crocheter, frapper). Un échec de Perception = on ne trouve pas, on se trompe de piste — **interdit** de recycler un beat précédent hors sujet (« qui aider », « on n'a pas besoin de toi »).\n`
       : declaresRoll && ctx.pendingRollRequest?.trim()
       ? `\n### Jet de dés — résolution obligatoire\n` +
         `Le joueur annonce un **résultat chiffré**. Ta demande précédente :\n` +
@@ -63,6 +63,7 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
     `${name} **effectue une action** : « ${action} »${abilities}\n\n` +
     `## Consignes MJ\n` +
     `- **Interprète** l'action demandée et intègre-la au fil narratif en cours (conséquences, réactions du monde, vrais PNJ).\n` +
+    `- Si l'idée est **viable** et que tu ne l'avais pas prévue : **prends-la**. Déplace l'enjeu (un autre visage, une autre porte) plutôt que de dire non pour sauver un plan.\n` +
     `- Parle à **${name}** et aux autres PJ à la **2e personne** (tu / vous). Ce sont des héros de la table, **pas** des PNJ.\n` +
     `- Calibre la longueur et le ton : **1–2 paragraphes sobres** si l'action est simple ou la scène calme ; **2–4 paragraphes** seulement si l'action est dramatique, risquée ou change vraiment la situation — pas de lyrisme gratuit.\n` +
     `- **N'explique pas deux fois** la même situation : ne reformule pas le dernier récit MJ ; narre seulement la **conséquence** de cette action.\n` +

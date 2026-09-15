@@ -66,7 +66,9 @@ function openingHardRules(host: string, location?: string): string {
     "Pas de PNJ nommé hors fiche. Figurant anonyme OK — seulement s'il **connaît** le PJ ou partage son quotidien.",
     "Pas de secret familial, destin ou prophétie hors fiche.",
     "Hook **personnel** : ça touche sa vie (voisin, travail, faim, ronde, chope renversée, nouvelle du village). Le PJ doit avoir une raison de réagir.",
-    "Interdit : inconnu qui dépose un parchemin crypté et disparaît ; « trouvez le X » ; quête livrée par un messager sans lien avec la fiche.",
+    "Le lieu **vit** (qui est là, ce qu'ils veulent) — pas une seule issue balisée. Le PJ doit pouvoir surprendre sans que tu le ramènes au menu.",
+    "**In medias res** : déjà dans le lieu et l'incident. Pas de prologue taverne + inconnu. Pourquoi eux, ici, maintenant — la fiche.",
+    "Interdit : inconnu qui dépose un parchemin crypté et disparaît ; voyageurs/étrangers qui ont « perdu un sac » et demandent de l'aide ; « trouvez le X » ; quête livrée par un messager sans lien avec la fiche.",
   ]
     .map((line) => `- ${line}`)
     .join("\n");
@@ -105,8 +107,8 @@ Réponds UNIQUEMENT avec un objet JSON valide (${langNote}) :
   "worldSummary": "2 phrases max : le pays",
   "mainPlot": "Enjeu local (2 phrases)",
   "startingSituation": "Où est le PJ et ce qu'il fait (1 phrase)",
-  "openingScene": "Incident PERSONNEL dans CE lieu (voisin, travail, bagarre, faim) — pas un parchemin d'inconnu",
-  "scene": { "location": "UN lieu concret", "mood": "1 détail", "tension": -20 }
+  "openingScene": "Incident PERSONNEL dans CE lieu (voisin, travail, bagarre, faim) — pas un parchemin d'inconnu ni un sac perdu d'étrangers",
+  "scene": { "location": "UN lieu concret", "mood": "1 détail", "tension": 10 }
 }
 
 tension : entier −100 à +100.`,
@@ -255,6 +257,22 @@ export function openingTreatsHostAsNpc(content: string, hostName: string): boole
     ) {
       return true;
     }
+    if (
+      new RegExp(
+        `\\b(visages?|yeux|silhouettes?)\\b[^.!?]{0,60}\\bde ${n}\\b`,
+        "iu"
+      ).test(t)
+    ) {
+      return true;
+    }
+    if (
+      new RegExp(
+        `\\b${n}\\s+(doit|devra|peut)(?:\\s+[\\p{L}'’-]+){0,4}\\s+(décider|choisir|agir)\\b`,
+        "iu"
+      ).test(t)
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -311,7 +329,7 @@ export function openingInventedFamilySecret(
   return true;
 }
 
-/** Inconnu + papier crypté + disparition : McGuffin que le joueur ignore. */
+/** Quête d'inconnus (parchemin crypté, sac perdu…) que le joueur n'a aucune raison d'accepter. */
 export function openingLooksLikeQuestMcGuffin(content: string): boolean {
   const t = stripOpeningComments(content);
   const parchment = /\b(parchemin|manuscrit|missive|papier griffonn)\b/i.test(t);
@@ -323,6 +341,18 @@ export function openingLooksLikeQuestMcGuffin(content: string): boolean {
     );
   if (parchment && (cryptic || vanish)) return true;
   if (parchment && vanish && /\b(inconnu|étranger|un homme|un vieux|vieillard)\b/i.test(t)) {
+    return true;
+  }
+  const strangers = /\b(voyageurs?|étrangers?|inconnus?|passants?|un homme|une femme)\b/i.test(
+    t
+  );
+  const lostKit =
+    /\b(sac|besace|provisions?|paquet|bourse)\b/i.test(t) &&
+    /\b(perdu|perdue|égaré|égarée|retrouver|à la recherche)\b/i.test(t);
+  const askHelp =
+    /\b(votre aide|aidez[- ]nous|compter sur|besoin de (toi|vous)|on a besoin)\b/i.test(t);
+  if (strangers && lostKit && askHelp) return true;
+  if (/\b(nous avons perdu|ont perdu notre|perdu notre sac)\b/i.test(t) && askHelp) {
     return true;
   }
   return false;

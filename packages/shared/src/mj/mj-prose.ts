@@ -31,7 +31,7 @@ export function mjProseLabel(value?: number | null): string {
 export function mjProseHint(value?: number | null): string {
   switch (mjProseBand(value)) {
     case "blunt":
-      return "Phrases courtes, un seul lieu, faits concrets — pas de métaphores.";
+      return "Phrases courtes, un seul lieu, deux traits qui comptent — pas un tapis de métaphores.";
     case "sober":
       return "Récit de table oral : un ou deux détails sensoriels, sans lyrisme.";
     case "lush":
@@ -47,9 +47,9 @@ export function formatMjProseRules(value?: number | null): string {
 
   if (band === "blunt") {
     return `${head}
-- **Droit au but.** 1–3 paragraphes courts. Sujet–verbe–complément. Un fait par phrase.
+- **Droit au but.** 1–3 paragraphes courts. Sujet–verbe–complément. **Règle des deux** : deux traits par chose, un bruit ou une odeur, un mouvement — puis stop.
 - **Un seul lieu** par message. Nomme-le clairement (l'auberge, la caserne, la place du marché) — pas une enfilade ruelle + chapelle + brume.
-- **Interdit** : métaphores (« comme si les murs parlaient », « un cœur qui bat » s'il n'y a pas de cœur), accumulations de murmures / ombres dansantes / parfums / brumes qui vibrent.
+- **Interdit** : tapis de métaphores (« comme si les murs parlaient »), accumulations de murmures / ombres dansantes / parfums / brumes qui vibrent. **Interdit** d'écrire l'émotion du PJ (« tu as peur »).
 - **Interdit** : PNJ **nommé** absent de la fiche (pas de « Sir Aldric » surgissant). Figurant anonyme OK (« un forgeron », « la tenancière»).
 - **Interdit** : secrets familiaux, destin, vérité sur le père/la mère, prophétie — sauf si c'est **écrit sur la fiche**.
 - L'ouverture : tu es déjà là, tu fais ce que dit ta fiche. Un incident **concret et petit** (bruit, message, altercation). Pas un roman.`;
@@ -57,15 +57,15 @@ export function formatMjProseRules(value?: number | null): string {
 
   if (band === "lush") {
     return `${head}
-- Style plus ample autorisé (3–5 paragraphes), détails sensoriels bienvenus.
+- Style plus ample autorisé (3–5 paragraphes). Toujours **deux traits** par chose, plus de chair sensorielle, **une** comparaison si elle paie.
 - Reste ancré : **un lieu à la fois**, pas de PNJ nommé hors fiche, pas de secret familial inventé.
-- Évite de répéter le même motif (murmure, brume, ombre) à chaque phrase.`;
+- Évite de répéter le même motif (murmure, brume, ombre) à chaque phrase. N'impose pas l'émotion du PJ.`;
   }
 
   return `${head}
-- Ton de table **sobre** : 2–4 paragraphes courts, un ou deux détails qui comptent.
+- Ton de table **sobre** : 2–4 paragraphes courts. **Règle des deux** + un sens hors la vue + un mouvement.
 - Un seul lieu. Pas de catalogue poétique. Pas de PNJ nommé hors fiche. Pas de secret inventé (père, destin) absent de la fiche.
-- Incident déclencheur concret, pas une allégorie.`;
+- Incident déclencheur concret, pas une allégorie. Le PJ sent ; tu ne lui dictes pas « tu es angoissé ».`;
 }
 
 const ORNATE_RE =

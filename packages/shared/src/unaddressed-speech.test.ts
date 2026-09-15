@@ -4,6 +4,7 @@ import {
   sceneLooksCrowded,
   shouldNarrateUnaddressedSay,
   buildUnaddressedSayHint,
+  sayLooksDirectedAtHearers,
 } from "./mj/unaddressed-speech.js";
 import { buildPlayerSayNarration } from "./mj/narration/builders/player-say.js";
 import { buildPlayerTableAskNarration } from "./mj/narration/builders/player-table-ask.js";
@@ -51,6 +52,21 @@ test("prompt Dire sans @ avec un compagnon", () => {
   assert.match(prompt, /sans destinataire/);
   assert.match(prompt, /Borin/);
   assert.match(prompt, /répondre/);
+  assert.match(prompt, /contenu littéral/);
+});
+
+test("vous / votre : les présents réagissent au contenu, pas à l'adresse", () => {
+  assert.equal(
+    sayLooksDirectedAtHearers("Il est sous votre main votre sac"),
+    true
+  );
+  const hint = buildUnaddressedSayHint(
+    ["voyageur", "compagnon"],
+    false,
+    "Il est sous votre main votre sac"
+  );
+  assert.match(hint, /contenu exact/);
+  assert.match(hint, /Interdit de demander/);
 });
 
 test("Donc on est où là = question table, pas parole de taverne", () => {

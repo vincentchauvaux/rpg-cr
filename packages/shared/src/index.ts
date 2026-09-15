@@ -28,6 +28,7 @@ export * from "./llm/lmstudio-preflight.js";
 export * from "./llm/llm-health.js";
 export * from "./llm/providers.js";
 export * from "./mj/canon-continuity.js";
+export * from "./mj/mj-craft.js";
 export * from "./mj/system-prompt.js";
 export * from "./mj/canon-continuity.js";
 export * from "./mj/sanitize-response.js";
