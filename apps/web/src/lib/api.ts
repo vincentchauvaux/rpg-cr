@@ -208,6 +208,26 @@ export function linkPlayerToUserApi(
   });
 }
 
+export function hideUserGrainApi(
+  playerId: string,
+  userId: string
+): Promise<{ ok: boolean }> {
+  return fetchJson(`/api/players/${playerId}/hide-grain`, {
+    method: "POST",
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export function unhideUserGrainApi(
+  playerId: string,
+  userId: string
+): Promise<{ ok: boolean }> {
+  return fetchJson(`/api/players/${playerId}/unhide-grain`, {
+    method: "POST",
+    body: JSON.stringify({ userId }),
+  });
+}
+
 export function setGodMode(
   playerId: string,
   isGodMode: boolean

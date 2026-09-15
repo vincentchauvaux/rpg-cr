@@ -48,7 +48,7 @@ function resumeGrainSession(g: GrainRecord, appUserId?: string): void {
     playerName: g.playerName,
     role: g.role,
   });
-  rememberGrain(g);
+  rememberGrain(g, appUserId);
 }
 
 export function SalonRoomClient({ code }: { code: string }) {

@@ -1,4 +1,7 @@
+import { unhideUserGrainApi } from "./api";
+
 const GRAINS_KEY = "rpg-cr-grains";
+const FORGOTTEN_KEY = "rpg-cr-grains-forgotten";
 
 export interface GrainRecord {
   roomId: string;
@@ -8,6 +11,41 @@ export interface GrainRecord {
   playerName: string;
   role: "admin" | "player";
   lastVisitedAt: string;
+}
+
+function forgottenKey(roomCode: string, playerId: string): string {
+  return `${roomCode.toUpperCase()}:${playerId}`;
+}
+
+function readForgottenKeys(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(FORGOTTEN_KEY);
+    const list = raw ? (JSON.parse(raw) as string[]) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+export function isGrainForgotten(roomCode: string, playerId: string): boolean {
+  return readForgottenKeys().includes(forgottenKey(roomCode, playerId));
+}
+
+export function markGrainForgotten(roomCode: string, playerId: string): void {
+  if (typeof window === "undefined") return;
+  const key = forgottenKey(roomCode, playerId);
+  const next = [...new Set([...readForgottenKeys(), key])];
+  localStorage.setItem(FORGOTTEN_KEY, JSON.stringify(next.slice(0, 80)));
+}
+
+export function clearGrainForgotten(roomCode: string, playerId: string): void {
+  if (typeof window === "undefined") return;
+  const key = forgottenKey(roomCode, playerId);
+  localStorage.setItem(
+    FORGOTTEN_KEY,
+    JSON.stringify(readForgottenKeys().filter((k) => k !== key))
+  );
 }
 
 export function listGrains(): GrainRecord[] {
@@ -24,7 +62,14 @@ export function listGrains(): GrainRecord[] {
   }
 }
 
-export function rememberGrain(record: Omit<GrainRecord, "lastVisitedAt"> & { lastVisitedAt?: string }): void {
+export function rememberGrain(
+  record: Omit<GrainRecord, "lastVisitedAt"> & { lastVisitedAt?: string },
+  appUserId?: string
+): void {
+  clearGrainForgotten(record.roomCode, record.playerId);
+  if (appUserId) {
+    void unhideUserGrainApi(record.playerId, appUserId).catch(() => undefined);
+  }
   const grains = listGrains();
   const now = record.lastVisitedAt ?? new Date().toISOString();
   const next: GrainRecord = { ...record, lastVisitedAt: now };
@@ -47,7 +92,11 @@ export function removeGrain(roomCode: string, playerId?: string): void {
 /** Graine la plus récente pour un code salon (reprise sans doublon joueur). */
 export function findMostRecentGrainForRoom(roomCode: string): GrainRecord | null {
   const code = roomCode.toUpperCase();
-  const match = listGrains().find((g) => g.roomCode.toUpperCase() === code);
+  const match = listGrains().find(
+    (g) =>
+      g.roomCode.toUpperCase() === code &&
+      !isGrainForgotten(g.roomCode, g.playerId)
+  );
   return match ?? null;
 }
 

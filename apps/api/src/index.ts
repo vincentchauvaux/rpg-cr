@@ -16,9 +16,11 @@ import {
 } from "./security.js";
 import {
   getUserById,
+  hideUserGrain,
   linkPlayerToUser,
   listUserGrains,
   mergeDuplicateUsersByEmail,
+  unhideUserGrain,
   upsertUserFromGoogle,
 } from "./users.js";
 import {
@@ -247,6 +249,32 @@ app.post<{
   linkPlayerToUser(player.id, user.id);
   const updated = getPlayerById(player.id);
   return { player: updated };
+});
+
+app.post<{
+  Params: { playerId: string };
+  Body: { userId: string };
+}>("/api/players/:playerId/hide-grain", {
+  config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+}, async (req, reply) => {
+  const user = getUserById(req.body?.userId ?? "");
+  if (!user) return reply.status(404).send({ error: "Utilisateur introuvable" });
+  if (!hideUserGrain(user.id, req.params.playerId)) {
+    return reply.status(404).send({ error: "Graine introuvable pour ce compte" });
+  }
+  return { ok: true };
+});
+
+app.post<{
+  Params: { playerId: string };
+  Body: { userId: string };
+}>("/api/players/:playerId/unhide-grain", {
+  config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+}, async (req, reply) => {
+  const user = getUserById(req.body?.userId ?? "");
+  if (!user) return reply.status(404).send({ error: "Utilisateur introuvable" });
+  unhideUserGrain(user.id, req.params.playerId);
+  return { ok: true };
 });
 
 app.get("/health", async () => ({ ok: true }));

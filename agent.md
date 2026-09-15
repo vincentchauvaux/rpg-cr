@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-15 (**ouverture AUZB43** : client à l'auberge, pas cuisine/dette/réplique PJ)
+> Dernière mise à jour : 2026-09-15 (**Oublier** une graine liée au compte Google)
 
 ## Vision
 
@@ -668,6 +668,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Rattrapage** : un salon créé **hors connexion** garde `players.user_id = NULL` — il se rattache dès qu'on ouvre ce salon **connecté** (effet de `SalonRoomClient`) ou qu'on passe par l'accueil connecté (auto-link des graines locales).
 - **Réseau prod** : le conteneur web joint l'API par `host.docker.internal:4010` (`extra_hosts: host-gateway`) car l'API est en `network_mode: host` ; ufw doit autoriser `172.16.0.0/12` vers 4010, sinon la synchro des comptes échoue silencieusement (`[auth] sync API failed`).
 - **Sync automatique graines** : dès la connexion Google, toutes les graines localStorage sont automatiquement liées au compte (`linkPlayerToUserApi`) — les campagnes deviennent accessibles sur tous les appareils. Un `useRef` évite le re-linking à chaque render. Le refresh des graines est déclenché après le linking pour afficher l'état à jour.
+- **Oublier** : connecté, « Oublier » ne faisait que retirer le localStorage — `GET /grains` les **remettait**. `user_hidden_grains` + `POST …/hide-grain` les retire de Mes graines (tous appareils) ; la table reste (code). Reprendre / ouvrir le salon les réaffiche (`unhide-grain`). Liste oubliée locale en filet.
 - **Tunnel auto hôte** : `ensureHostTunnel()` — à la création salon, reprise graine (admin), entrée salon hôte et wizard MJ (mode VPS). Appelle l'assistant local `POST http://127.0.0.1:17434/start`, puis poll `GET /api/llm/tunnel-status` jusqu'à `reachable:true`. CLI : `npm run tunnel:ensure`.
 - **Auth.js** : `basePath` = `/rpg-cr/api/auth` en prod ; handler route réinjecte `/rpg-cr` (Next.js le retire). `AUTH_URL` = origine HTTPS **sans** `/rpg-cr`. Nginx conserve le préfixe vers le conteneur web.
 - **Nginx** : `location /rpg-cr/api/auth/` → conteneur **web** (3010) ; repli `location /api/auth/` pour le callback OAuth sans préfixe — voir `deploy/nginx-rpg-cr.conf.example`.

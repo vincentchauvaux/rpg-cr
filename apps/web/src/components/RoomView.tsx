@@ -60,6 +60,7 @@ import {
 } from "@/hooks/use-room-websocket";
 import { loadSession, clearSession, type Session } from "@/lib/session";
 import { rememberGrain, touchGrain } from "@/lib/grains";
+import { useAppUserId } from "@/components/GoogleAuthPanel";
 import {
   loadAdminPanel,
   saveAdminPanel,
@@ -244,6 +245,7 @@ function applyMjStatusSnapshot(
 
 export function RoomView({ code }: Props) {
   const router = useRouter();
+  const appUserId = useAppUserId();
   const [session, setSession] = useState<Session | null>(null);
   useAutoHostTunnel(isVpsLmStudioHostMode() && session?.role === "admin");
   const [room, setRoom] = useState<Room | null>(null);
@@ -495,10 +497,10 @@ export function RoomView({ code }: Props) {
       playerId: s.playerId,
       playerName: s.playerName,
       role: s.role,
-    });
+    }, appUserId);
     touchGrain(s.roomCode, s.playerId);
 
-  }, [code, refresh]);
+  }, [code, refresh, appUserId]);
 
   /** Alignement DB fire-and-forget — ne touche jamais l'UI du switch */
   useEffect(() => {
@@ -1116,9 +1118,9 @@ export function RoomView({ code }: Props) {
         playerId: session.playerId,
         playerName: session.playerName,
         role: session.role,
-      });
+      }, appUserId);
     }
-  }, [room?.name, session]);
+  }, [room?.name, session, appUserId]);
 
   useEffect(() => {
     return () => {
@@ -1166,7 +1168,7 @@ export function RoomView({ code }: Props) {
         playerId: session.playerId,
         playerName: session.playerName,
         role: session.role,
-      });
+      }, appUserId);
     } catch (e) {
       setError(
         e instanceof Error

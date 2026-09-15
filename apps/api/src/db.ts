@@ -203,6 +203,13 @@ export function initDb(): void {
       old_user_id TEXT PRIMARY KEY,
       canonical_user_id TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS user_hidden_grains (
+      user_id TEXT NOT NULL,
+      player_id TEXT NOT NULL,
+      hidden_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, player_id)
+    );
   `);
 
   ensureColumn("players", "user_id", "TEXT REFERENCES users(id)");

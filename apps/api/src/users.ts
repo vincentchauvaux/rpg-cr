@@ -145,6 +145,11 @@ export function mergeUsersInto(canonicalId: string, duplicateId: string): void {
   db.prepare(
     `UPDATE user_id_aliases SET canonical_user_id = ? WHERE canonical_user_id = ?`
   ).run(canonicalId, duplicateId);
+  db.prepare(
+    `INSERT OR IGNORE INTO user_hidden_grains (user_id, player_id, hidden_at)
+     SELECT ?, player_id, hidden_at FROM user_hidden_grains WHERE user_id = ?`
+  ).run(canonicalId, duplicateId);
+  db.prepare(`DELETE FROM user_hidden_grains WHERE user_id = ?`).run(duplicateId);
   db.prepare(`DELETE FROM users WHERE id = ?`).run(duplicateId);
 }
 
@@ -175,6 +180,29 @@ export function mergeDuplicateUsersByEmail(): number {
   return merged;
 }
 
+export function hideUserGrain(userId: string, playerId: string): boolean {
+  const canonicalId = resolveUserId(userId);
+  const row = db
+    .prepare(
+      `SELECT user_id FROM players WHERE id = ? AND player_kind = 'human'`
+    )
+    .get(playerId) as { user_id: string | null } | undefined;
+  if (!row?.user_id) return false;
+  if (resolveUserId(row.user_id) !== canonicalId) return false;
+  db.prepare(
+    `INSERT OR REPLACE INTO user_hidden_grains (user_id, player_id, hidden_at)
+     VALUES (?, ?, ?)`
+  ).run(canonicalId, playerId, new Date().toISOString());
+  return true;
+}
+
+export function unhideUserGrain(userId: string, playerId: string): void {
+  const canonicalId = resolveUserId(userId);
+  db.prepare(
+    `DELETE FROM user_hidden_grains WHERE user_id = ? AND player_id = ?`
+  ).run(canonicalId, playerId);
+}
+
 export function linkPlayerToUser(playerId: string, userId: string): void {
   const canonicalId = resolveUserId(userId);
   if (!getUserRowById(canonicalId)) return;
@@ -193,9 +221,12 @@ export function listUserGrains(userId: string): UserGrain[] {
        FROM players p
        INNER JOIN rooms r ON r.id = p.room_id
        WHERE p.user_id = ? AND p.player_kind = 'human'
+         AND p.id NOT IN (
+           SELECT player_id FROM user_hidden_grains WHERE user_id = ?
+         )
        ORDER BY p.joined_at DESC`
     )
-    .all(canonicalId) as {
+    .all(canonicalId, canonicalId) as {
     player_id: string;
     player_name: string;
     role: "admin" | "player";

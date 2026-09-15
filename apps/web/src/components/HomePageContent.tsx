@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createRoom, getRoom, joinRoom, listCampaigns, listUserGrainsFromApi, linkPlayerToUserApi } from "@/lib/api";
+import { createRoom, getRoom, joinRoom, listCampaigns, listUserGrainsFromApi, linkPlayerToUserApi, hideUserGrainApi } from "@/lib/api";
 import {
   GoogleAuthPanel,
   GRAINS_LINKED_EVENT,
@@ -26,6 +26,8 @@ import {
   listGrains,
   rememberGrain,
   removeGrain,
+  markGrainForgotten,
+  isGrainForgotten,
   type GrainRecord,
 } from "@/lib/grains";
 import { loadSession } from "@/lib/session";
@@ -108,6 +110,7 @@ export function HomePageContent() {
         /* grains locales seulement */
       }
     }
+    merged = merged.filter((g) => !isGrainForgotten(g.roomCode, g.playerId));
     setGrains(merged);
     if (!merged.length) {
       setGrainMeta({});
@@ -143,6 +146,7 @@ export function HomePageContent() {
     // Link all local grains to the user account in the background
     void (async () => {
       for (const grain of local) {
+        if (isGrainForgotten(grain.roomCode, grain.playerId)) continue;
         try {
           await linkPlayerToUserApi(grain.playerId, appUserId);
         } catch {
@@ -196,7 +200,7 @@ export function HomePageContent() {
       rememberGrain({
         ...session,
         roomName: room.name,
-      });
+      }, appUserId);
       router.push(`/salon/${room.code}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
@@ -232,7 +236,7 @@ export function HomePageContent() {
           playerId: prior.playerId,
           playerName: prior.playerName,
           role: prior.role,
-        });
+        }, appUserId);
         router.push(`/salon/${code}`);
         return;
       }
@@ -250,7 +254,7 @@ export function HomePageContent() {
       rememberGrain({
         ...session,
         roomName: room.name,
-      });
+      }, appUserId);
       router.push(`/salon/${room.code}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
@@ -279,21 +283,39 @@ export function HomePageContent() {
       playerName: g.playerName,
       role: g.role,
     });
-    rememberGrain(g);
+    rememberGrain(g, appUserId);
     router.push(`/salon/${g.roomCode}`);
   }
 
-  function forgetGrain(g: GrainRecord) {
+  async function forgetGrain(g: GrainRecord) {
     if (
       !window.confirm(
-        `Oublier « ${g.roomName} » de cette tablette locale ? (La campagne reste sur le serveur.)`
+        `Retirer « ${g.roomName} » de Mes graines ? La table reste sur le serveur (code ${g.roomCode}).`
       )
     ) {
       return;
     }
+    markGrainForgotten(g.roomCode, g.playerId);
     removeGrain(g.roomCode, g.playerId);
+    setGrains((prev) =>
+      prev.filter(
+        (x) =>
+          !(
+            x.roomCode.toUpperCase() === g.roomCode.toUpperCase() &&
+            x.playerId === g.playerId
+          )
+      )
+    );
     clearSession();
-    refreshGrains();
+    if (appUserId) {
+      try {
+        await hideUserGrainApi(g.playerId, appUserId);
+      } catch {
+        /* liste locale déjà à jour */
+      }
+    }
+    window.dispatchEvent(new Event(GRAINS_LINKED_EVENT));
+    await refreshGrains();
   }
 
   return (
@@ -419,7 +441,7 @@ export function HomePageContent() {
           <div className="grains-panel">
             <p className="muted" style={{ marginBottom: "1rem" }}>
               {appUserId
-                ? "Vos campagnes liées à votre compte Google — elles suivent sur tous vos appareils. Reprendre restaure votre identité ; les chroniques .md vivent sur le serveur."
+                ? "Vos campagnes liées à votre compte Google. Oublier les retire de cette liste (tous appareils) ; le code du salon reste valable."
                 : "Vos campagnes visitées sur cet appareil. Connectez-vous pour les retrouver sur votre téléphone ; les chroniques .md vivent sur le serveur."}
             </p>
             {!grains.length ? (
@@ -455,7 +477,7 @@ export function HomePageContent() {
                         </button>
                         <button
                           type="button"
-                          title="Retirer de cette tablette"
+                          title="Retirer de Mes graines"
                           onClick={() => forgetGrain(g)}
                         >
                           Oublier

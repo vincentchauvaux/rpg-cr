@@ -130,8 +130,8 @@ export default function ConfidentialitePage() {
         <p>
           Pour supprimer un compte lié : demandez-le à l&apos;adresse ci-dessus
           (procédure manuelle MVP). Vous pouvez quitter un salon via
-          « Sauvegarder et quitter » ; l&apos;oubli d&apos;une graine sur
-          l&apos;appareil n&apos;efface pas les données serveur.
+          « Sauvegarder et quitter » ; retirer une graine de « Mes graines »
+          n&apos;efface pas les données serveur (le code du salon reste valable).
         </p>
       </section>
 
