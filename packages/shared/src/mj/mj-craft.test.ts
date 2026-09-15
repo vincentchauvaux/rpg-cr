@@ -13,6 +13,8 @@ test("la maîtrise parle en écrivain, pas en règlement", () => {
   assert.match(MJ_CRAFT_RULES, /Oui, et/);
   assert.match(MJ_CRAFT_RULES, /In medias res/);
   assert.match(MJ_CRAFT_RULES, /monde tourne/i);
+  assert.match(MJ_CRAFT_RULES, /tu ne parles pas pour lui/);
+  assert.match(MJ_CRAFT_RULES, /sans ennemi/);
   assert.doesNotMatch(MJ_CRAFT_RULES, /Spotify|YouTube|Pinterest|X card|Ghibli|Witcher/i);
 });
 
@@ -22,4 +24,5 @@ test("le prompt MJ injecte la maîtrise", () => {
   assert.match(MJ_SYSTEM_PROMPT_COMPACT, /Monde vivant, pas un rail/);
   assert.match(MJ_CRAFT_RULES_COMPACT, /deux.*traits/i);
   assert.match(MJ_CRAFT_RULES_COMPACT, /oui, et/i);
+  assert.match(MJ_CRAFT_RULES_COMPACT, /parler pour le PJ/);
 });

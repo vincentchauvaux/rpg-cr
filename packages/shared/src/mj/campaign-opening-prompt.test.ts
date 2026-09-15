@@ -5,6 +5,7 @@ import {
   isCampaignOpeningTooThin,
   isCampaignOpeningUnplayable,
   namesReferToSamePerson,
+  openingDumpsEncyclopedia,
   openingInventedFamilySecret,
   openingInventedNamedNpc,
   openingLooksLikeQuestMcGuffin,
@@ -50,6 +51,8 @@ test("secours d'ouverture : le PJ n'est pas un PNJ à rejoindre", () => {
   assert.match(text, /Tu es Timmy, Sergent/);
   assert.match(text, /huit gardes/);
   assert.doesNotMatch(text, /Rejoins Timmy/i);
+  assert.doesNotMatch(text, /Enjeu\s*:/);
+  assert.equal(isCampaignOpeningUnplayable(text, "Timmy"), false);
 });
 
 const THORIN_NPC_OPENING = `
@@ -165,5 +168,64 @@ test("ouverture injouable : Sir Aldric et secret du père hors fiche", () => {
       mjProse: 20,
     }),
     true
+  );
+});
+
+const JROUNCH_CRISIS = `
+Tu es Jrounch le jrunch, Villageois. Tes hommes sont avec toi : Aucun. Je vis ici depuis toujours, paysan, à l'auberge ou à la taverne.
+
+Jrounch le jrunch se trouve dans l'auberge du village, en train de servir un verre de bière aux villageois.
+
+Un voisin, le vieux Maître Lien, arrive en larmes, expliquant que des brigands ont volé la dernière cargaison de blé et menacent de détruire le champ.
+
+Autour de toi : Auberge du village. Tension palpable.
+
+La République de Zargard-gar, un pays de plaines fertiles et de villages paisibles.
+
+Enjeu : Un conflit naissant entre les agriculteurs du village et un groupe de brigands qui s'approprie les récoltes.
+`;
+
+test("ouverture injouable : encyclopédie, Maître nommé, guerre agricole", () => {
+  assert.equal(openingInventedNamedNpc(JROUNCH_CRISIS, "Jrounch le jrunch"), true);
+  assert.equal(openingTreatsHostAsNpc(JROUNCH_CRISIS, "Jrounch le jrunch"), true);
+  assert.equal(openingLooksLikeQuestMcGuffin(JROUNCH_CRISIS), true);
+  assert.equal(openingDumpsEncyclopedia(JROUNCH_CRISIS), true);
+  assert.equal(isCampaignOpeningUnplayable(JROUNCH_CRISIS, "Jrounch le jrunch"), true);
+});
+
+test("secours d'ouverture : paysan seul, pas de guerre collée", () => {
+  const plan: CampaignOpeningPlan = {
+    worldSummary: "La République de Zargard-gar, un pays de plaines fertiles.",
+    mainPlot: "Un conflit naissant entre agriculteurs et brigands.",
+    startingSituation:
+      "Jrounch le jrunch se trouve dans l'auberge du village, en train de servir un verre.",
+    openingScene:
+      "Un voisin, le vieux Maître Lien, arrive en larmes : des brigands ont volé le blé.",
+    scene: { location: "Auberge du village", mood: "Tension palpable", tension: 10 },
+  };
+  const text = renderFallbackOpeningNarrative(plan, {
+    roomName: "Test",
+    worldSeed: "abc",
+    map: null,
+    hostName: "Jrounch le jrunch",
+    hostSheet: {
+      rank: "Villageois",
+      servants: "Aucun — tu es seul.",
+      background: "Je vis ici depuis toujours, paysan, à l'auberge ou à la taverne.",
+    },
+  });
+  assert.match(text, /Tu es Jrounch le jrunch, Villageois/);
+  assert.match(text, /Auberge du village/);
+  assert.doesNotMatch(text, /Tes hommes/);
+  assert.doesNotMatch(text, /Je vis ici/);
+  assert.doesNotMatch(text, /Maître Lien/);
+  assert.doesNotMatch(text, /Enjeu\s*:/);
+  assert.doesNotMatch(text, /République/);
+  assert.equal(
+    isCampaignOpeningUnplayable(text, "Jrounch le jrunch", {
+      sheet: { rank: "Villageois" },
+      mjProse: 20,
+    }),
+    false
   );
 });

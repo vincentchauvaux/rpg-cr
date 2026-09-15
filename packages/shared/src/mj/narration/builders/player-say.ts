@@ -1,5 +1,6 @@
 import type { NarrationContext } from "../types.js";
 import { buildUnaddressedSayHint } from "../../unaddressed-speech.js";
+import { mjPlayerIntentHints } from "../../player-banter.js";
 
 /** Réaction MJ à un Dire sans @PNJ — le monde autour peut entendre. */
 export function buildPlayerSayNarration(ctx: NarrationContext): string {
@@ -27,6 +28,8 @@ export function buildPlayerSayNarration(ctx: NarrationContext): string {
     `## Consignes MJ\n` +
     `- Ce sont des **paroles entendues** dans la scène (pas une Action, pas un aparté système). Elles **pèsent** : gêne, mensonge, rire, dette — pas un totem d'immunité.\n` +
     `- **Résous le contenu littéral** de la réplique. Si le PJ désigne un objet (« le sac est sous ta main »), marchande, accuse ou refuse : les PNJ **réagissent à ça** — tu n'inventes pas qu'il n'a parlé à personne.\n` +
+    `- **Interdit** d'écrire les paroles de ${name} entre « … » s'il ne les a pas dites mot pour mot.\n` +
+    mjPlayerIntentHints(content) +
     `- Interdit de proposer un **nouveau menu de quête** (retrouver un objet, partir en forêt) si le PJ vient de traiter la demande autrement.\n` +
     `- Parle à **${name}** à la **2e personne**. Ne parle pas à la place des autres PJ.\n` +
     `- Si c'est un échange **entre PJ** sans enjeu monde, reste bref ou silencieux.\n` +

@@ -38,6 +38,40 @@ export function messageAsksTableOrientation(content: string): boolean {
   return false;
 }
 
+/** Le joueur recadre l'ampleur (« je n'ai parlé que de culture ») — pas une prise de pouvoir. */
+export function messageLooksLikeScaleCorrection(content: string): boolean {
+  const t = content.trim();
+  if (!t) return false;
+  if (/\bje n['’]ai (parlé|parler|fait) que\b/iu.test(t)) return true;
+  if (/\bje donne juste\b/iu.test(t)) return true;
+  if (/\bc['’]est juste des? (infos?|conseils?)\b/iu.test(t)) return true;
+  if (/^wow\b/iu.test(t) && /\bje n['’]ai\b/iu.test(t)) return true;
+  return false;
+}
+
+/** Offre un verre / retour au métier de servir. */
+export function messageOffersARound(content: string): boolean {
+  return /\b(quelqu['’]un veu[tx] (à )?boire|vous voulez (un verre|à boire)|qui veu[tx] (un verre|à boire)|je sers)\b/iu.test(
+    content
+  );
+}
+
+/** Consignes MJ quand le PJ recadre ou sert à boire. */
+export function mjPlayerIntentHints(speech: string): string {
+  const bits: string[] = [];
+  if (messageLooksLikeScaleCorrection(speech)) {
+    bits.push(
+      `- Le PJ **recadre l'ampleur** : il n'a pas pris la tête du village. Tu **réduis**. Retour au quotidien. Interdit de le sacrer chef. Interdit le méta (« le seul PJ présent », « quelles actions »).`
+    );
+  }
+  if (messageOffersARound(speech)) {
+    bits.push(
+      `- Il propose à boire / sert : **oui, et** — un visage connu a soif. Tu ne sors pas un menu de quête.`
+    );
+  }
+  return bits.length ? `${bits.join("\n")}\n` : "";
+}
+
 export type PlayerBanterPlayer = Pick<
   Player,
   "id" | "kind" | "characterStatus" | "introducedInStory"

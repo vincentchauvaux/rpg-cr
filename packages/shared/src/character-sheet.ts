@@ -315,6 +315,15 @@ export function formatStatsLine(stats?: CharacterStats): string {
     .join(" · ");
 }
 
+/** Suite réelle — « Aucun », « tu es seul » ne se narre pas. */
+export function sheetFollowersForMj(servants?: string): string {
+  const t = servants?.trim() ?? "";
+  if (!t) return "";
+  if (/^(aucun|aucune|nul|n\/?a|—|-|\/)\b/i.test(t)) return "";
+  if (/\b(tu es seul|pas de suite|sans hommes)\b/i.test(t)) return "";
+  return t;
+}
+
 export function formatCharacterSheetForMj(name: string, sheet: CharacterSheet): string {
   const s = normalizeCharacterSheet(sheet);
   const lines: string[] = [`### Fiche — ${name}`];
@@ -331,12 +340,15 @@ export function formatCharacterSheetForMj(name: string, sheet: CharacterSheet): 
   }
   if (s.rank) lines.push(`- Rang : ${s.rank} (canon — pas un titre inventé)`);
   if (s.background?.trim()) {
-    lines.push(`- Histoire : ${s.background.trim().slice(0, 420)}`);
+    lines.push(
+      `- Histoire (à tisser en 2e personne — ne pas coller tel quel, surtout pas « je … ») : ${s.background.trim().slice(0, 420)}`
+    );
   }
   if (s.ambition?.trim()) lines.push(`- Ambition / but : ${s.ambition.trim().slice(0, 240)}`);
-  if (s.servants?.trim()) {
+  const followers = sheetFollowersForMj(s.servants);
+  if (followers) {
     lines.push(
-      `- Hommes / suite (présents avec ${name} sauf si le récit les a éloignés) : ${s.servants.trim()}`
+      `- Hommes / suite (présents avec ${name} sauf si le récit les a éloignés) : ${followers}`
     );
   }
   if (s.habitat?.trim()) lines.push(`- Habitat : ${s.habitat.trim().slice(0, 160)}`);

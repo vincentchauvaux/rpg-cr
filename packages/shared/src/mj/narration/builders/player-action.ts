@@ -5,6 +5,7 @@ import {
   COMPANION_ONGOING_MJ_HINT,
   messageLooksLikeCompanionInvite,
 } from "../../../companion-pact.js";
+import { mjPlayerIntentHints } from "../../player-banter.js";
 
 export function buildPlayerActionNarration(ctx: NarrationContext): string {
   const name = ctx.playerName ?? "Le joueur";
@@ -65,6 +66,10 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
     `- **Interprète** l'action demandée et intègre-la au fil narratif en cours (conséquences, réactions du monde, vrais PNJ).\n` +
     `- Si l'idée est **viable** et que tu ne l'avais pas prévue : **prends-la**. Déplace l'enjeu (un autre visage, une autre porte) plutôt que de dire non pour sauver un plan.\n` +
     `- Parle à **${name}** et aux autres PJ à la **2e personne** (tu / vous). Ce sont des héros de la table, **pas** des PNJ.\n` +
+    `- **Interdit** d'écrire les paroles de ${name} entre « … » s'il ne les a pas dites mot pour mot. Les PNJ parlent ; lui, tu résumes le geste.\n` +
+    mjPlayerIntentHints(action) +
+    `- S'il se demande **pourquoi** un PNJ s'investit : **ce PNJ** répond — tu n'inverses pas la question.\n` +
+    `- Sort, graine, attaque **sans ennemi** dans la scène : l'effet se pose **ici**. Interdit d'inventer hurlements, orage ou bataille.\n` +
     `- Calibre la longueur et le ton : **1–2 paragraphes sobres** si l'action est simple ou la scène calme ; **2–4 paragraphes** seulement si l'action est dramatique, risquée ou change vraiment la situation — pas de lyrisme gratuit.\n` +
     `- **N'explique pas deux fois** la même situation : ne reformule pas le dernier récit MJ ; narre seulement la **conséquence** de cette action.\n` +
     `- Ne rédige **pas** un chapitre entier sauf si l'action le justifie clairement.\n` +

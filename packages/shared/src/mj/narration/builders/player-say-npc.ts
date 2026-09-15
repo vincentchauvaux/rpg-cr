@@ -32,6 +32,8 @@ export function buildPlayerSayNpcNarration(ctx: NarrationContext): string {
     `## Consignes MJ\n` +
     `- Interprète **uniquement** la réaction de ${npcList} (et le monde immédiat autour d'eux). Ne résous pas une action physique : c'est de la parole.\n` +
     `- **Réagis au contenu exact** de la réplique. Accusation, marchandage, question : les PNJ y répondent — interdit d'ignorer pour ressortir un menu de quête.\n` +
+    `- **Interdit** d'écrire les paroles de ${name} entre « … » s'il ne les a pas dites mot pour mot.\n` +
+    `- Si ${name} demande **pourquoi** le PNJ s'investit : le PNJ répond (ou esquive) — tu n'inverses pas la question.\n` +
     `- Parle à **${name}** à la **2e personne** (tu / vous). ${name} n'est **pas** un PNJ.\n` +
     `- Reste fidèle au rôle déjà établi : un PNJ bourru, hautain, peureux, ivre ou occupé peut **ignorer**, grogner, couper court, mentir, ou répondre à côté. Ce n'est pas un échec — c'est du jeu.\n` +
     (isQuestion

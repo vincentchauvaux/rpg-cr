@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-15 (**MJ** : métier Le Rôliste distillé — impro, in medias res, monde qui tourne)
+> Dernière mise à jour : 2026-09-15 (**MJ** : pas parler pour le PJ, secours sans encyclopédie)
 
 ## Vision
 
@@ -559,7 +559,7 @@ Pas de bouton « ajouter un compagnon » : le PJ **demande au PNJ** (Dire `@PNJ`
 - **Noms de royaumes** : générés de façon déterministe par `world_seed` / `map_seed` dans `packages/shared/src/map/world-names.ts` → stockés dans `rooms.map_json` (`countries`, `territories`, POI). Plus de liste figée Aldermar / Brumes / Khar-Vos pour les **nouveaux** salons.
 - **Déclenchement unique** quand l'**hôte** (admin humain) finalise sa fiche (`POST …/character/finalize`) ou passe `ready` + `story_locked` : `scheduleCampaignOpening` → `bootstrapCampaignOpening` (`apps/api/src/campaign-opening.ts`).
 - Deux appels LLM : plan JSON (`packages/shared/src/mj/campaign-opening-prompt.ts`) puis récit MJ long (Acte I, hook, enjeu) intégrant la fiche hôte — **pas** de second message d'intégration pour l'hôte. Le prompt d'ouverture injecte les pays / territoires / POI de la carte et interdit les noms legacy sauf s'ils sont déjà dans `map_json` (anciennes parties).
-- **Voix PJ** : 2e personne ; `isCampaignOpeningUnplayable` (trop court, trop romancé, trop de lieux, hôte=PNJ y compris « visages de X » / « X doit décider », Sir/Dame hors fiche, secret du père, **McGuffin** : parchemin d'inconnu **ou** étrangers qui ont perdu un sac). Retry = réécriture courte, puis récit de secours. Style salon = **une** injection (`formatMjProseRules` dans le system MJ). Contraintes d'Acte I = `openingHardRules` : hook **personnel**, **in medias res**, lieu qui **vit**. Maîtrise (`mj-craft.ts`) distillée (pas copiée) des dossiers MJ du [blog Le Rôliste](https://www.blog.leroliste.com/) : 12 conseils, descriptions, impro, scénario, implication.
+- **Voix PJ** : 2e personne ; `isCampaignOpeningUnplayable` (trop court, trop romancé, trop de lieux, hôte=PNJ y compris « visages de X » / « X se trouve » / « X doit décider », Sir/Dame/**Maître** hors fiche, secret du père, **McGuffin** : parchemin, sac perdu, **voisin en larmes + brigands + récolte**, dump **Enjeu :** / République). Retry puis récit de secours **jouable** (pas de « Tes hommes : Aucun », pas de fiche « je … » collée, pas d'encyclopédie). `openingHardRules` : hook **petit** et personnel, **in medias res**. Maîtrise : ne **pas parler pour le PJ** ; s'il réduit le geste, on réduit ; un verre = quelqu'un boit ; sort sans ennemi ≠ bataille. Source métier : [blog Le Rôliste](https://www.blog.leroliste.com/).
 - **Style** : `llm_config.mjProse` (0–100, défaut 20) — curseur admin « Droit au but / Sobre / Romancé » injecté dans tous les tours MJ (`formatMjProseRules`).
 - **Brief de départ** : QCM `creationBrief` (qui / en ce moment / passé) avant la fiche ; préremplit rang/habitat/suite ; paysan local → **Maison au village** ; contraint l'ouverture à **un lieu** calé sur le choix.
 - Finalisation **hôte** : « X a scellé sa fiche. » (sans « présentez-vous ») ; les autres PJ gardent l'invite à se présenter.
@@ -956,6 +956,14 @@ La carte n'est chargée en state client **que** si god mode actif.
 **Solution** : fiche MJ = rang + suite + histoire ; ouverture à la 2e personne (jamais « rejoins le PJ ») ; ouverture trop courte → retry puis récit de secours ; questions « où sont mes hommes » = orientation table ; choix sûrs (ceinture, rejoindre, demander, **accepter / refuser**, ignorer, verre, rentrer chez soi) **sans d20**. Un Dire avec « vous / votre » force la réaction au **contenu**, pas « à qui tu parles ».
 
 **Fichiers** : `character-sheet.ts`, `campaign-opening-prompt.ts`, `campaign-opening.ts`, `scene-choice.ts`, `scene-check.ts`, `player-table-ask.ts`, `system-prompt.ts`
+
+### Paysan à l'auberge couronné chef de guerre (Jrounch, droit au but 20)
+
+**Problème** : le récit de **secours** collait la fiche (« Tes hommes : Aucun », « Je vis ici… »), un **Maître Lien** nommé, une guerre de brigands, puis « Enjeu : ». En jeu le MJ **parlait pour le PJ**, ignorait « je donne juste des infos / quelqu'un veut à boire », inversait les questions, et inventait une bataille pour un sort sans ennemi.
+
+**Solution** : secours jouable (2e personne, suite réelle seulement, pas d'encyclopédie) ; McGuffin larmes+brigands+blé ; `sheetFollowersForMj` ignore « Aucun » ; consigne **ne pas parler pour le PJ** ; recadrage d'ampleur + offre à boire ; sort sans ennemi ≠ orage.
+
+**Fichiers** : `campaign-opening-prompt.ts`, `character-sheet.ts`, `mj-craft.ts`, `player-say.ts`, `player-action.ts`, `player-banter.ts`
 
 ## Correctifs 2026-09-10
 

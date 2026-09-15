@@ -103,3 +103,14 @@ test("prompt épreuve : l'échec narre cette action, pas un beat précédent", (
   assert.match(prompt, /interdit/);
   assert.match(prompt, /qui aider/);
 });
+
+test("prompt Action : pas de réplique inventée ni de bataille hors scène", () => {
+  const prompt = buildPlayerActionNarration({
+    kind: "player_action",
+    playerName: "Jrounch le jrunch",
+    actionText: "J'utilise Graines de blé et Sérénité du Sable",
+  });
+  assert.match(prompt, /écrire les paroles/);
+  assert.match(prompt, /sans ennemi/);
+  assert.match(prompt, /n'inverses pas/);
+});

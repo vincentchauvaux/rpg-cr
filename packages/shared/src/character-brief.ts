@@ -156,7 +156,7 @@ export function applyCreationBriefToSheet(
   const withMen = brief.past === "with_men" || brief.station === "guard" || brief.station === "noble";
   const servants =
     brief.past === "alone"
-      ? "Aucun — tu es seul."
+      ? ""
       : withMen
         ? "Quelques hommes sous tes ordres (pas de nom propre tant que tu ne les as pas nommés)."
         : "";

@@ -1,6 +1,6 @@
 import type { CharacterSheet, ProceduralMap } from "../types.js";
 import { formatAlignmentLabel } from "../alignment.js";
-import { formatCharacterSheetForMj } from "../character-sheet.js";
+import { formatCharacterSheetForMj, sheetFollowersForMj } from "../character-sheet.js";
 import { buildGenerationLocaleRules, localeLabel, normalizeLocale } from "../locale.js";
 import { legacyWorldNamesGuard } from "../map/world-names.js";
 import {
@@ -65,10 +65,11 @@ function openingHardRules(host: string, location?: string): string {
     `« ${host} » est le JOUEUR (tu / tes). Interdit : 3e personne, réplique de ${host}, « suivez ${host} ».`,
     "Pas de PNJ nommé hors fiche. Figurant anonyme OK — seulement s'il **connaît** le PJ ou partage son quotidien.",
     "Pas de secret familial, destin ou prophétie hors fiche.",
-    "Hook **personnel** : ça touche sa vie (voisin, travail, faim, ronde, chope renversée, nouvelle du village). Le PJ doit avoir une raison de réagir.",
+    "Hook **personnel** et **petit** : ça touche sa vie (voisin, travail, faim, ronde, chope, rumeur). Pas une guerre livrée au premier regard.",
     "Le lieu **vit** (qui est là, ce qu'ils veulent) — pas une seule issue balisée. Le PJ doit pouvoir surprendre sans que tu le ramènes au menu.",
     "**In medias res** : déjà dans le lieu et l'incident. Pas de prologue taverne + inconnu. Pourquoi eux, ici, maintenant — la fiche.",
-    "Interdit : inconnu qui dépose un parchemin crypté et disparaît ; voyageurs/étrangers qui ont « perdu un sac » et demandent de l'aide ; « trouvez le X » ; quête livrée par un messager sans lien avec la fiche.",
+    "Figurant : « un voisin », « le vieux », « la tenancière » — **pas** Maître Lien, pas de nom hors fiche.",
+    "Interdit : encyclopédie (République + « un pays de… », ligne **Enjeu :**). Interdit : voisin en larmes + brigands + récolte volée. Interdit : parchemin crypté ; sac perdu d'étrangers ; « trouvez le X ».",
   ]
     .map((line) => `- ${line}`)
     .join("\n");
@@ -107,7 +108,7 @@ Réponds UNIQUEMENT avec un objet JSON valide (${langNote}) :
   "worldSummary": "2 phrases max : le pays",
   "mainPlot": "Enjeu local (2 phrases)",
   "startingSituation": "Où est le PJ et ce qu'il fait (1 phrase)",
-  "openingScene": "Incident PERSONNEL dans CE lieu (voisin, travail, bagarre, faim) — pas un parchemin d'inconnu ni un sac perdu d'étrangers",
+  "openingScene": "Incident PETIT dans CE lieu (chope, voisin connu, rumeur) — pas un parchemin, pas un sac perdu, pas une guerre de brigands",
   "scene": { "location": "UN lieu concret", "mood": "1 détail", "tension": 10 }
 }
 
@@ -243,7 +244,7 @@ export function openingTreatsHostAsNpc(content: string, hostName: string): boole
     }
     if (
       new RegExp(
-        `${n}[^.!?]{0,160}\\b(se tient|s'approche|scrute|hoche la tête|se tourne vers vous|vous (regarde|lance)|dit-il|dit‑il|annonce-t-il)`,
+        `${n}[^.!?]{0,160}\\b(se tient|se trouve|s'approche|scrute|hoche la tête|se tourne vers vous|vous (regarde|lance)|dit-il|dit‑il|annonce-t-il)`,
         "iu"
       ).test(t)
     ) {
@@ -355,6 +356,20 @@ export function openingLooksLikeQuestMcGuffin(content: string): boolean {
   if (/\b(nous avons perdu|ont perdu notre|perdu notre sac)\b/i.test(t) && askHelp) {
     return true;
   }
+  const tears = /\b(larmes|en larmes|pleure|éplor)\b/i.test(t);
+  const raiders = /\b(brigands?|bandits?)\b/i.test(t);
+  const crop = /\b(blé|récolte|cargaison|champ)\b/i.test(t);
+  if (tears && raiders && crop) return true;
+  return false;
+}
+
+/** Colle une fiche pays / une ligne « Enjeu : » au lieu de poser le PJ. */
+export function openingDumpsEncyclopedia(content: string): boolean {
+  const t = stripOpeningComments(content);
+  if (/\bEnjeu\s*:/i.test(t)) return true;
+  if (/\b(République|royaume)\b.{0,80}\bun pays de\b/i.test(t)) return true;
+  if (/\bUn conflit naissant\b/i.test(t)) return true;
+  if (/\bTes hommes sont avec toi\s*:\s*Aucun\b/i.test(t)) return true;
   return false;
 }
 /** Ouverture trop courte, menu vide, PJ=PNJ, PNJ inventé, trop de lieux, McGuffin, ou trop romancé. */
@@ -368,6 +383,7 @@ export function isCampaignOpeningUnplayable(
   if (openingInventedNamedNpc(content, hostName, opts?.sheet)) return true;
   if (openingInventedFamilySecret(content, opts?.sheet)) return true;
   if (openingLooksLikeQuestMcGuffin(content)) return true;
+  if (openingDumpsEncyclopedia(content)) return true;
   if (openingTooManyPlaces(content, opts?.mjProse)) return true;
   if (openingTooOrnate(content, opts?.mjProse)) return true;
   return false;
@@ -381,32 +397,43 @@ export function isCampaignOpeningTooThin(content: string): boolean {
   return false;
 }
 
-/** Récit de secours si le LLM ne pose pas le monde. */
+/** Récit de secours si le LLM ne pose pas le monde. Jouable : 2e personne, pas d'encyclopédie. */
 export function renderFallbackOpeningNarrative(
   plan: CampaignOpeningPlan,
   ctx: CampaignOpeningContext
 ): string {
   const sheet = ctx.hostSheet;
   const rank = sheet.rank?.trim();
-  const men = sheet.servants?.trim();
-  const background = sheet.background?.trim();
-  const who = rank
-    ? `Tu es ${ctx.hostName}, ${rank}.`
-    : `Tu es ${ctx.hostName}.`;
-  const suite = men
-    ? ` Tes hommes sont avec toi : ${men}.`
-    : "";
-  const past = background ? ` ${background.slice(0, 280)}` : "";
+  const who = rank ? `Tu es ${ctx.hostName}, ${rank}.` : `Tu es ${ctx.hostName}.`;
+  const followers = sheetFollowersForMj(sheet.servants);
+  const suite = followers ? ` Tes hommes sont avec toi : ${followers}.` : "";
+  const background = sheet.background?.trim() ?? "";
+  const past =
+    background && !/^(je|j['’])/i.test(background) ? ` ${background.slice(0, 160)}` : "";
+  const location = plan.scene.location.trim() || "ici";
+  const mood = plan.scene.mood.trim();
+  const start = playableOpeningBeat(plan.startingSituation, ctx);
+  const scene = playableOpeningBeat(plan.openingScene, ctx);
+  const beat =
+    [start, scene].filter(Boolean).join(" ") ||
+    "Tu es déjà là, dans le geste du métier. Un visage connu, pas une guerre livrée par un voisin.";
 
   return (
     `${who}${suite}${past}\n\n` +
-    `${plan.startingSituation}\n\n` +
-    `${plan.openingScene}\n\n` +
-    `Autour de toi : **${plan.scene.location}**. ${plan.scene.mood}.\n\n` +
-    `${plan.worldSummary}\n\n` +
-    `Enjeu : ${plan.mainPlot}\n\n` +
+    `Tu es à **${location}**.${mood ? ` ${mood}.` : ""}\n\n` +
+    `${beat}\n\n` +
     `Que fais-tu ?\n` +
     `<!--scene:{"location":${JSON.stringify(plan.scene.location)},"mood":${JSON.stringify(plan.scene.mood)},"tension":${plan.scene.tension}}-->\n` +
-    `<!--arc:{"mainPlot":${JSON.stringify(plan.mainPlot)},"currentBeat":${JSON.stringify(plan.openingScene.slice(0, 200))}}-->`
+    `<!--arc:{"mainPlot":${JSON.stringify(plan.mainPlot)},"currentBeat":${JSON.stringify(beat.slice(0, 200))}}-->`
   );
+}
+
+function playableOpeningBeat(text: string, ctx: CampaignOpeningContext): string {
+  const t = text.trim();
+  if (!t) return "";
+  if (openingTreatsHostAsNpc(t, ctx.hostName)) return "";
+  if (openingInventedNamedNpc(t, ctx.hostName, ctx.hostSheet)) return "";
+  if (openingLooksLikeQuestMcGuffin(t)) return "";
+  if (openingDumpsEncyclopedia(t)) return "";
+  return t;
 }

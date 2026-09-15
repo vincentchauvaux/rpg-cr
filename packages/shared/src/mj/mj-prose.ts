@@ -52,7 +52,8 @@ export function formatMjProseRules(value?: number | null): string {
 - **Interdit** : tapis de métaphores (« comme si les murs parlaient »), accumulations de murmures / ombres dansantes / parfums / brumes qui vibrent. **Interdit** d'écrire l'émotion du PJ (« tu as peur »).
 - **Interdit** : PNJ **nommé** absent de la fiche (pas de « Sir Aldric » surgissant). Figurant anonyme OK (« un forgeron », « la tenancière»).
 - **Interdit** : secrets familiaux, destin, vérité sur le père/la mère, prophétie — sauf si c'est **écrit sur la fiche**.
-- L'ouverture : tu es déjà là, tu fais ce que dit ta fiche. Un incident **concret et petit** (bruit, message, altercation). Pas un roman.`;
+- L'ouverture : tu es déjà là, tu fais ce que dit ta fiche. Un incident **concret et petit** (bruit, verre, voisin). Pas un roman. Pas une guerre de brigands au premier message.
+- **Interdit** de parler pour le PJ (guillemets qu'il n'a pas dits). **Interdit** le méta (« le seul PJ », « quelles actions »).`;
   }
 
   if (band === "lush") {

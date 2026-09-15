@@ -27,6 +27,17 @@ test("brief : préremplit rang et habitat sans écraser", () => {
   assert.equal(kept.rank, "Sergent déjà écrit");
 });
 
+test("brief : seul n'invente pas une suite « Aucun »", () => {
+  const brief = normalizeCreationBrief({
+    station: "peasant",
+    activity: "inn",
+    past: "alone",
+  });
+  assert.ok(brief);
+  const filled = applyCreationBriefToSheet({ rank: "", habitat: "" }, brief!);
+  assert.equal(filled.servants ?? "", "");
+});
+
 test("hints IA : pas de destin inventé", () => {
   const hints = formatCreationBriefAsHints({
     station: "noble",

@@ -11,6 +11,8 @@ import { buildPlayerTableAskNarration } from "./mj/narration/builders/player-tab
 import {
   messageAsksTableOrientation,
   messageAddressesMjOrWorld,
+  messageLooksLikeScaleCorrection,
+  messageOffersARound,
 } from "./mj/player-banter.js";
 
 test("taverne = foule, forêt non", () => {
@@ -92,4 +94,24 @@ test("où sont mes hommes / qui suis-je = orientation table", () => {
     true
   );
   assert.equal(messageAsksTableOrientation("quel est mon but ?"), true);
+});
+
+test("je n'ai parlé que de culture : recadrer, pas couronner", () => {
+  assert.equal(
+    messageLooksLikeScaleCorrection("Wow, je n'ai parler que de culture moi"),
+    true
+  );
+  assert.equal(
+    messageOffersARound("Moi je donne juste des infos, quelqu'un veux à boire ?"),
+    true
+  );
+  const prompt = buildPlayerSayNarration({
+    kind: "player_say",
+    playerName: "Jrounch le jrunch",
+    actionText: "Moi je donne juste des infos, quelqu'un veux à boire ?",
+    crowdPresent: true,
+  });
+  assert.match(prompt, /recadre l'ampleur/);
+  assert.match(prompt, /a soif/);
+  assert.match(prompt, /écrire les paroles/);
 });
