@@ -92,6 +92,18 @@ export function SalonRoomClient({ code }: { code: string }) {
       });
   }, [normalizedCode, appUserId]);
 
+  /**
+   * Rattrapage : un héros créé hors ligne (ou avant la synchro du compte) reste
+   * invisible sur les autres appareils. Dès qu'on ouvre le salon connecté, on le
+   * rattache.
+   */
+  useEffect(() => {
+    if (gate !== "ready" || !appUserId) return;
+    const session = loadSession();
+    if (!session || session.roomCode.toUpperCase() !== normalizedCode) return;
+    void linkPlayerToUserApi(session.playerId, appUserId).catch(() => undefined);
+  }, [gate, appUserId, normalizedCode]);
+
   /** Compte connecté : reprendre le héros de ce salon créé sur un autre appareil. */
   useEffect(() => {
     if (gate !== "join" || !appUserId) return;

@@ -5,6 +5,7 @@ import {
   locationIsVaguerThan,
   mergeScenePatch,
   scrubScenePatchAgainstSourceText,
+  scrubScenePatchLocation,
 } from "./mj/scene-extract-prompt.js";
 import { rewriteTableMetaClosers } from "./mj/sanitize-response.js";
 import { formatEstablishedCanonSummary } from "./mj/canon-continuity.js";
@@ -53,6 +54,21 @@ test("relance méta réécrite en relance jouable", () => {
   assert.match(
     rewriteTableMetaClosers("Quelles actions souhaitez-vous entreprendre ?"),
     /Que fais‑tu \?/
+  );
+});
+
+test("un libellé technique de carte n'est pas un lieu de scène", () => {
+  assert.equal(
+    scrubScenePatchLocation({ location: "Sentier entre la capitale et city 2" }).location,
+    undefined
+  );
+  assert.equal(
+    scrubScenePatchLocation({ location: "Hameau de Rocheor" }).location,
+    "Hameau de Rocheor"
+  );
+  assert.equal(
+    scrubScenePatchLocation({ location: "Place du village" }).location,
+    "Place du village"
   );
 });
 

@@ -111,6 +111,10 @@ export function isLikelyPlaceLocation(location: string): boolean {
   return false;
 }
 
+/** Restes de génération de carte en anglais + index (« city 2 », « unknown 6 »). */
+const TECHNICAL_PLACE_LABEL_RE =
+  /\b(?:city|town|village|church|dungeon|capital|unknown|poi|ter)[\s_-]*\d+\b/i;
+
 /** Retire un lieu qui ressemble à un nom de joueur ou n'est pas un cadre spatial. */
 export function scrubScenePatchLocation(
   patch: ScenePatchInput,
@@ -136,6 +140,12 @@ export function scrubScenePatchLocation(
   }
 
   if (!isLikelyPlaceLocation(loc)) {
+    const { location: _loc, ...rest } = patch;
+    return rest;
+  }
+
+  // Libellé technique d'une ancienne carte (« city 2 », « village 3 ») : pas un lieu jouable.
+  if (TECHNICAL_PLACE_LABEL_RE.test(loc)) {
     const { location: _loc, ...rest } = patch;
     return rest;
   }

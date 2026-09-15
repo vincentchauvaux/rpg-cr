@@ -207,9 +207,10 @@ export function buildFallbackOpeningPlan(ctx: CampaignOpeningContext): CampaignO
 
 function mapSummary(map: ProceduralMap | null, worldSeed: string): string {
   if (!map) return `Monde en gestation (graine narrative ${worldSeed}).`;
+  const namedPois = map.pois.filter((p) => !PLACEHOLDER_PLACE_RE.test(p.name.trim()));
   const poi =
-    map.pois.length > 0
-      ? map.pois
+    namedPois.length > 0
+      ? namedPois
           .slice(0, 8)
           .map((p) => `${p.name} (${p.type})`)
           .join("; ")

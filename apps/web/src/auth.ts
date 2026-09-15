@@ -8,6 +8,9 @@ export const AUTH_BASE_PATH = authBasePath();
 /** Chemin public SessionProvider (identique). */
 export const AUTH_PUBLIC_BASE_PATH = AUTH_BASE_PATH;
 
+/** Délai avant de retenter la synchro du compte quand l'API n'a pas répondu. */
+const SYNC_RETRY_MS = 60_000;
+
 async function syncUserToApi(profile: {
   googleSub: string;
   email?: string | null;
@@ -55,9 +58,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, account, profile }) {
-      if (account?.provider === "google" && account.providerAccountId) {
+      const googleSub =
+        (account?.provider === "google" ? account.providerAccountId : null) ??
+        (token.googleSub as string | undefined) ??
+        (typeof token.sub === "string" ? token.sub : undefined);
+      if (googleSub) token.googleSub = googleSub;
+
+      // La synchro ne tournait qu'à la connexion : un jeton émis avant la
+      // fonctionnalité (ou pendant une panne de l'API) restait sans compte, donc
+      // aucune graine liée. On réessaie tant que le compte manque, sans spammer.
+      const lastTryAt = Number(token.appUserSyncAt ?? 0);
+      const retryDue = Date.now() - lastTryAt > SYNC_RETRY_MS;
+      if (!token.appUserId && googleSub && retryDue) {
+        token.appUserSyncAt = Date.now();
         const appUserId = await syncUserToApi({
-          googleSub: account.providerAccountId,
+          googleSub,
           email: token.email ?? profile?.email ?? null,
           displayName:
             (token.name as string | undefined) ??
