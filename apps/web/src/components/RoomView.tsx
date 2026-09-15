@@ -67,6 +67,7 @@ import {
 } from "@/lib/god-mode-ui";
 import { GodModeSwitch } from "@/components/GodModeSwitch";
 import { AdminLlmForm } from "@/components/AdminLlmForm";
+import { LlmTracePanel } from "@/components/LlmTracePanel";
 import { LocaleSelector } from "@/components/LocaleSelector";
 import { ChatMessageRow } from "@/components/ChatMessageRow";
 import { SceneCheckBanner } from "@/components/SceneCheckBanner";
@@ -1931,6 +1932,9 @@ export function RoomView({ code }: Props) {
                     onTest={handleTestLlm}
                     initialCollapsed={hasLlmConfig}
                   />
+                  {room && (
+                    <LlmTracePanel roomId={room.id} playerId={session.playerId} />
+                  )}
 
                   <InviteQrPanel code={code} />
 

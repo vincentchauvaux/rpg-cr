@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-15 (**V7B7ZP** : OpenRouter clé à 0 + Groq TPD → secours Ollama ; plus de hint LM Studio gemma)
+> Dernière mise à jour : 2026-09-15 (**journal LLM** JSONL + god mode, sans prompts ni clés)
 
 ## Vision
 
@@ -715,6 +715,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 
 - La clé API LLM OpenAI/OpenRouter peut être saisie côté client (god mode) et transmise à l’appel MJ ; non persistée en base. **Groq / Gemini : jamais le frontend** — `GROQ_API_KEY` / `GEMINI_API_KEY` + `AI_PROVIDER` / `AI_MODEL` / `AI_FALLBACK_PROVIDER` dans `.env` (docker-compose.prod.yml).
 - **Routage LLM** : `completeChat` + `taskKind` `narration` | `tool` ; `AI_PROVIDER=groq|gemini|openrouter` surcharge un salon **cloud** ; un salon enregistré **Ollama / LM Studio** n’est **pas** redirigé (sinon TPM OpenRouter alors que l’UI dit VPS). Fallback `AI_FALLBACK_PROVIDER` puis LM Studio / Ollama (`LM_STUDIO_BASE_URL`) pour les salons cloud. Cloud défaut hors VPS sans env = GPT-4o (MJ) + GPT-4o mini ; local = un seul modèle chargé.
+- **Journal LLM** : chaque `completeChat` écrit une ligne JSONL (`/data/llm-events.jsonl` en prod, à côté de la SQLite en local) — provider demandé vs effectif, secours, durée, chars, salon, libellé de file (`character-all`, `player:reclaim`…). **Pas** de prompt ni de clé. God mode → panneau **Journal LLM**. `docker logs rpg-cr-api-1` contient aussi `[LLM] …`. Rotation ~1,5 Mo (`llm-events.1.jsonl`).
 - **Réclamer hôte** : `pickHostMjPromptType` + `handleHostReclaim` dans `RoomView` (préambule / récap / reclaim) — déjà en place ; pas de travail dupliqué côté sous-agent `3dd156bd` si non retrouvé dans l'historique.
 - `getRoomByCode` compare en NOCASE (codes 6 caractères).
 - Pour LM Studio dans Docker : `host.docker.internal:1234`.

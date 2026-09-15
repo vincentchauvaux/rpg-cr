@@ -26,6 +26,7 @@ export * from "./llm/context-budget.js";
 export * from "./llm/model-context-tier.js";
 export * from "./llm/lmstudio-preflight.js";
 export * from "./llm/llm-health.js";
+export * from "./llm/llm-trace.js";
 export * from "./llm/providers.js";
 export * from "./mj/canon-continuity.js";
 export * from "./mj/mj-craft.js";

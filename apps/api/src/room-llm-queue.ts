@@ -3,6 +3,9 @@
  * Priorités : narrative > interactive > background (FIFO au sein d'une priorité).
  */
 
+import { getRoomById } from "./rooms.js";
+import { runWithLlmTrace } from "./llm-trace-file.js";
+
 export type RoomLlmPriority = "narrative" | "interactive" | "background";
 
 const PRIORITY_ORDER: RoomLlmPriority[] = ["narrative", "interactive", "background"];
@@ -53,7 +56,16 @@ async function drainRoomQueue(roomId: string): Promise<void> {
   q.currentLabel = job.label;
 
   try {
-    const result = await job.run();
+    const roomCode = getRoomById(roomId)?.code;
+    const result = await runWithLlmTrace(
+      {
+        roomId,
+        roomCode,
+        purpose: job.label,
+        queueWaitMs: Date.now() - job.enqueuedAt,
+      },
+      () => job.run()
+    );
     job.resolve(result);
   } catch (err) {
     job.reject(err);

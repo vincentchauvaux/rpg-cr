@@ -277,6 +277,18 @@ export function testLlmConfig(
   });
 }
 
+export function getLlmCallLog(
+  roomId: string,
+  playerId: string,
+  limit = 80
+): Promise<{ path: string; events: import("@rpg-cr/shared").LlmTraceEvent[] }> {
+  const q = new URLSearchParams({
+    playerId,
+    limit: String(limit),
+  });
+  return fetchJson(`/api/rooms/${roomId}/llm/log?${q.toString()}`);
+}
+
 export function askMj(
   roomId: string,
   playerId: string,

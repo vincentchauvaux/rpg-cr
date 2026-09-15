@@ -7,6 +7,7 @@ import multipart from "@fastify/multipart";
 import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, assertChatModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel, usesTightGroqTpm } from "@rpg-cr/shared";
 import { resolveRoomApiKey } from "./llm-api-key.js";
 import { initDb } from "./db.js";
+import { installLlmFileTrace, readLlmTraceEvents, runWithLlmTrace } from "./llm-trace-file.js";
 import {
   API_SECURITY_HEADERS,
   assertSafeLocalLlmFetchUrl,
@@ -163,6 +164,7 @@ app.addHook("onSend", async (_req, reply, payload) => {
 });
 
 initDb();
+installLlmFileTrace();
 
 function requireAuthInternal(req: { headers: Record<string, unknown> }): boolean {
   const secret = process.env.AUTH_INTERNAL_SECRET?.trim();
@@ -507,9 +509,13 @@ app.post<{
   }
 
   try {
-    const result = await testLlmConnection(
-      room.llmConfig,
-      resolveRoomApiKey(room.llmConfig, req.body.apiKey, room.id)
+    const result = await runWithLlmTrace(
+      { roomId: room.id, roomCode: room.code, purpose: "llm-test" },
+      () =>
+        testLlmConnection(
+          room.llmConfig!,
+          resolveRoomApiKey(room.llmConfig, req.body.apiKey, room.id)
+        )
     );
     return result;
   } catch (e) {
@@ -517,6 +523,26 @@ app.post<{
     const status = err.includes("embeddings") ? 400 : 502;
     return reply.status(status).send({ error: err });
   }
+});
+
+app.get<{
+  Params: { roomId: string };
+  Querystring: { playerId?: string; limit?: string };
+}>("/api/rooms/:roomId/llm/log", async (req, reply) => {
+  const room = getRoomById(req.params.roomId);
+  if (!room) return reply.status(404).send({ error: "Salon introuvable" });
+  const actorId = req.query.playerId?.trim();
+  const actor = actorId
+    ? listPlayers(room.id).find((p) => p.id === actorId)
+    : undefined;
+  if (!canConfigureRoomLlm(actor)) {
+    return reply.status(403).send({ error: "Réservé à l'hôte du salon" });
+  }
+  const limit = Number(req.query.limit ?? 80);
+  return {
+    path: "llm-events.jsonl",
+    events: readLlmTraceEvents({ roomId: room.id, limit }),
+  };
 });
 
 app.post<{

@@ -6,4 +6,6 @@ dist/
 backups/
 *.db
 *.sqlite
+llm-events.jsonl
+llm-events.1.jsonl
 .DS_Store

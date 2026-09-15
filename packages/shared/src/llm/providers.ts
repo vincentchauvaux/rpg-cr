@@ -31,6 +31,13 @@ import {
   resolveServerAiApiKey,
   usesServerOnlyApiKey,
 } from "./env-ai.js";
+import {
+  emitLlmTrace,
+  llmTraceOutcomeFromError,
+  peekLlmTraceContext,
+  redactLlmLogText,
+  type LlmTraceContext,
+} from "./llm-trace.js";
 import type { LlmRoomConfig } from "../types.js";
 
 export interface ChatCompletionMessage {
@@ -66,6 +73,8 @@ export interface LlmProviderOptions {
   jsonMode?: boolean;
   /** 401 / bouton pastille : sauter le cloud et parler à Ollama. */
   forceLocalFallback?: boolean;
+  /** Surcharge salon / libellé (sinon contexte file LLM). */
+  trace?: LlmTraceContext;
 }
 
 type AssistantMessage = {
@@ -699,7 +708,7 @@ function formatChainedLlmFailure(
   return new Error(`${first} — puis secours ${fallbackProvider} : ${second}`);
 }
 
-export async function completeChat(
+async function completeChatUntraced(
   config: LlmRoomConfig,
   messages: ChatCompletionMessage[],
   options: LlmProviderOptions = {}
@@ -856,6 +865,59 @@ export async function completeChat(
     prior,
     namedFallback?.providerId
   );
+}
+
+export async function completeChat(
+  config: LlmRoomConfig,
+  messages: ChatCompletionMessage[],
+  options: LlmProviderOptions = {}
+): Promise<LlmCompletionResult> {
+  const started = Date.now();
+  const envAi = readEnvAiSettings();
+  const taskKind = options.taskKind ?? "narration";
+  const promptChars = estimatePromptChars(messages);
+  const ctx = options.trace ?? peekLlmTraceContext();
+  try {
+    const result = await completeChatUntraced(config, messages, options);
+    emitLlmTrace({
+      at: new Date().toISOString(),
+      ok: true,
+      usedFallback: result.usedFallback,
+      requestedProvider: config.providerId,
+      requestedModel: config.modelId,
+      effectiveProvider: result.providerId,
+      effectiveModel: result.modelId,
+      envProvider: envAi.provider,
+      taskKind,
+      promptChars,
+      durationMs: Date.now() - started,
+      usageTotal: result.usage?.totalTokens,
+      purpose: ctx?.purpose,
+      roomId: ctx?.roomId,
+      roomCode: ctx?.roomCode,
+      queueWaitMs: ctx?.queueWaitMs,
+    });
+    return result;
+  } catch (error) {
+    emitLlmTrace({
+      at: new Date().toISOString(),
+      ok: false,
+      usedFallback: false,
+      requestedProvider: config.providerId,
+      requestedModel: config.modelId,
+      envProvider: envAi.provider,
+      taskKind,
+      promptChars,
+      durationMs: Date.now() - started,
+      outcome: llmTraceOutcomeFromError(error),
+      error: redactLlmLogText(error),
+      purpose: ctx?.purpose,
+      roomId: ctx?.roomId,
+      roomCode: ctx?.roomCode,
+      queueWaitMs: ctx?.queueWaitMs,
+    });
+    throw error;
+  }
 }
 
 /** Alias récit — `completeChat` avec kind narration. */
