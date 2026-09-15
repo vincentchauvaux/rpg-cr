@@ -357,7 +357,7 @@ Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**
 
 **MJ local (gratuit)** : l'API appelle un endpoint OpenAI-compatible via `LM_STUDIO_BASE_URL` (nom historique — **Ollama** `http://127.0.0.1:11434/v1` ou **LM Studio** `http://127.0.0.1:1234/v1`). Providers UI distincts : **Ollama (VPS / local)** et **LM Studio (Mac + tunnel)**. `resolveLmStudioServerBaseUrl` ([lmstudio-url.ts](packages/shared/src/llm/lmstudio-url.ts)) prime sur l'URL affichée dans l'UI. **Sans Mac** : installer Ollama sur le VPS ([deploy/OLLAMA-VPS.md](deploy/OLLAMA-VPS.md)). **Avec GPU Mac** : tunnel SSH `-R 1234:127.0.0.1:1234` ([deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md)).
 
-**État VPS (2026-09-15)** : Docker actif ; **MJ via Ollama sur le VPS** (`LM_STUDIO_BASE_URL=http://127.0.0.1:11434/v1`) — plus de tunnel Mac requis. Dernier déploiement : `f0987fe` (QCM : tout l’intérieur de l’étape défile). Health et accueil publics **200**. Déploiement : `bash deploy/push-deploy.sh` (Mac) ou `bash deploy/deploy.sh` (VPS). Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`. Un salon déjà ouvert **n’est pas réécrit** : il faut un **nouveau salon** pour l'Acte I.
+**État VPS (2026-09-15)** : Docker actif ; **MJ via Ollama sur le VPS** (`LM_STUDIO_BASE_URL=http://127.0.0.1:11434/v1`) — plus de tunnel Mac requis. Dernier déploiement : `1fed06f` (ouverture posée + variée par graine). Health et accueil publics **200**. Déploiement : `bash deploy/push-deploy.sh` (Mac) ou `bash deploy/deploy.sh` (VPS). Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`. Un salon déjà ouvert **n’est pas réécrit** : il faut un **nouveau salon** pour l'Acte I.
 
 **Suite sur le VPS** :
 ```bash
