@@ -3753,6 +3753,24 @@ textarea.field-invalid {
   font-size: 0.85rem;
 }
 
+.auth-grains-link {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.auth-grains-link:hover {
+  border-color: var(--accent, var(--gold, #c9a227));
+}
+
 .auth-google-btn {
   width: 100%;
 }

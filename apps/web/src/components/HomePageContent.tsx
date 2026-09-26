@@ -6,6 +6,7 @@ import { createRoom, getRoom, joinRoom, listCampaigns, listUserGrainsFromApi, li
 import {
   GoogleAuthPanel,
   GRAINS_LINKED_EVENT,
+  OPEN_GRAINS_EVENT,
   useAppUserId,
 } from "@/components/GoogleAuthPanel";
 import { useAutoHostTunnel } from "@/hooks/use-auto-host-tunnel";
@@ -110,7 +111,11 @@ export function HomePageContent() {
         /* grains locales seulement */
       }
     }
-    merged = merged.filter((g) => !isGrainForgotten(g.roomCode, g.playerId));
+    // Connecté : la liste compte (serveur) fait foi. Le filet local
+    // « oublié » recachait les parties même après les avoir rétablies.
+    if (!appUserId) {
+      merged = merged.filter((g) => !isGrainForgotten(g.roomCode, g.playerId));
+    }
     setGrains(merged);
     if (!merged.length) {
       setGrainMeta({});
@@ -160,8 +165,21 @@ export function HomePageContent() {
   }, [appUserId, refreshGrains]);
 
   useEffect(() => {
-    if (tab === "grains") refreshGrains();
-  }, [tab, refreshGrains]);
+    if (tab === "grains" || appUserId) refreshGrains();
+  }, [tab, refreshGrains, appUserId]);
+
+  const openedGrainsOnce = useRef(false);
+  useEffect(() => {
+    if (!appUserId || openedGrainsOnce.current) return;
+    openedGrainsOnce.current = true;
+    setTab("grains");
+  }, [appUserId]);
+
+  useEffect(() => {
+    const open = () => setTab("grains");
+    window.addEventListener(OPEN_GRAINS_EVENT, open);
+    return () => window.removeEventListener(OPEN_GRAINS_EVENT, open);
+  }, []);
 
   function rollAllCreate() {
     setRoomSuggestion(randomRoomName());
@@ -353,7 +371,7 @@ export function HomePageContent() {
             className={tab === "grains" ? "primary" : ""}
             onClick={() => setTab("grains")}
           >
-            Mes graines
+            Mes parties{grains.length > 0 ? ` (${grains.length})` : ""}
           </button>
         </div>
 
@@ -441,8 +459,8 @@ export function HomePageContent() {
           <div className="grains-panel">
             <p className="muted" style={{ marginBottom: "1rem" }}>
               {appUserId
-                ? "Vos campagnes liées à votre compte Google. Oublier les retire de cette liste (tous appareils) ; le code du salon reste valable."
-                : "Vos campagnes visitées sur cet appareil. Connectez-vous pour les retrouver sur votre téléphone ; les chroniques .md vivent sur le serveur."}
+                ? "Toutes les tables liées à votre compte Google — la même liste sur téléphone et ordi. Oublier les retire d'ici ; le code du salon reste valable."
+                : "Tables visitées sur cet appareil. Connectez-vous pour les retrouver partout."}
             </p>
             {!grains.length ? (
               <p className="muted">

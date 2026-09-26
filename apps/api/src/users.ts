@@ -66,7 +66,7 @@ export function upsertUserFromGoogle(input: {
       nextSub,
       row.id
     );
-    return rowToUser({
+    const profile = rowToUser({
       ...row,
       email,
       display_name: input.displayName.trim(),
@@ -74,6 +74,8 @@ export function upsertUserFromGoogle(input: {
       last_login_at: now,
       google_sub: nextSub,
     });
+    claimUnlinkedHumanPlayersForLoneUser(profile.id);
+    return profile;
   }
 
   const id = uuid();
@@ -89,7 +91,7 @@ export function upsertUserFromGoogle(input: {
     now,
     now
   );
-  return rowToUser({
+  const created = rowToUser({
     id,
     google_sub: input.googleSub,
     email: input.email?.trim() || null,
@@ -98,6 +100,8 @@ export function upsertUserFromGoogle(input: {
     created_at: now,
     last_login_at: now,
   });
+  claimUnlinkedHumanPlayersForLoneUser(created.id);
+  return created;
 }
 
 function getUserRowById(userId: string): Record<string, unknown> | undefined {
@@ -201,6 +205,26 @@ export function unhideUserGrain(userId: string, playerId: string): void {
   db.prepare(
     `DELETE FROM user_hidden_grains WHERE user_id = ? AND player_id = ?`
   ).run(canonicalId, playerId);
+}
+
+/** Un seul compte sur l'instance : les PJ orphelins (créés hors connexion) lui reviennent. */
+export function claimUnlinkedHumanPlayersForLoneUser(userId: string): number {
+  const canonicalId = resolveUserId(userId);
+  if (!getUserRowById(canonicalId)) return 0;
+  const n = db.prepare(`SELECT COUNT(*) AS c FROM users`).get() as { c: number };
+  if (Number(n.c) !== 1) return 0;
+  const info = db
+    .prepare(
+      `UPDATE players SET user_id = ? WHERE user_id IS NULL AND player_kind = 'human'`
+    )
+    .run(canonicalId);
+  return Number(info.changes ?? 0);
+}
+
+export function claimOrphansForLoneAccounts(): number {
+  const rows = db.prepare(`SELECT id FROM users`).all() as { id: string }[];
+  if (rows.length !== 1) return 0;
+  return claimUnlinkedHumanPlayersForLoneUser(rows[0].id);
 }
 
 export function linkPlayerToUser(playerId: string, userId: string): void {

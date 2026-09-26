@@ -7,6 +7,8 @@ import type { UserGrain } from "@rpg-cr/shared";
 
 /** Émis quand des graines locales viennent d'être rattachées au compte. */
 export const GRAINS_LINKED_EVENT = "rpg-cr:grains-linked";
+/** Ouvre l'onglet Mes parties sur l'accueil. */
+export const OPEN_GRAINS_EVENT = "rpg-cr:open-grains";
 
 export function GoogleAuthPanel() {
   const { data: session, status } = useSession();
@@ -87,12 +89,15 @@ export function GoogleAuthPanel() {
           Déconnexion
         </button>
       </div>
-      {grains.length > 0 && (
-        <p className="muted" style={{ marginTop: "0.75rem", marginBottom: 0, fontSize: "0.85rem" }}>
-          {grains.length} campagne{grains.length > 1 ? "s" : ""} liée{grains.length > 1 ? "s" : ""} à
-          ce compte (onglet Mes graines).
-        </p>
-      )}
+      <button
+        type="button"
+        className="auth-grains-link"
+        onClick={() => window.dispatchEvent(new Event(OPEN_GRAINS_EVENT))}
+      >
+        {grains.length > 0
+          ? `${grains.length} partie${grains.length > 1 ? "s" : ""} sur ce compte — voir la liste`
+          : "Voir mes parties"}
+      </button>
     </div>
   );
 }
