@@ -4,7 +4,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
-import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, assertChatModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel, usesTightGroqTpm } from "@rpg-cr/shared";
+import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, assertChatModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel, usesTightGroqTpm, buildAutomaticLlmConfig } from "@rpg-cr/shared";
 import { resolveRoomApiKey } from "./llm-api-key.js";
 import { initDb } from "./db.js";
 import { installLlmFileTrace, readLlmTraceEvents, runWithLlmTrace } from "./llm-trace-file.js";
@@ -498,23 +498,12 @@ app.put<{
   if (!canConfigureRoomLlm(actor)) {
     return reply.status(403).send({ error: "Réservé à l'hôte du salon" });
   }
-  const config = req.body.llmConfig;
-  if (config?.modelId?.trim()) {
-    try {
-      assertMjSuitableModelId(config.modelId);
-    } catch (e) {
-      const err = e instanceof Error ? e.message : "Modèle invalide";
-      return reply.status(400).send({ error: err });
-    }
-  }
-  if (config?.toolModelId?.trim()) {
-    try {
-      assertChatModelId(config.toolModelId);
-    } catch (e) {
-      const err = e instanceof Error ? e.message : "Modèle outils invalide";
-      return reply.status(400).send({ error: err });
-    }
-  }
+  const incoming = req.body.llmConfig;
+  const config = buildAutomaticLlmConfig({
+    mjProse: incoming?.mjProse,
+    autoExtractFacts: incoming?.autoExtractFacts,
+    systemPromptOverride: incoming?.systemPromptOverride,
+  });
   setLlmConfig(req.params.roomId, config);
   return { ok: true };
 });

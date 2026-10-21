@@ -367,12 +367,17 @@ export function buildCampaignOpeningNarrativePrompt(
 export function buildCampaignOpeningRewritePrompt(
   failedContent: string,
   plan: CampaignOpeningPlan,
-  ctx: CampaignOpeningContext
+  ctx: CampaignOpeningContext,
+  reasons: string[] = []
 ): string {
   const excerpt = failedContent.replace(/<!--[\s\S]*?-->/g, "").trim().slice(0, 700);
+  const why = reasons.length
+    ? `Raisons : ${reasons.join(" ; ")}.\nCorrige **uniquement** ça. Garde le lieu, tu/vous, un incident petit. Pas de cuisine, pas de dette inventée, pas de réplique du PJ, pas de QCM.\n\n`
+    : "";
   return (
-    `[OUVERTURE — RÉÉCRITURE]\nLe texte ci-dessous est injouable. Réécris l'Acte I en respectant la table.\n\n` +
-    `---\n${excerpt}\n---\n\n` +
+    `[OUVERTURE — RÉÉCRITURE]\nLe texte ci-dessous est injouable. Réécris l'Acte I en respectant la table.\n` +
+    why +
+    `\n---\n${excerpt}\n---\n\n` +
     buildCampaignOpeningNarrativePrompt(plan, ctx)
   );
 }
@@ -650,27 +655,41 @@ export function openingSkipsPlaceSetup(content: string): boolean {
   return !/\b(tu |vous |tes |ton |ta |votre |vos )\b/i.test(head);
 }
 
+/** Pourquoi l'Acte I est injouable — pour la réécriture ciblée. */
+export function campaignOpeningUnplayableReasons(
+  content: string,
+  hostName: string,
+  opts?: { sheet?: CharacterSheet; mjProse?: number }
+): string[] {
+  const reasons: string[] = [];
+  if (isCampaignOpeningTooThin(content)) reasons.push("texte trop court");
+  if (openingTreatsHostAsNpc(content, hostName)) reasons.push("l'hôte est traité comme un PNJ");
+  if (openingInventedNamedNpc(content, hostName, opts?.sheet)) {
+    reasons.push("PNJ nommé hors fiche");
+  }
+  if (openingInventedFamilySecret(content, opts?.sheet)) reasons.push("secret familial inventé");
+  if (openingLooksLikeQuestMcGuffin(content)) reasons.push("quête / objet perdu inventé");
+  if (openingLooksLikeStockHook(content)) reasons.push("cliché vieux + étranger au sac");
+  if (openingTreatsGuestAsStaff(content, opts?.sheet)) {
+    reasons.push("le joueur est en cuisine / service au lieu d'être client");
+  }
+  if (openingInventedPriorFavor(content, opts?.sheet)) reasons.push("dette ou faveur d'hier inventée");
+  if (openingSpeaksForPlayer(content)) reasons.push("réplique du PJ écrite par le MJ");
+  if (openingLooksLikeQcmMenu(content)) reasons.push("questionnaire 1/2/3 au lieu d'une relance");
+  if (openingSkipsPlaceSetup(content)) reasons.push("pas de pose du lieu à la 2e personne");
+  if (openingDumpsEncyclopedia(content)) reasons.push("fiche pays / Enjeu :");
+  if (openingTooManyPlaces(content, opts?.mjProse)) reasons.push("trop de lieux");
+  if (openingTooOrnate(content, opts?.mjProse)) reasons.push("trop romancé");
+  return reasons;
+}
+
 /** Ouverture trop courte, menu vide, PJ=PNJ, PNJ inventé, trop de lieux, McGuffin, ou trop romancé. */
 export function isCampaignOpeningUnplayable(
   content: string,
   hostName: string,
   opts?: { sheet?: CharacterSheet; mjProse?: number }
 ): boolean {
-  if (isCampaignOpeningTooThin(content)) return true;
-  if (openingTreatsHostAsNpc(content, hostName)) return true;
-  if (openingInventedNamedNpc(content, hostName, opts?.sheet)) return true;
-  if (openingInventedFamilySecret(content, opts?.sheet)) return true;
-  if (openingLooksLikeQuestMcGuffin(content)) return true;
-  if (openingLooksLikeStockHook(content)) return true;
-  if (openingTreatsGuestAsStaff(content, opts?.sheet)) return true;
-  if (openingInventedPriorFavor(content, opts?.sheet)) return true;
-  if (openingSpeaksForPlayer(content)) return true;
-  if (openingLooksLikeQcmMenu(content)) return true;
-  if (openingSkipsPlaceSetup(content)) return true;
-  if (openingDumpsEncyclopedia(content)) return true;
-  if (openingTooManyPlaces(content, opts?.mjProse)) return true;
-  if (openingTooOrnate(content, opts?.mjProse)) return true;
-  return false;
+  return campaignOpeningUnplayableReasons(content, hostName, opts).length > 0;
 }
 
 /** Menu vide ou texte trop court pour poser une scène. */

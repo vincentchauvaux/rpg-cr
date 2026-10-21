@@ -1,7 +1,6 @@
 import type { LlmRoomConfig } from "../types.js";
 import {
   defaultNarrationModelId,
-  defaultToolModelId,
   getCatalogEntry,
 } from "./catalog.js";
 import { defaultModelForLocalProvider, isLocalLlmProvider } from "./local-llm.js";
@@ -111,65 +110,151 @@ export function resolveServerAiApiKey(
   return openai;
 }
 
-export function applyEnvAiOverride(
-  config: LlmRoomConfig,
-  settings: EnvAiSettings = readEnvAiSettings()
+function configForAutomaticProvider(
+  provider: NonNullable<ReturnType<typeof normalizeAiProviderId>>,
+  settings: EnvAiSettings,
+  base?: Partial<LlmRoomConfig>
 ): LlmRoomConfig {
-  const provider = normalizeAiProviderId(settings.provider);
-  if (!provider) return config;
-
-  // God mode Ollama / LM Studio : ne pas masquer par AI_PROVIDER=openrouter
-  // (sinon TPM cloud 200k alors que l'UI dit « Ollama VPS »).
-  if (isLocalLlmProvider(config.providerId) && !isLocalLlmProvider(provider)) {
-    return config;
-  }
-
-  if (provider === "groq" || provider === "gemini") {
-    const entry = getCatalogEntry(provider);
-    const model =
-      settings.model?.trim() ||
-      (provider === "groq"
-        ? DEFAULT_GROQ_MODEL
-        : defaultNarrationModelId(entry) || defaultModelForCloudProvider(provider));
-    const tool =
-      settings.toolModel?.trim() ||
-      (provider === "groq"
-        ? DEFAULT_GROQ_TOOL_MODEL
-        : defaultToolModelId(entry) || model);
+  const entry = getCatalogEntry(provider);
+  if (provider === "groq") {
+    const model = settings.model?.trim() || DEFAULT_GROQ_MODEL;
     return {
-      ...config,
-      providerId: provider,
+      providerId: "groq",
       modelId: model,
-      toolModelId: tool,
-      baseUrl: entry?.defaultBaseUrl ?? config.baseUrl,
+      toolModelId: settings.toolModel?.trim() || DEFAULT_GROQ_TOOL_MODEL,
+      baseUrl: entry?.defaultBaseUrl,
+      useFallbackLmStudio: true,
+      autoExtractFacts: base?.autoExtractFacts,
+      mjProse: base?.mjProse,
+      systemPromptOverride: base?.systemPromptOverride,
     };
   }
-
-  if (isLocalLlmProvider(provider)) {
+  if (provider === "gemini") {
     const model =
       settings.model?.trim() ||
-      config.modelId.trim() ||
-      defaultModelForLocalProvider(provider);
+      defaultNarrationModelId(entry) ||
+      DEFAULT_GEMINI_MODEL;
     return {
-      ...config,
+      providerId: "gemini",
+      modelId: model,
+      toolModelId: settings.toolModel?.trim() || model,
+      baseUrl: entry?.defaultBaseUrl,
+      useFallbackLmStudio: true,
+      autoExtractFacts: base?.autoExtractFacts,
+      mjProse: base?.mjProse,
+      systemPromptOverride: base?.systemPromptOverride,
+    };
+  }
+  if (isLocalLlmProvider(provider)) {
+    const model = settings.model?.trim() || defaultModelForLocalProvider(provider);
+    return {
       providerId: provider,
       modelId: model,
       toolModelId: undefined,
+      baseUrl: entry?.defaultBaseUrl,
+      useFallbackLmStudio: true,
+      autoExtractFacts: base?.autoExtractFacts,
+      mjProse: base?.mjProse,
+      systemPromptOverride: base?.systemPromptOverride,
     };
   }
-
-  const entry = getCatalogEntry(provider);
   const model =
     settings.model?.trim() ||
     defaultNarrationModelId(entry) ||
-    config.modelId;
+    "google/gemini-3.8-flash";
   return {
-    ...config,
     providerId: provider,
     modelId: model,
     toolModelId: settings.toolModel?.trim() || model,
-    baseUrl: entry?.defaultBaseUrl ?? config.baseUrl,
+    baseUrl: entry?.defaultBaseUrl,
+    useFallbackLmStudio: true,
+    autoExtractFacts: base?.autoExtractFacts,
+    mjProse: base?.mjProse,
+    systemPromptOverride: base?.systemPromptOverride,
   };
+}
+
+/** Chaîne unique : env → premier cloud dispo → Ollama VPS. Plus de choix salon. */
+export function listAutomaticLlmCandidates(
+  settings: EnvAiSettings = readEnvAiSettings(),
+  env: Record<string, string | undefined> = process.env
+): LlmRoomConfig[] {
+  const out: LlmRoomConfig[] = [];
+  const seen = new Set<string>();
+  const push = (cfg: LlmRoomConfig) => {
+    if (seen.has(cfg.providerId)) return;
+    seen.add(cfg.providerId);
+    out.push(cfg);
+  };
+
+  const preferred = normalizeAiProviderId(settings.provider);
+  if (preferred) push(configForAutomaticProvider(preferred, settings));
+
+  if (env.GEMINI_API_KEY?.trim()) {
+    push(
+      configForAutomaticProvider("gemini", {
+        ...settings,
+        provider: "gemini",
+        model:
+          settings.model && preferred === "gemini" ? settings.model : null,
+      })
+    );
+  }
+  if (env.OPENROUTER_API_KEY?.trim()) {
+    push(
+      configForAutomaticProvider("openrouter", {
+        ...settings,
+        provider: "openrouter",
+        model:
+          preferred === "openrouter" && settings.model
+            ? settings.model
+            : "google/gemini-3.8-flash",
+      })
+    );
+  }
+  if (env.GROQ_API_KEY?.trim()) {
+    push(
+      configForAutomaticProvider("groq", {
+        ...settings,
+        provider: "groq",
+        model: preferred === "groq" ? settings.model : null,
+      })
+    );
+  }
+  push(
+    configForAutomaticProvider("ollama", {
+      provider: "ollama",
+      model: null,
+      fallbackProvider: null,
+    })
+  );
+  return out;
+}
+
+export function buildAutomaticLlmConfig(
+  room?: Pick<LlmRoomConfig, "mjProse" | "autoExtractFacts" | "systemPromptOverride">,
+  settings: EnvAiSettings = readEnvAiSettings(),
+  env: Record<string, string | undefined> = process.env
+): LlmRoomConfig {
+  const primary = listAutomaticLlmCandidates(settings, env)[0];
+  return {
+    ...primary,
+    mjProse: room?.mjProse,
+    autoExtractFacts: room?.autoExtractFacts,
+    systemPromptOverride: room?.systemPromptOverride,
+  };
+}
+
+/**
+ * Le salon ne choisit plus le fournisseur : env + clés serveur + Ollama.
+ * On conserve seulement le style de récit (mjProse) et les faits auto.
+ */
+export function applyEnvAiOverride(
+  config: LlmRoomConfig,
+  settings: EnvAiSettings = readEnvAiSettings(),
+  env: Record<string, string | undefined> = process.env
+): LlmRoomConfig {
+  return buildAutomaticLlmConfig(config, settings, env);
 }
 
 export function resolveEffectiveLlmConfig(

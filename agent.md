@@ -1,10 +1,10 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-09-26 (**Mes parties** : liste compte dès la connexion, orphelins rattachés)
+> Dernière mise à jour : 2026-10-21 (**MJ automatique** + ouverture Acte I plus stricte)
 
 ## Vision
 
-Application SaaS de salons JDR rejoinables, avec MJ IA (LLM marché + fallback LM Studio), carte procédurale, journal/quêtes/propositions, interface admin (god mode), déployable sur VPS.
+Application SaaS de salons JDR rejoinables, avec MJ IA **unique** (le serveur choisit le LLM, pas le joueur), carte procédurale, journal/quêtes/propositions, interface admin (god mode), déployable sur VPS.
 
 ## Stack
 
@@ -23,8 +23,8 @@ Application SaaS de salons JDR rejoinables, avec MJ IA (LLM marché + fallback L
 2. **API salons** — `POST /api/rooms`, `GET /api/rooms/:code`, `POST /api/rooms/:id/join`, liste joueurs
 3. **WebSocket** — `/ws?roomId&playerId&playerName`, broadcast messages, joueurs, scène, **épreuves de table** (`scene_check`) ; ping/pong ; reconnexion client + resync API
 4. **Interface** — accueil créer/rejoindre, page `/salon/[code]`, QR + lien, switch god mode (admin) ; **favicon** dé D20 or (`apps/web/src/app/icon.svg` + `apple-icon.tsx`)
-   - **Création salon** : noms salon/hôte proposés aléatoirement (utilisables sans saisie) ; clic efface pour taper ; bouton 🎲 par champ + « Tout relancer » ; `markHostLlmSetupPending(roomId)` à la création
-   - **Onboarding hôte (graine)** : après création/reprise salon, tant que la fiche n'est pas `ready` — `HostSetupWizard` (**étape 1/3**) bloque le chat : `AdminLlmForm` (LLM + **curseur Style du récit MJ**) ; test obligatoire ; puis **QCM de départ** (`CharacterBriefForm`, étape 2/3) ; puis `CharacterCreationWizard` fiche (**étape 3/3**). Joueurs non-hôte : QCM puis fiche (pas d'étape LLM). Pendant l'étape 1, le formulaire LLM du god mode est masqué (évite doublon). QCM : **tout l’intérieur de l’étape défile** (titre, intro, choix, Continuer) — l’ascenseur est **l’overlay** (`.char-wizard-overlay` : `overflow-y: auto`, `align-items: flex-start`, `overscroll-behavior: contain`), le wizard se centre par `margin: auto` sans `height: 100%`. Deux scrollers imbriqués + centrage en `overflow: hidden` écrasaient l’étape dans une fente de 85 px.
+   - **Création salon** : noms salon/hôte proposés aléatoirement (utilisables sans saisie) ; clic efface pour taper ; bouton 🎲 par champ + « Tout relancer ». Le salon naît déjà avec une `llm_config` **automatique** (pas d’étape moteur).
+   - **Onboarding** : plus de `HostSetupWizard` / choix Ollama / LM Studio / clé. Tant que la fiche n'est pas `ready` — **QCM de départ** (`CharacterBriefForm`) puis `CharacterCreationWizard` fiche. Même flux pour hôte et joueurs. God mode : `MjProseSettings` (style du récit uniquement). QCM : **tout l’intérieur de l’étape défile** (titre, intro, choix, Continuer) — l’ascenseur est **l’overlay** (`.char-wizard-overlay` : `overflow-y: auto`, `align-items: flex-start`, `overscroll-behavior: contain`), le wizard se centre par `margin: auto` sans `height: 100%`. Deux scrollers imbriqués + centrage en `overflow: hidden` écrasaient l’étape dans une fente de 85 px.
    - **God mode** : panneau admin = `localStorage` `rpg-cr-admin-panel:{playerId}` via `useSyncExternalStore` — **jamais** resync depuis refresh/WS/DB ; PATCH serveur fire-and-forget au toggle. Switch **sans titre dupliqué** (le titre d’onglet « Administration » suffit) pour éviter le débordement « God mo… » sur mobile.
    - **Layout salon** (`room-shell` + `room-layout`) : **une colonne** centrée ; **dock** (`RoomDockNav`) — sticky **haut** (bureau), fixe **bas** (mobile ≤640px) : **Fiche** + **Cercle** | **Accueil** (chat + scène + aide inline) | **Aide** + **Réglages** ; chaque onglet n’affiche **que** son panneau (plus de fiche/compagnons/réglages empilés sous Accueil). Masqué en plein écran récit / onboarding LLM. `sessionStorage` `rpg-cr-room-tab:{roomId}` (ancien `scene` → `main`). **Mentions @** : `ChatMentionInput` dans le **chat** et l’**aide personnelle** (`HeroAssistantPanel`) — joueurs à la table + PNJ du canon ; sous-titre **Lieu · …** (rencontre déduite des messages / scène, pas « Récit »). API `GET …/mention-suggestions`. **Compagnons** : `.companions-block` — `margin-top` 1rem (bureau) / 0,75rem (≤640px). **Récit** : nom du PJ **au-dessus** du Dire / de l’Action (colonne, plus à côté du texte).
    - **En-tête salon** (`RoomView`) : titre + **code seul** (sans préfixe « Code : ») — clic copie le code (`navigator.clipboard`) + retour visuel « Copié ! » + `aria-live` ; bouton **Sauvegarder et quitter** : libellé complet au bureau, **icône seule** en mobile **dans l’en-tête** (pas `position: fixed` — il défile avec la page). **Bas du récit** : bouton `↓` sur le journal si on n’est plus collé en bas (après un long message MJ ou lecture d’historique).
@@ -184,11 +184,9 @@ Les listes markdown (`- …`) du **dernier** récit MJ encore **en vigueur** (2�
 
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.
 
-   - **Ollama (VPS)** : provider dédié, URL `http://127.0.0.1:11434/v1`, modèle ex. `qwen2.5:7b-instruct` (RAM-safe) — optionnel `qwen3:8b` / `qwen3:14b` si 16 Go+ ; install `deploy/ollama-setup.sh`, pas de tunnel Mac
-   - **LM Studio (Mac + tunnel)** : URL `http://127.0.0.1:1234/v1`, modèle saisi à la main ; « Enregistrer la config MJ » = sauvegarde SQLite uniquement
-   - **OpenRouter** : URL `https://openrouter.ai/api/v1`, ids `openai/gpt-4o` (MJ) + `openai/gpt-4o-mini` (outils) ; clé `sk-or-…` **jamais en git**
-   - **Groq / Gemini (gratuit, serveur)** : `AI_PROVIDER=gemini|groq|openrouter`, `AI_MODEL`, `AI_FALLBACK_PROVIDER=groq` ; clés `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` **uniquement `process.env`** (jamais frontend, jamais SQLite, jamais logs) ; même `completeChat` ; dernier fallback LM Studio / Ollama conservé. **VPS OVH** : l’API Gemini Google refuse souvent l’IP datacenter (`location is not supported`) → MJ Flash via OpenRouter (`google/gemini-3.8-flash`).
-5. **LLM** — catalogue avec rôles `narration` / `tool` / `both` ; config par salon (`modelId` MJ + `toolModelId` optionnel cloud) ; `completeChat` + profils (`task-profile.ts`) ; **MJ auto Dire** : `@PNJ` **ou** parole sans @ s'il y a des auditeurs / de la foule (`scheduleSayNpcMj`) ; **MJ auto Action** actif (`scheduleActionMj`) ; Réclamer / routes hôte ; endpoint `POST /api/rooms/:id/mj` conservé (API interne / v2)
+   - **MJ automatique (unique)** : le joueur ne choisit plus le moteur. `listAutomaticLlmCandidates` : `AI_PROVIDER` d’abord, puis première clé dispo (Gemini → OpenRouter → Groq), **Ollama VPS** toujours en dernier. `completeChat` enchaîne les candidats. `PUT /llm` ne garde que `mjProse` / faits auto / override prompt.
+   - **Ouverture Acte I** : si le récit est injouable (cuisine, dette inventée, QCM, réplique du PJ…), réécriture avec les **raisons** puis secours `renderFallbackOpeningNarrative`. Premier Dire/Action après ouverture : interdit de reposer la scène.
+5. **LLM** — `completeChat` + profils (`task-profile.ts`) ; **MJ auto Dire** / **Action** ; Réclamer / routes hôte
 6. **Carte** — génération procédurale (simplex noise, biomes, effets toxic/fog/evil/buff, POI, territoires, SVG)
 7. **Modèles** — tables SQLite : messages, quêtes, journal, propositions archivées (+ endpoints REST)
 8. **Prompt MJ** — `system-prompt.ts` + **maîtrise d'écrivain** (`mj-craft.ts` : monde vivant pas un rail ; **règle des deux** + un sens + un mouvement ; [DIRE] dit dans le monde ; PNJ incarnés) + contexte monde + canon (`canon-continuity.ts`)
@@ -715,8 +713,8 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 
 ## Notes agent
 
-- La clé API LLM OpenAI/OpenRouter peut être saisie côté client (god mode) et transmise à l’appel MJ ; non persistée en base. **Groq / Gemini : jamais le frontend** — `GROQ_API_KEY` / `GEMINI_API_KEY` + `AI_PROVIDER` / `AI_MODEL` / `AI_FALLBACK_PROVIDER` dans `.env` (docker-compose.prod.yml).
-- **Routage LLM** : `completeChat` + `taskKind` `narration` | `tool` ; `AI_PROVIDER=groq|gemini|openrouter` surcharge un salon **cloud** ; un salon enregistré **Ollama / LM Studio** n’est **pas** redirigé (sinon TPM OpenRouter alors que l’UI dit VPS). Fallback `AI_FALLBACK_PROVIDER` puis LM Studio / Ollama (`LM_STUDIO_BASE_URL`) pour les salons cloud. Cloud défaut hors VPS sans env = GPT-4o (MJ) + GPT-4o mini ; local = un seul modèle chargé.
+- **Aucune clé LLM côté client.** `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` + `AI_PROVIDER` / `AI_MODEL` dans `.env`. God mode : style du récit seulement (`MjProseSettings`).
+- **Routage LLM** : unique et automatique. `applyEnvAiOverride` ignore le provider du salon. Chaîne `listAutomaticLlmCandidates` : `AI_PROVIDER` → Gemini → OpenRouter → Groq → Ollama VPS. `completeChat` tente chaque candidat puis le local.
 - **Journal LLM** : chaque `completeChat` écrit une ligne JSONL (`/data/llm-events.jsonl` en prod, à côté de la SQLite en local) — provider demandé vs effectif, secours, durée, chars, salon, libellé de file (`character-all`, `player:reclaim`…). **Pas** de prompt ni de clé. God mode → panneau **Journal LLM**. `docker logs rpg-cr-api-1` contient aussi `[LLM] …`. Rotation ~1,5 Mo (`llm-events.1.jsonl`).
 - **Réclamer hôte** : `pickHostMjPromptType` + `handleHostReclaim` dans `RoomView` (préambule / récap / reclaim) — déjà en place ; pas de travail dupliqué côté sous-agent `3dd156bd` si non retrouvé dans l'historique.
 - `getRoomByCode` compare en NOCASE (codes 6 caractères).

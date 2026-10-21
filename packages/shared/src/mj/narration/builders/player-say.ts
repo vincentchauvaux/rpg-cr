@@ -35,7 +35,10 @@ export function buildPlayerSayNarration(ctx: NarrationContext): string {
     `- Si c'est un échange **entre PJ** sans enjeu monde, reste bref ou silencieux.\n` +
     (unaddressed ||
       `- Personne d'évident à portée : au plus un détail d'ambiance, pas d'interlocuteur inventé nommé.\n`) +
-    `- 1–2 paragraphes sobres, français, dialogues en « … ». Options \`- \` seulement si un dilemme **nouveau** reste ouvert après cette réplique. Ce que tu établis devient canon.` +
+    `- 1–2 paragraphes sobres, français, dialogues en « … ». Options \`- \` seulement si un dilemme **nouveau** reste ouvert après cette réplique. Ce que tu établis devient canon.\n` +
+    (ctx.campaignOpeningDone
+      ? `- L'ouverture est déjà jouée : réagis à **cette** réplique, sans reposer la scène ni inventer une dette / un QCM.\n`
+      : "") +
     tableNowBlock +
     sceneBlock +
     companions

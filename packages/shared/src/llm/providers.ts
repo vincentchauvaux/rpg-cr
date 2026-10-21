@@ -1,8 +1,7 @@
 import { getCatalogEntry, isOpenRouterProvider } from "./catalog.js";
-import { estimatePromptChars, resolveLlmTimeoutMs, isLlmQuotaOrCreditError, isLlmRateLimitError, parseLlmRetryAfterMs, resolveMjMaxTokens } from "./context-budget.js";
+import { estimatePromptChars, resolveLlmTimeoutMs, isLlmRateLimitError, parseLlmRetryAfterMs, resolveMjMaxTokens } from "./context-budget.js";
 import {
   appendQuotaToLlmError,
-  isLlmAuthError,
   parseLlmQuotaFromHeaders,
   parseLlmQuotaFromText,
   parseLlmUsage,
@@ -24,7 +23,7 @@ import {
 import { resolveLmStudioServerBaseUrl } from "./lmstudio-url.js";
 import { LLM_TASK_PROFILES, resolveTaskModelId, type LlmTaskKind } from "./task-profile.js";
 import {
-  fallbackProviderConfig,
+  listAutomaticLlmCandidates,
   missingServerApiKeyError,
   readEnvAiSettings,
   resolveEffectiveLlmConfig,
@@ -689,14 +688,6 @@ async function completeAgainstConfig(
   return { ...payload, providerId: config.providerId, modelId };
 }
 
-function isCloudFailureWorthLocalFallback(error: unknown): boolean {
-  return (
-    isLlmAuthError(error) ||
-    isLlmQuotaOrCreditError(error) ||
-    isLlmRateLimitError(error)
-  );
-}
-
 function formatChainedLlmFailure(
   primary: unknown,
   fallbackProvider: string,
@@ -802,69 +793,51 @@ async function completeChatUntraced(
     primaryError = error;
   }
 
-  const namedFallback = fallbackProviderConfig(
-    envAi.fallbackProvider ?? "",
-    effective
+  const chain = listAutomaticLlmCandidates(envAi).filter(
+    (c) => c.providerId !== effective.providerId
   );
-  let namedFallbackError: unknown;
-  if (namedFallback) {
+  let lastError: unknown = primaryError;
+  let lastProvider = effective.providerId;
+  for (const next of chain) {
     const fallbackMax =
-      namedFallback.providerId === "groq"
+      next.providerId === "groq"
         ? Math.min(
             chatOptions.maxTokens,
-            resolveMjMaxTokens("groq", namedFallback.modelId)
+            resolveMjMaxTokens("groq", next.modelId)
           )
         : chatOptions.maxTokens;
     try {
       const result = await completeAgainstConfig(
-        namedFallback,
+        {
+          ...next,
+          mjProse: config.mjProse,
+          autoExtractFacts: config.autoExtractFacts,
+          systemPromptOverride: config.systemPromptOverride,
+        },
         messages,
         options,
         {
           ...chatOptions,
           maxTokens: fallbackMax,
-          retryOnEmpty: isReasoningChatModelId(namedFallback.modelId),
-          retryOnTimeout: false,
+          retryOnEmpty:
+            isLocalLlmProvider(next.providerId) ||
+            isReasoningChatModelId(next.modelId),
+          retryOnTimeout: isLocalLlmProvider(next.providerId),
+          timeoutMs: resolveLlmTimeoutMs(next.providerId, estimatedChars),
         },
         options.apiKey
       );
       return { ...result, usedFallback: true };
     } catch (error) {
-      namedFallbackError = error;
+      lastError = formatChainedLlmFailure(lastError, next.providerId, error);
+      lastProvider = next.providerId;
     }
   }
 
-  const cloudDead =
-    isCloudFailureWorthLocalFallback(primaryError) ||
-    (namedFallbackError != null &&
-      isCloudFailureWorthLocalFallback(namedFallbackError));
-  const allowLocal =
-    !isLocalLlmProvider(effective.providerId) &&
-    (cloudDead || Boolean(config.useFallbackLmStudio));
-
-  if (!allowLocal) {
-    if (namedFallback && namedFallbackError) {
-      throw formatChainedLlmFailure(
-        primaryError,
-        namedFallback.providerId,
-        namedFallbackError
-      );
-    }
-    throw primaryError;
+  if (isLocalLlmProvider(effective.providerId) || isLocalLlmProvider(lastProvider)) {
+    throw lastError;
   }
-
-  const prior =
-    namedFallback && namedFallbackError
-      ? formatChainedLlmFailure(
-          primaryError,
-          namedFallback.providerId,
-          namedFallbackError
-        )
-      : primaryError;
-  return runLocalFallback(
-    prior,
-    namedFallback?.providerId
-  );
+  return runLocalFallback(lastError, lastProvider);
 }
 
 export async function completeChat(

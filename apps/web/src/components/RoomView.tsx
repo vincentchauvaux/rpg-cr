@@ -67,7 +67,6 @@ import {
   subscribeAdminPanel,
 } from "@/lib/god-mode-ui";
 import { GodModeSwitch } from "@/components/GodModeSwitch";
-import { AdminLlmForm } from "@/components/AdminLlmForm";
 import { LlmTracePanel } from "@/components/LlmTracePanel";
 import { LocaleSelector } from "@/components/LocaleSelector";
 import { ChatMessageRow } from "@/components/ChatMessageRow";
@@ -99,7 +98,7 @@ import {
 } from "@/components/PlayerCompanionList";
 import { GraineReader } from "@/components/GraineReader";
 import { CharacterCreationWizard } from "@/components/CharacterCreationWizard";
-import { HostSetupWizard } from "@/components/HostSetupWizard";
+import { MjProseSettings } from "@/components/MjProseSettings";
 import { HeroAssistantPanel } from "@/components/HeroAssistantPanel";
 import { RoomDockNav } from "@/components/RoomDockNav";
 import {
@@ -111,8 +110,6 @@ import {
   isHostLlmSetupComplete,
   markHostLlmSetupComplete,
 } from "@/lib/host-llm-setup";
-import { useAutoHostTunnel } from "@/hooks/use-auto-host-tunnel";
-import { isVpsLmStudioHostMode } from "@/lib/lmstudio-tunnel";
 import { getBasePath } from "@/lib/config";
 import { CharacterSheetPanel } from "@/components/CharacterSheetPanel";
 import { NarrativeCanonPanel } from "@/components/NarrativeCanonPanel";
@@ -247,7 +244,6 @@ export function RoomView({ code }: Props) {
   const router = useRouter();
   const appUserId = useAppUserId();
   const [session, setSession] = useState<Session | null>(null);
-  useAutoHostTunnel(isVpsLmStudioHostMode() && session?.role === "admin");
   const [room, setRoom] = useState<Room | null>(null);
   const [scene, setScene] = useState<SceneState | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -1192,12 +1188,7 @@ export function RoomView({ code }: Props) {
   const hostLocale = hostPlayer?.preferredLocale ?? "fr";
   const needsCharacter =
     me?.kind === "human" && me.characterStatus !== "ready";
-  const showHostLlmSetup =
-    isAdmin &&
-    needsCharacter &&
-    Boolean(room?.id) &&
-    !hostLlmStepDone &&
-    (!hasLlmConfig || !isHostLlmSetupComplete(room!.id));
+  const showHostLlmSetup = false;
   const showCharacterWizard =
     needsCharacter && !showHostLlmSetup;
 
@@ -1406,20 +1397,6 @@ export function RoomView({ code }: Props) {
               : "room-main"
           }
         >
-          {showHostLlmSetup && session && room && (
-            <HostSetupWizard
-              roomCode={room.code}
-              catalog={catalog}
-              llmForm={llmForm}
-              setLlmForm={setLlmForm}
-              apiKey={apiKey}
-              setApiKey={setApiKey}
-              hasLlmConfig={hasLlmConfig}
-              onSave={handleSaveLlm}
-              onTest={handleTestLlm}
-              onContinue={handleHostSetupContinue}
-            />
-          )}
           {showCharacterWizard && me && session && (
             <CharacterCreationWizard
               player={me}
@@ -1486,11 +1463,6 @@ export function RoomView({ code }: Props) {
             />
             <ScribIndicator active={mjBackgroundScrib} />
           </div>
-          {showHostLlmSetup && (
-            <p className="muted" style={{ marginBottom: "0.75rem" }}>
-              Hôte : configurez le MJ (étape 1) avant de créer votre personnage.
-            </p>
-          )}
           {showCharacterWizard && (
             <p className="muted" style={{ marginBottom: "0.75rem" }}>
               Finalisez votre personnage pour rejoindre la conversation.
@@ -1924,15 +1896,10 @@ export function RoomView({ code }: Props) {
 
               {isAdmin && adminOpen && !showHostLlmSetup ? (
                 <div className="god-panel">
-                  <AdminLlmForm
-                    catalog={catalog}
+                  <MjProseSettings
                     llmForm={llmForm}
                     setLlmForm={setLlmForm}
-                    apiKey={apiKey}
-                    setApiKey={setApiKey}
                     onSave={handleSaveLlm}
-                    onTest={handleTestLlm}
-                    initialCollapsed={hasLlmConfig}
                   />
                   {room && (
                     <LlmTracePanel roomId={room.id} playerId={session.playerId} />

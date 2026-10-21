@@ -5,6 +5,7 @@ import {
   buildCampaignOpeningRewritePrompt,
   buildFallbackOpeningPlan,
   completeChat,
+  campaignOpeningUnplayableReasons,
   isCampaignOpeningUnplayable,
   parseCampaignOpeningPlan,
   renderFallbackOpeningNarrative,
@@ -113,11 +114,12 @@ export async function bootstrapCampaignOpening(
     const plan =
       parseCampaignOpeningPlan(planResult.content) ?? buildFallbackOpeningPlan(ctx);
 
+    const openingOpts = {
+      sheet: host.characterSheet,
+      mjProse: ctx.mjProse,
+    };
     const unplayable = (content: string) =>
-      isCampaignOpeningUnplayable(content, host.name, {
-        sheet: host.characterSheet,
-        mjProse: ctx.mjProse,
-      });
+      isCampaignOpeningUnplayable(content, host.name, openingOpts);
 
     const narrativePrompt = buildCampaignOpeningNarrativePrompt(plan, ctx);
     const runOpening = (userPrompt: string) =>
@@ -133,14 +135,32 @@ export async function bootstrapCampaignOpening(
       runOpening(narrativePrompt)
     );
     if (unplayable(opening.content)) {
+      const reasons = campaignOpeningUnplayableReasons(
+        opening.content,
+        host.name,
+        openingOpts
+      );
+      console.warn(
+        `[opening] ${room.code} injouable (${reasons.join("; ")}) — réécriture`
+      );
       opening = await queueNarrativeLlm(
         roomId,
         "campaign-opening-narrative-retry",
         () =>
-          runOpening(buildCampaignOpeningRewritePrompt(opening.content, plan, ctx))
+          runOpening(
+            buildCampaignOpeningRewritePrompt(opening.content, plan, ctx, reasons)
+          )
       );
     }
     if (unplayable(opening.content)) {
+      const reasons = campaignOpeningUnplayableReasons(
+        opening.content,
+        host.name,
+        openingOpts
+      );
+      console.warn(
+        `[opening] ${room.code} toujours injouable (${reasons.join("; ")}) — secours`
+      );
       opening = {
         ...opening,
         content: renderFallbackOpeningNarrative(plan, ctx),

@@ -4,6 +4,7 @@ import {
   buildCampaignOpeningRewritePrompt,
   buildOpeningPalette,
   isCampaignOpeningTooThin,
+  campaignOpeningUnplayableReasons,
   isCampaignOpeningUnplayable,
   namesReferToSamePerson,
   openingDumpsEncyclopedia,
@@ -333,4 +334,30 @@ test("ouverture injouable : cuisine + dette inventée + réplique du PJ (Yodeli)
     isCampaignOpeningUnplayable(YODELI_KITCHEN_OPENING, "Yodeli yodelou", { sheet }),
     true
   );
+  const reasons = campaignOpeningUnplayableReasons(
+    YODELI_KITCHEN_OPENING,
+    "Yodeli yodelou",
+    { sheet }
+  );
+  assert.ok(reasons.some((r) => /cuisine|service/i.test(r)));
+  assert.ok(reasons.some((r) => /dette|faveur/i.test(r)));
+  const rewrite = buildCampaignOpeningRewritePrompt(
+    YODELI_KITCHEN_OPENING,
+    {
+      worldSummary: "Une auberge.",
+      mainPlot: "Tension locale.",
+      startingSituation: "Tu es à table.",
+      openingScene: "Ton banc n'est pas libre.",
+      scene: { location: "l'auberge", mood: "calme", tension: -18 },
+    },
+    {
+      roomName: "Test",
+      worldSeed: "seed",
+      map: null,
+      hostName: "Yodeli yodelou",
+      hostSheet: sheet,
+    },
+    reasons
+  );
+  assert.match(rewrite, /cuisine|service/i);
 });

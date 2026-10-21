@@ -7,6 +7,7 @@ import {
   EMPTY_CHARACTER_SHEET,
   DEFAULT_LOCALE,
   withNormalizedMjProse,
+  buildAutomaticLlmConfig,
   type CharacterSheet,
   type CharacterStatus,
   type CircleStatus,
@@ -202,6 +203,17 @@ function rowToRoom(row: Record<string, unknown>): Room {
   };
 }
 
+function ensureRoomLlmConfig(room: Room): Room {
+  const cfg = buildAutomaticLlmConfig(room.llmConfig ?? undefined);
+  const stored = room.llmConfig;
+  const stale =
+    !stored ||
+    stored.providerId !== cfg.providerId ||
+    stored.modelId !== cfg.modelId;
+  if (stale) setLlmConfig(room.id, cfg);
+  return { ...room, llmConfig: cfg };
+}
+
 export function getWorldSeed(roomId: string): string | null {
   const row = db.prepare(`SELECT world_seed, map_seed FROM rooms WHERE id = ?`).get(roomId) as
     | { world_seed?: string; map_seed?: string }
@@ -282,6 +294,7 @@ export function createRoom(
   const mapSeed = worldSeed.slice(0, 8);
   const map = generateProceduralMap(mapSeed);
   const now = new Date().toISOString();
+  const llmConfig = buildAutomaticLlmConfig();
 
   db.prepare(
     `INSERT INTO rooms (
@@ -289,8 +302,18 @@ export function createRoom(
        world_seed, campaign_opening_done,
        scene_location, scene_mood, scene_tension, narrative_arc
      )
-     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, 0, '', '', 0, NULL)`
-  ).run(id, code, name, now, mapSeed, JSON.stringify(map), now, worldSeed);
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '', '', 0, NULL)`
+  ).run(
+    id,
+    code,
+    name,
+    now,
+    mapSeed,
+    JSON.stringify(map),
+    JSON.stringify(llmConfig),
+    now,
+    worldSeed
+  );
 
   const admin = insertPlayer(id, adminName, "admin", {
     isGodMode: false,
@@ -320,7 +343,7 @@ export function createRoom(
       map_seed: mapSeed,
       world_seed: worldSeed,
       campaign_opening_done: 0,
-      llm_config: null,
+      llm_config: JSON.stringify(llmConfig),
     }),
     admin,
     map,
@@ -331,14 +354,14 @@ export function getRoomByCode(code: string): Room | null {
   const row = db
     .prepare(`SELECT * FROM rooms WHERE code = ? COLLATE NOCASE`)
     .get(code.toUpperCase()) as Record<string, unknown> | undefined;
-  return row ? rowToRoom(row) : null;
+  return row ? ensureRoomLlmConfig(rowToRoom(row)) : null;
 }
 
 export function getRoomById(id: string): Room | null {
   const row = db.prepare(`SELECT * FROM rooms WHERE id = ?`).get(id) as
     | Record<string, unknown>
     | undefined;
-  return row ? rowToRoom(row) : null;
+  return row ? ensureRoomLlmConfig(rowToRoom(row)) : null;
 }
 
 export function getMap(roomId: string): ProceduralMap | null {

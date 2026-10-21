@@ -206,6 +206,7 @@ function buildPlayerActionNarrationContext(
       ? findPendingRollRequest(roomId)
       : undefined,
     companionInvite: messageLooksLikeCompanionInvite(content),
+    campaignOpeningDone: getCampaignOpeningDone(roomId),
   };
 }
 
@@ -257,6 +258,7 @@ function buildPlayerSayUnaddressedContext(
     nearbyListeners,
     crowdPresent,
     companionInvite: messageLooksLikeCompanionInvite(content),
+    campaignOpeningDone: getCampaignOpeningDone(roomId),
   };
 }
 
@@ -721,7 +723,7 @@ export function requestPlayerMjTrigger(
   if (!room?.llmConfig) {
     return {
       ok: false,
-      error: "MJ non configuré — l'hôte doit configurer le LLM en god mode.",
+      error: "MJ indisponible — le serveur n'a pas de moteur configuré.",
     };
   }
 
@@ -814,7 +816,7 @@ export function requestHostMjTrigger(
   if (!room?.llmConfig) {
     return {
       ok: false,
-      error: "MJ non configuré — l'hôte doit configurer le LLM en god mode.",
+      error: "MJ indisponible — le serveur n'a pas de moteur configuré.",
     };
   }
 
@@ -1165,7 +1167,7 @@ export function scheduleAiPuppetGeneration(roomId: string, player: Player): void
       roomId,
       "system",
       "Système",
-      `« ${player.name} » : MJ non configuré — fiche minimale uniquement. Configurez le LLM en god mode pour une génération complète.`,
+      `« ${player.name} » : MJ indisponible — fiche minimale uniquement.`,
       "system"
     );
     broadcastMessage(roomId, sys);

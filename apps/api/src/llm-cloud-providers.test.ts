@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import {
   applyEnvAiOverride,
+  listAutomaticLlmCandidates,
   completeChat,
   DEFAULT_GEMINI_MODEL,
   DEFAULT_GROQ_MODEL,
@@ -99,6 +100,8 @@ test("Gemini : la clé frontend est ignorée au profit de GEMINI_API_KEY", () =>
 });
 
 test("AI_PROVIDER=groq surcharge un salon cloud, pas Ollama", () => {
+  process.env.AI_PROVIDER = "groq";
+  process.env.AI_MODEL = DEFAULT_GROQ_MODEL;
   const effective = applyEnvAiOverride(cloudRoom, {
     provider: "groq",
     model: DEFAULT_GROQ_MODEL,
@@ -122,16 +125,23 @@ test("AI_PROVIDER=gemini surcharge un salon cloud, pas Ollama", () => {
   assert.equal(effective.baseUrl, "https://generativelanguage.googleapis.com/v1beta/openai");
 });
 
-test("salon Ollama : AI_PROVIDER cloud n'impose plus de TPM OpenRouter", () => {
-  for (const provider of ["openrouter", "groq", "gemini", "openai"] as const) {
-    const effective = applyEnvAiOverride(localRoom, {
-      provider,
-      model: provider === "groq" ? DEFAULT_GROQ_MODEL : "google/gemini-3.8-flash",
-      fallbackProvider: "groq",
-    });
-    assert.equal(effective.providerId, "ollama", provider);
-    assert.equal(effective.modelId, "qwen2.5:7b-instruct", provider);
-  }
+test("plus de choix salon : AI_PROVIDER cloud s'impose même si le salon était Ollama", () => {
+  const effective = applyEnvAiOverride(localRoom, {
+    provider: "groq",
+    model: DEFAULT_GROQ_MODEL,
+    fallbackProvider: "gemini",
+  });
+  assert.equal(effective.providerId, "groq");
+  assert.equal(effective.modelId, DEFAULT_GROQ_MODEL);
+});
+
+test("sans clé ni AI_PROVIDER : Ollama VPS automatique", () => {
+  const effective = applyEnvAiOverride(cloudRoom, {
+    provider: null,
+    model: null,
+    fallbackProvider: null,
+  });
+  assert.equal(effective.providerId, "ollama");
 });
 
 test("Groq : sans AI_TOOL_MODEL, outils = même 20B (extraits auto coupés ailleurs)", () => {
@@ -457,26 +467,40 @@ test("primary + secours en échec : les deux erreurs sont visibles", async () =>
   );
 });
 
-test("salon Ollama : completeChat n'appelle pas OpenRouter malgré AI_PROVIDER", async () => {
+test("chaîne automatique : clés Gemini + Groq → Gemini puis Groq puis Ollama", () => {
+  process.env.GEMINI_API_KEY = "g";
+  process.env.GROQ_API_KEY = "q";
+  const chain = listAutomaticLlmCandidates({
+    provider: null,
+    model: null,
+    fallbackProvider: null,
+  });
+  assert.deepEqual(
+    chain.map((c) => c.providerId),
+    ["gemini", "groq", "ollama"]
+  );
+});
+
+test("choix automatique : AI_PROVIDER OpenRouter gagne même si le salon était Ollama", async () => {
   process.env.AI_PROVIDER = "openrouter";
   process.env.AI_MODEL = "google/gemini-3.8-flash";
   process.env.OPENROUTER_API_KEY = "sk-or-test";
   let calledUrl = "";
   globalThis.fetch = async (input) => {
     calledUrl = String(input);
-    if (String(input).includes("openrouter")) {
-      throw new Error("OpenRouter ne doit pas être appelé pour un salon Ollama");
+    if (String(input).includes("11434")) {
+      throw new Error("Ollama ne doit pas être le premier choix si OpenRouter est dispo");
     }
-    return chatResponse("OK ollama");
+    return chatResponse("OK openrouter");
   };
 
   const result = await completeChat(localRoom, [{ role: "user", content: "OK" }], {
     timeoutMs: 5_000,
   });
-  assert.match(calledUrl, /11434/);
-  assert.equal(result.providerId, "ollama");
+  assert.match(calledUrl, /openrouter/);
+  assert.equal(result.providerId, "openrouter");
   assert.equal(result.usedFallback, false);
-  assert.equal(result.content, "OK ollama");
+  assert.equal(result.content, "OK openrouter");
 });
 
 test("OpenRouter sans clé : secours Ollama (pas un quota 0)", async () => {

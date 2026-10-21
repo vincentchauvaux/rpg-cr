@@ -73,6 +73,9 @@ export function buildPlayerActionNarration(ctx: NarrationContext): string {
     `- Sort, graine, attaque **sans ennemi** dans la scène : l'effet se pose **ici**. Interdit d'inventer hurlements, orage ou bataille.\n` +
     `- Calibre la longueur et le ton : **1–2 paragraphes sobres** si l'action est simple ou la scène calme ; **2–4 paragraphes** seulement si l'action est dramatique, risquée ou change vraiment la situation — pas de lyrisme gratuit.\n` +
     `- **N'explique pas deux fois** la même situation : ne reformule pas le dernier récit MJ ; narre seulement la **conséquence** de cette action.\n` +
+    (ctx.campaignOpeningDone
+      ? `- L'Acte I est **déjà posé**. Interdit de reposer le lieu, l'heure, « tu es à l'auberge », ou un nouveau hook d'ouverture. Continue **après** le dernier beat.\n`
+      : "") +
     `- Ne rédige **pas** un chapitre entier sauf si l'action le justifie clairement.\n` +
     `- Résous partiellement ou totalement selon le contexte ; propose un **jet de dés** si l'issue est incertaine et qu'aucun total n'a déjà été annoncé ; si les dés de table ont parlé, **ne redemande pas** de jet.\n` +
     `- Tiens compte des compagnons présents, de la **fiche** (rang, hommes, inventaire) et de la scène archivée ; ce que tu établis devient **canon**.\n` +
