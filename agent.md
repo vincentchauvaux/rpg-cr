@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-10-21 (**MJ automatique** + ouverture Acte I plus stricte)
+> Dernière mise à jour : 2026-10-21 (**MJ automatique** + ouverture Acte I) — déployé prod `d1060f2`
 
 ## Vision
 
