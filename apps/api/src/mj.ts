@@ -12,6 +12,8 @@ import {
   isLlmTimeoutError,
   isLlmRateLimitError,
   isLlmQuotaOrCreditError,
+  isLlmUnavailableError,
+  isLlmPromptTooHeavyForLocal,
   isReasoningChatModelId,
   formatSmallContextModelHint,
   mjContextLimits,
@@ -27,10 +29,13 @@ import {
   type ScenePatchInput,
   type ExtractedNarrativeArc,
   formatCompanionRosterForMj,
+  inferAdventureEventKind,
+  GROQ_NARRATION_MAX_CHARS,
   type CompanionDirective,
   type LlmUsage,
   type LlmQuotaHint,
 } from "@rpg-cr/shared";
+import { adventureSliceForTurn, commitAdventureAfterTurn } from "./adventure-store.js";
 import { getMap, getRoomById, getPlayerById, listPlayers } from "./rooms.js";
 import { listQuests, listJournal } from "./campaign.js";
 import { listMessages } from "./messages.js";
@@ -60,6 +65,8 @@ export interface MjTurnOptions {
   preferredContextMode?: MjContextMode;
   /** 401 / pastille : Ollama au lieu de rejouer OpenRouter sans clé. */
   forceLocalFallback?: boolean;
+  /** Événement d'aventure (sinon déduit du texte). */
+  adventureKind?: import("@rpg-cr/shared").AdventureEventKind;
 }
 
 function truncateMjBlock(text: string, max: number): string {
@@ -118,6 +125,19 @@ function buildMjTurnMessages(
     .filter(Boolean)
     .join("\n\n");
 
+  const adventureKind =
+    options.adventureKind ??
+    inferAdventureEventKind(
+      options.actionContent || playerMessage,
+      options.actionContent ? "action" : "say"
+    );
+  const adventurePack = adventureSliceForTurn(roomId, {
+    kind: adventureKind,
+    text: options.actionContent || playerMessage,
+    maxChars: micro ? 700 : slim ? 1400 : 2800,
+  });
+  const adventureBlock = adventurePack?.block ?? "";
+
   const factsLimit = micro ? 5 : slim ? 10 : 20;
   const narrativeFacts = listNarrativeFacts(roomId, factsLimit);
   const factsBlock = formatNarrativeFactsForMj(narrativeFacts);
@@ -175,7 +195,7 @@ function buildMjTurnMessages(
     ? [
         `Graine : ${worldSeed}.`,
         `### Script de table\n${truncateMjBlock(tableNowBlock, 700)}`,
-        `### Canon (résumé)\n${establishedCanonSummary}`,
+        adventureBlock || `### Canon (résumé)\n${establishedCanonSummary}`,
         `### Scène\n${sceneBlock}`,
         playerSheetBlock
           ? `### PJ actif\n${truncateMjBlock(playerSheetBlock, limits.playerSheetMax)}`
@@ -184,7 +204,9 @@ function buildMjTurnMessages(
     : [
         `Graine narrative du salon : ${worldSeed}.`,
         `### Script de table (source de vérité — ne pas re-narrer)\n${truncateMjBlock(tableNowBlock, slim ? 900 : 1800)}`,
-        `### Résumé canon établi (ne pas inventer au-delà)\n${establishedCanonSummary}`,
+        adventureBlock
+          ? ""
+          : `### Résumé canon établi (ne pas inventer au-delà)\n${establishedCanonSummary}`,
         map
           ? `Carte (graine ${map.seed}) : pays — ${map.countries.join(", ")}. POI : ${map.pois.map((p) => p.name).join("; ")}.`
           : "Carte non générée.",
@@ -192,12 +214,14 @@ function buildMjTurnMessages(
         slim
           ? ""
           : `Dernier journal (DB) : ${journal.at(-1)?.title ?? "—"}.`,
-        mdSnippet ||
-          (slim
-            ? ""
-            : "Pas encore d'export .md — l'hôte peut quitter avec « Sauvegarder et quitter »."),
-        slim ? "" : `### Canon narratif établi (faits MJ)\n${factsBlock}`,
-        establishedCanonBlock
+        adventureBlock
+          ? adventureBlock
+          : mdSnippet ||
+            (slim
+              ? ""
+              : "Pas encore d'aventure JSON — elle se crée à l'ouverture ou au premier tour."),
+        slim || adventureBlock ? "" : `### Canon narratif établi (faits MJ)\n${factsBlock}`,
+        establishedCanonBlock && !adventureBlock
           ? `### Éléments établis (ne pas inventer au-delà)\n${establishedCanonBlock}`
           : "",
         `### Scène actuelle (lieu + ambiance + tension)\n${sceneBlock}`,
@@ -313,6 +337,17 @@ export async function runMjTurn(
       envAi.fallbackProvider
     );
   let payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
+  if (
+    !options.preferredContextMode &&
+    payload.estimatedChars > GROQ_NARRATION_MAX_CHARS &&
+    (effective.providerId === "groq" || Boolean(process.env.GROQ_API_KEY?.trim()))
+  ) {
+    const slimmer = nextSlimmerMjMode(mode);
+    if (slimmer) {
+      mode = slimmer;
+      payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
+    }
+  }
   devLogMjContext(
     mode,
     payload.estimatedChars,
@@ -335,7 +370,9 @@ export async function runMjTurn(
       (isContextLengthLlmError(firstError) ||
         isLlmTimeoutError(firstError) ||
         isLlmRateLimitError(firstError) ||
-        isLlmQuotaOrCreditError(firstError));
+        isLlmQuotaOrCreditError(firstError) ||
+        isLlmUnavailableError(firstError) ||
+        isLlmPromptTooHeavyForLocal(firstError));
 
     if (isContextLengthLlmError(firstError) && !slimmer) {
       throw new Error(
@@ -370,6 +407,19 @@ export async function runMjTurn(
 
   const prepared = prepareMjResponse(result.content);
   warnCanonContinuityDrift(roomId, prepared.content);
+
+  try {
+    commitAdventureAfterTurn(roomId, {
+      kind: options.adventureKind,
+      text: options.actionContent || playerMessage,
+      mjText: prepared.content,
+      location: prepared.scenePatch?.location,
+      lastBeat: options.actionContent || playerMessage,
+      tension: prepared.scenePatch?.tension,
+    });
+  } catch (err) {
+    console.warn("[adventure] commit after turn failed", err);
+  }
 
   return {
     content: prepared.content,

@@ -1,6 +1,12 @@
 import { getCatalogEntry, isOpenRouterProvider } from "./catalog.js";
 import { estimatePromptChars, resolveLlmTimeoutMs, isLlmRateLimitError, parseLlmRetryAfterMs, resolveMjMaxTokens } from "./context-budget.js";
 import {
+  isLlmProviderSkipped,
+  rememberLlmProviderFailure,
+  shouldSkipGroqNarration,
+  shouldSkipLocalNarration,
+} from "./provider-skip.js";
+import {
   appendQuotaToLlmError,
   parseLlmQuotaFromHeaders,
   parseLlmQuotaFromText,
@@ -774,28 +780,61 @@ async function completeChatUntraced(
   };
 
   if (options.forceLocalFallback) {
+    if (shouldSkipLocalNarration(estimatedChars, taskKind)) {
+      throw new Error(
+        "Prompt trop long pour Ollama CPU — d'abord réduire le contexte."
+      );
+    }
     return runLocalFallback(
       new Error("Relance demandée via LLM local (Ollama / LM Studio).")
     );
   }
 
   let primaryError: unknown;
-  try {
-    const result = await completeAgainstConfig(
-      effective,
-      messages,
-      options,
-      chatOptions,
-      options.apiKey
+  if (
+    effective.providerId === "groq" &&
+    shouldSkipGroqNarration(estimatedChars, taskKind)
+  ) {
+    primaryError = new Error(
+      "Prompt trop long pour Groq (TPM) — d'abord réduire le contexte."
     );
-    return { ...result, usedFallback: false };
-  } catch (error) {
-    primaryError = error;
+  } else if (isLlmProviderSkipped(effective.providerId)) {
+    primaryError = new Error(
+      `LLM ${effective.providerId} écarté (échec récent : quota / 503).`
+    );
+  } else {
+    try {
+      const result = await completeAgainstConfig(
+        effective,
+        messages,
+        options,
+        chatOptions,
+        options.apiKey
+      );
+      return { ...result, usedFallback: false };
+    } catch (error) {
+      primaryError = error;
+      rememberLlmProviderFailure(effective.providerId, error);
+    }
   }
 
-  const chain = listAutomaticLlmCandidates(envAi).filter(
-    (c) => c.providerId !== effective.providerId
-  );
+  const chain = listAutomaticLlmCandidates(envAi).filter((c) => {
+    if (c.providerId === effective.providerId) return false;
+    if (isLlmProviderSkipped(c.providerId)) return false;
+    if (
+      isLocalLlmProvider(c.providerId) &&
+      shouldSkipLocalNarration(estimatedChars, taskKind)
+    ) {
+      return false;
+    }
+    if (
+      c.providerId === "groq" &&
+      shouldSkipGroqNarration(estimatedChars, taskKind)
+    ) {
+      return false;
+    }
+    return true;
+  });
   let lastError: unknown = primaryError;
   let lastProvider = effective.providerId;
   for (const next of chain) {
@@ -829,9 +868,21 @@ async function completeChatUntraced(
       );
       return { ...result, usedFallback: true };
     } catch (error) {
+      rememberLlmProviderFailure(next.providerId, error);
       lastError = formatChainedLlmFailure(lastError, next.providerId, error);
       lastProvider = next.providerId;
     }
+  }
+
+  if (
+    shouldSkipLocalNarration(estimatedChars, taskKind) ||
+    shouldSkipGroqNarration(estimatedChars, taskKind)
+  ) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(
+          "Prompt trop long pour Groq / Ollama — d'abord réduire le contexte."
+        );
   }
 
   if (isLocalLlmProvider(effective.providerId) || isLocalLlmProvider(lastProvider)) {

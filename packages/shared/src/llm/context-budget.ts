@@ -68,9 +68,10 @@ export function resolveLlmTimeoutMs(
 ): number {
   const isLocal = isLocalLlmProvider(providerId);
   if (!isLocal) {
-    if (estimatedChars > 28_000) return 120_000;
-    if (estimatedChars > 16_000) return 100_000;
-    return 90_000;
+    if (providerId === "gemini") return 18_000;
+    if (providerId === "groq") return 45_000;
+    if (estimatedChars > 16_000) return 45_000;
+    return 30_000;
   }
 
   const base = 180_000;
@@ -96,6 +97,17 @@ export function isLlmQuotaOrCreditError(error: unknown): boolean {
   return /LLM 402|LLM 403|key limit|credit|quota exceeded|insufficient.?credits|payment required|User location is not supported/i.test(
     error.message
   );
+}
+
+/** 503 / saturé — Gemini OVH souvent. Ne pas attendre 90 s. */
+export function isLlmUnavailableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /LLM 503|overloaded|unavailable|high demand|UNAVAILABLE|busy/i.test(error.message);
+}
+
+export function isLlmPromptTooHeavyForLocal(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /trop long pour (Ollama|Groq)/i.test(error.message);
 }
 
 /** Groq inclut `max_tokens` dans le TPM : attendre le délai annoncé (ex. 8.52s). */

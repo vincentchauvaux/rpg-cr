@@ -190,13 +190,12 @@ export function listAutomaticLlmCandidates(
   const preferred = normalizeAiProviderId(settings.provider);
   if (preferred) push(configForAutomaticProvider(preferred, settings));
 
-  if (env.GEMINI_API_KEY?.trim()) {
+  if (env.GROQ_API_KEY?.trim()) {
     push(
-      configForAutomaticProvider("gemini", {
+      configForAutomaticProvider("groq", {
         ...settings,
-        provider: "gemini",
-        model:
-          settings.model && preferred === "gemini" ? settings.model : null,
+        provider: "groq",
+        model: preferred === "groq" ? settings.model : null,
       })
     );
   }
@@ -212,12 +211,13 @@ export function listAutomaticLlmCandidates(
       })
     );
   }
-  if (env.GROQ_API_KEY?.trim()) {
+  if (env.GEMINI_API_KEY?.trim()) {
     push(
-      configForAutomaticProvider("groq", {
+      configForAutomaticProvider("gemini", {
         ...settings,
-        provider: "groq",
-        model: preferred === "groq" ? settings.model : null,
+        provider: "gemini",
+        model:
+          settings.model && preferred === "gemini" ? settings.model : null,
       })
     );
   }

@@ -4,10 +4,11 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
-import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, assertChatModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel, usesTightGroqTpm, buildAutomaticLlmConfig } from "@rpg-cr/shared";
+import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, assertChatModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel, usesTightGroqTpm, buildAutomaticLlmConfig, parseAdventureJson } from "@rpg-cr/shared";
 import { resolveRoomApiKey } from "./llm-api-key.js";
 import { initDb } from "./db.js";
 import { engineHealth, startRpgCrEngine, stopRpgCrEngine } from "./engine.js";
+import { loadOrSeedAdventure, writeAdventure } from "./adventure-store.js";
 import { installLlmFileTrace, readLlmTraceEvents, runWithLlmTrace } from "./llm-trace-file.js";
 import {
   API_SECURITY_HEADERS,
@@ -991,6 +992,36 @@ app.get<{
   const content = readGraineFile(room.code, req.params.filename);
   if (content == null) return reply.status(404).send({ error: "Fichier introuvable" });
   return { filename: req.params.filename, content };
+});
+
+app.get<{
+  Params: { roomId: string };
+  Querystring: { actorPlayerId?: string };
+}>("/api/rooms/:roomId/adventure", async (req, reply) => {
+  const actor = requireAdminGod(req.query.actorPlayerId ?? "");
+  if (!actor || actor.roomId !== req.params.roomId) {
+    return reply.status(403).send({ error: "God mode requis" });
+  }
+  const adventure = loadOrSeedAdventure(req.params.roomId);
+  if (!adventure) return reply.status(404).send({ error: "Salon introuvable" });
+  return { adventure };
+});
+
+app.put<{
+  Params: { roomId: string };
+  Querystring: { actorPlayerId?: string };
+  Body: { adventure?: unknown };
+}>("/api/rooms/:roomId/adventure", async (req, reply) => {
+  const actor = requireAdminGod(req.query.actorPlayerId ?? "");
+  if (!actor || actor.roomId !== req.params.roomId) {
+    return reply.status(403).send({ error: "God mode requis" });
+  }
+  const room = getRoomById(req.params.roomId);
+  if (!room) return reply.status(404).send({ error: "Salon introuvable" });
+  const parsed = parseAdventureJson(req.body?.adventure ?? req.body);
+  if (!parsed) return reply.status(400).send({ error: "JSON d'aventure invalide" });
+  writeAdventure(room.code, parsed);
+  return { adventure: parsed };
 });
 
 function canAccessCharacter(

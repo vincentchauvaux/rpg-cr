@@ -1,4 +1,5 @@
 export * from "./google-subject.js";
+export * from "./adventure/index.js";
 export * from "./types.js";
 export * from "./companion-pact.js";
 export * from "./companion-active.js";
@@ -24,6 +25,7 @@ export * from "./llm/model-kind.js";
 export * from "./llm/local-llm.js";
 export * from "./llm/lmstudio-url.js";
 export * from "./llm/context-budget.js";
+export * from "./llm/provider-skip.js";
 export * from "./llm/model-context-tier.js";
 export * from "./llm/lmstudio-preflight.js";
 export * from "./llm/llm-health.js";

@@ -78,13 +78,20 @@ export function initialMjContextModeForModel(modelId: string): "full" | "slim" |
   return "full";
 }
 
-/** Groq free : prompt slim. Idem si Groq est le secours (OpenRouter/Gemini peuvent tomber dessus). */
+/** Groq free : prompt slim. Idem si Groq est dans la chaîne (clé présente) — OpenRouter 403 tombe dessus. */
 export function initialMjContextModeForConfig(
   providerId: string,
   modelId: string,
-  fallbackProvider?: string | null
+  fallbackProvider?: string | null,
+  env: Record<string, string | undefined> = process.env
 ): "full" | "slim" | "micro" {
   const fallback = fallbackProvider?.trim().toLowerCase();
-  if (providerId === "groq" || fallback === "groq") return "slim";
+  if (
+    providerId === "groq" ||
+    fallback === "groq" ||
+    Boolean(env.GROQ_API_KEY?.trim())
+  ) {
+    return "slim";
+  }
   return initialMjContextModeForModel(modelId);
 }

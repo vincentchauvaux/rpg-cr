@@ -20,6 +20,7 @@ import {
   resolveServerAiApiKey,
   isReasoningChatModelId,
   usesTightGroqTpm,
+  clearLlmProviderSkips,
   type LlmRoomConfig,
 } from "@rpg-cr/shared";
 
@@ -71,6 +72,7 @@ function errorResponse(status: number, message: string): Response {
 }
 
 beforeEach(() => {
+  clearLlmProviderSkips();
   for (const key of ENV_KEYS) {
     savedEnv[key] = process.env[key];
     delete process.env[key];
@@ -398,6 +400,16 @@ test("si Groq est le secours, le MJ part déjà en prompt slim", () => {
     initialMjContextModeForConfig("groq", "openai/gpt-oss-20b"),
     "slim"
   );
+  assert.equal(
+    initialMjContextModeForConfig("openrouter", "google/gemini-3.8-flash", null, {
+      GROQ_API_KEY: "gsk_test",
+    }),
+    "slim"
+  );
+  assert.equal(
+    initialMjContextModeForConfig("openrouter", "google/gemini-3.8-flash", null, {}),
+    "full"
+  );
 });
 
 test("quota / plafond de clé détecté (test court ≠ récit MJ)", () => {
@@ -472,7 +484,7 @@ test("primary + secours en échec : les deux erreurs sont visibles", async () =>
   );
 });
 
-test("chaîne automatique : clés Gemini + Groq → Gemini puis Groq puis Ollama", () => {
+test("chaîne automatique : Groq avant Gemini (OVH 503) puis Ollama", () => {
   process.env.GEMINI_API_KEY = "g";
   process.env.GROQ_API_KEY = "q";
   const chain = listAutomaticLlmCandidates({
@@ -482,8 +494,32 @@ test("chaîne automatique : clés Gemini + Groq → Gemini puis Groq puis Ollama
   });
   assert.deepEqual(
     chain.map((c) => c.providerId),
-    ["gemini", "groq", "ollama"]
+    ["groq", "gemini", "ollama"]
   );
+});
+
+test("OpenRouter 403 : Groq ensuite, pas Gemini ni Ollama sur un petit prompt", async () => {
+  process.env.AI_PROVIDER = "openrouter";
+  process.env.OPENROUTER_API_KEY = "sk-or-dead";
+  process.env.GROQ_API_KEY = "g";
+  process.env.GEMINI_API_KEY = "m";
+  const urls: string[] = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    urls.push(url);
+    if (url.includes("openrouter")) {
+      return errorResponse(403, "Key limit exceeded (total limit). $0.00 of $0.00 used");
+    }
+    if (url.includes("api.groq.com")) return chatResponse("OK groq");
+    throw new Error(`ne devrait pas appeler ${url}`);
+  };
+  const result = await completeChat(cloudRoom, [{ role: "user", content: "OK" }], {
+    timeoutMs: 5_000,
+  });
+  assert.equal(result.providerId, "groq");
+  assert.equal(result.usedFallback, true);
+  assert.equal(urls.some((u) => u.includes("generativelanguage")), false);
+  assert.equal(urls.some((u) => u.includes("11434")), false);
 });
 
 test("choix automatique : AI_PROVIDER OpenRouter gagne même si le salon était Ollama", async () => {

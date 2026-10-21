@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-10-21 (**moteur Rust** `rpg-cr-engine` + fill-all JSON) — déployé prod `6145764`
+> Dernière mise à jour : 2026-10-21 (**aventure JSON** : le pion suit les sorties + chaîne LLM Groq-first)
 
 ## Vision
 
@@ -196,7 +196,7 @@ Les listes markdown (`- …`) du **dernier** récit MJ encore **en vigueur** (2�
 
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.
 
-   - **MJ automatique (unique)** : le joueur ne choisit plus le moteur. `listAutomaticLlmCandidates` : `AI_PROVIDER` d’abord, puis première clé dispo (Gemini → OpenRouter → Groq), **Ollama VPS** toujours en dernier. `completeChat` enchaîne les candidats. `PUT /llm` ne garde que `mjProse` / faits auto / override prompt.
+   - **MJ automatique (unique)** : le joueur ne choisit plus le moteur. Chaîne : `AI_PROVIDER` → **Groq** → OpenRouter → Gemini → Ollama. 403 / clé à 0 $ : on **écarte** le provider 30 min. Gemini 503 : 18 s max puis skip 5 min. Prompt récit **> 12k car.** : pas d’Ollama CPU (le tour MJ réduit d’abord). `PUT /llm` ne garde que `mjProse` / faits auto / override prompt.
    - **Ouverture Acte I** : si le récit est injouable (cuisine, dette inventée, QCM, réplique du PJ…), réécriture avec les **raisons** puis secours `renderFallbackOpeningNarrative`. Premier Dire/Action après ouverture : interdit de reposer la scène.
 5. **LLM** — `completeChat` + profils (`task-profile.ts`) ; **MJ auto Dire** / **Action** ; Réclamer / routes hôte
 6. **Carte** — génération procédurale (simplex noise, biomes, effets toxic/fog/evil/buff, POI, territoires, SVG)
@@ -267,7 +267,7 @@ Chemin : `apps/api/data/campaigns/{CODE}/` (override : `CAMPAIGN_DATA_DIR`).
 
 1. Accueil → **Mes graines** → **Reprendre** (restaure session locale).
 2. God mode → reconfigurer provider/modèle (`room.llmConfig` en SQLite).
-3. Le prompt MJ injecte `lore.md` + `journal.md` (si export existant) + DB récente.
+3. Le prompt MJ injecte d'abord la **tranche d'aventure JSON** (nœud visé par l'action / le lieu de table). Après un tour réussi, `now.nodeId` **avance** (sorties, « je sors », lieu nommé). `lore.md` / canon 80 messages seulement si pas d'aventure.
 4. Les .md restent la mémoire de campagne ; le LLM est interchangeable.
 
 ### v2 (documenté, non implémenté)
@@ -389,6 +389,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 - `crates/rpg-cr-engine/` — cœur déterministe Rust (tests = cas Thorin / Sera / Jrounch / Ching / Yodeli). `cargo test -p rpg-cr-engine`. HTTP : `/v1/parse-sheet`, `/v1/opening-quality`, `/v1/sanitize`, `/v1/scene-check`.
 - `apps/api/src/engine.ts` — spawn binaire ou `RPG_CR_ENGINE_URL` ; secours TS si down. `/health` expose `engine`.
+- `packages/shared/src/adventure/` — **aventure JSON** `rpg-cr.adventure.v1` : lieux, nœuds, cast, faits, secrets, horloges, modules. `pickNextAdventureNode` / `advanceAdventure` font suivre `now` (sorties, lieu table, POI). `selectAdventureSlice` = tranche du nœud visé. Fichier : `data/campaigns/{CODE}/adventure.json`. God : `GET/PUT /api/rooms/:id/adventure`.
 - `packages/shared/src/map/procedural.ts` — carte
 - `packages/shared/src/llm/providers.ts` — `completeChat` (OpenAI-compatible) ; alias `completeAsMj` = kind narration ; overlay `AI_PROVIDER` + fallback `AI_FALLBACK_PROVIDER` puis LM Studio
 - `packages/shared/src/llm/env-ai.ts` — Groq/Gemini : clés `process.env` uniquement, jamais le frontend
@@ -580,7 +581,7 @@ Pas de bouton « ajouter un compagnon » : le PJ **demande au PNJ** (Dire `@PNJ`
 - **Resync client** : `GET /api/rooms/:code` expose `mjStatus` (refcount serveur) ; `RoomView.refresh` réapplique l'état MJ si WS manqué ; heuristique messages (« Le MJ prépare le monde… » sans récit MJ ni échec) → statut occupé ; si échec ouverture déjà dans le fil → **clear** du spinner bloqué (WS `message` + refresh).
 - **Échec ouverture visible joueurs** : message `L'ouverture de campagne a échoué…` n'est plus filtré comme message technique admin ; pendant l'ouverture, panneau « Se présenter » remplacé par attente.
 - **`POST …/introduce` (auto)** : timeout client **270 s** (comme MJ) — évite l'erreur générique « requête échouée alors que le serveur répond » à 30 s.
-- `lore.md` / journal export : injectés dans le prompt MJ **seulement** si `campaign_opening_done` et export existant (évite le biais des anciennes intros sur une nouvelle partie).
+- **Aventure JSON** (`adventure.json`) : source de vérité scénario. Ouverture → `seedAdventure` (auberge/ronde/halte…). Tour MJ → `selectAdventureSlice` (secrets verrouillés exclus, bestiaire seulement en combat, magie seulement en rituel). `lore.md` : secours si pas de JSON.
 - Prompt système + heuristiques scène : interdiction des clichés ruines/forteresse par défaut ; « Commencer » après ouverture = reprise sans re-intro complète.
 
 ## Entrée en scène (joueur humain)
@@ -729,7 +730,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 ## Notes agent
 
 - **Aucune clé LLM côté client.** `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` + `AI_PROVIDER` / `AI_MODEL` dans `.env`. God mode : style du récit seulement (`MjProseSettings`).
-- **Routage LLM** : unique et automatique. `applyEnvAiOverride` ignore le provider du salon. Chaîne `listAutomaticLlmCandidates` : `AI_PROVIDER` → Gemini → OpenRouter → Groq → Ollama VPS. `completeChat` tente chaque candidat puis le local.
+- **Routage LLM** : unique et automatique. `applyEnvAiOverride` ignore le provider du salon. Chaîne : `AI_PROVIDER` → Groq → OpenRouter → Gemini → Ollama. Quota 403 mémorisé 30 min. Si Groq est dans la chaîne, le tour MJ part **slim** (micro si > 10k car.). Groq / Ollama refusés sur un récit trop lourd — le tour réduit d'abord.
 - **Journal LLM** : chaque `completeChat` écrit une ligne JSONL (`/data/llm-events.jsonl` en prod, à côté de la SQLite en local) — provider demandé vs effectif, secours, durée, chars, salon, libellé de file (`character-all`, `player:reclaim`…). **Pas** de prompt ni de clé. God mode → panneau **Journal LLM**. `docker logs rpg-cr-api-1` contient aussi `[LLM] …`. Rotation ~1,5 Mo (`llm-events.1.jsonl`).
 - **Réclamer hôte** : `pickHostMjPromptType` + `handleHostReclaim` dans `RoomView` (préambule / récap / reclaim) — déjà en place ; pas de travail dupliqué côté sous-agent `3dd156bd` si non retrouvé dans l'historique.
 - `getRoomByCode` compare en NOCASE (codes 6 caractères).
@@ -755,7 +756,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 
 ### Groq / Gemini (cloud gratuit, serveur)
 
-`AI_PROVIDER` **surcharge** un salon cloud (`openrouter` / `openai` / `groq` / `gemini`). Un salon **enregistré** en Ollama ou LM Studio **garde** ce backend — le `.env` OpenRouter ne doit plus afficher un TPM 200k. Clés uniquement dans `.env` / Docker — jamais `NEXT_PUBLIC_*`.
+Le salon **ne choisit plus** le moteur. Chaîne unique (`listAutomaticLlmCandidates`) : `AI_PROVIDER` → **Groq** → OpenRouter → Gemini → Ollama. Clés uniquement dans `.env` / Docker — jamais `NEXT_PUBLIC_*`.
 
 ```
 GROQ_API_KEY=…
@@ -763,16 +764,13 @@ GEMINI_API_KEY=…
 OPENROUTER_API_KEY=…
 AI_PROVIDER=openrouter
 AI_MODEL=google/gemini-3.8-flash
-AI_FALLBACK_PROVIDER=groq
 ```
 
-- **Défaut soirée (prod VPS)** : Gemini Flash **via OpenRouter** (`google/gemini-3.8-flash`). L’API Gemini Google (`generativelanguage.googleapis.com`) renvoie souvent `User location is not supported` depuis une IP datacenter OVH. Si OpenRouter échoue → Groq.
+- **Prod VPS** : `AI_PROVIDER=openrouter` + Flash. OpenRouter 403 (clé 0 $) → **écarté 30 min**, Groq ensuite (pas Gemini 503). Gemini Google direct : 18 s max, skip 5 min si 503. Prompt récit **> 12k car.** : pas d’Ollama CPU ; le tour MJ réduit d’abord.
 - **Local Mac** : `AI_PROVIDER=gemini` + `GEMINI_API_KEY` peut marcher (hors datacenter).
 - Groq **free** compte les jetons **par minute** (TPM) **et** la réservation `max_tokens`. `openai/gpt-oss-20b` = **8k TPM**. Sur Groq : prompt **slim**, `max_tokens` ~1536, extraits auto **sans LLM**, retry 429.
 - Groq : API `https://api.groq.com/openai/v1` ; si un id disparaît : `GET /openai/v1/models`.
 - Gemini : API officielle OpenAI-compatible Google ; défaut Flash `gemini-3.8-flash` (ou `AI_MODEL=gemini-flash-latest`).
-- Chaîne : provider env → `AI_FALLBACK_PROVIDER` → LM Studio/Ollama (`LM_STUDIO_BASE_URL`) si `useFallbackLmStudio`.
-- Revenir au local : **Enregistrer** Ollama / LM Studio en god mode (plus besoin de commenter `AI_PROVIDER`). Commenter `AI_PROVIDER` seulement pour forcer le local sur un salon encore configuré OpenRouter.
 - Tests : `packages/shared/src/companion-pact.test.ts` (invitation, parser bloc, strip récit) ; `npm run test:ai` (mocks + live si les clés sont dans l’env).
 
 ### Architecture
@@ -891,9 +889,9 @@ Quand le MJ ne répond plus, le salon affiche **pourquoi** (plus un simple « MJ
 
 | Signal | Signification |
 |--------|----------------|
-| Badge **MJ : 0 jeton** / **quota minute** | Plafond **TPM** (minute) ou **TPD Groq 200k/jour**. Ollama n’a **pas** ce plafond. Salon OpenRouter dont la clé est à 0 (403) : secours Groq puis **Ollama** même si `useFallbackLmStudio` est faux. Un salon enregistré Ollama n’est plus redirigé vers `AI_PROVIDER=openrouter`. |
+| Badge **MJ : 0 jeton** / **quota minute** | Plafond **TPM** (minute) ou **TPD Groq 200k/jour**. Ollama n’a **pas** ce plafond. OpenRouter 403 (clé 0 $) : provider **écarté 30 min**, Groq ensuite ; Ollama seulement si le prompt récit ≤ 12k car. |
 | Badge **MJ : crédit 0** | Compte cloud **à 0** (OpenRouter 402, plafond de clé). Ce n’est pas le TPM. |
-| Badge **MJ : délai** | Timeout HTTP (cloud ~90–120 s, Ollama/LM Studio plus long). |
+| Badge **MJ : délai** | Timeout HTTP (Gemini 18 s, Groq 45 s, autre cloud 30–45 s, Ollama/LM Studio plus long). |
 | **Ollama local** | Pas de « solde de jetons » : le modèle tourne sur le VPS, silence = timeout, crash, ou CPU saturé. |
 
 - Parse : `packages/shared/src/llm/llm-health.ts` — `usage` (prompt/réponse), Groq `Limit/Used/Requested`, en-têtes `x-ratelimit-remaining-tokens`. Un **401** n’est **pas** du TPM (pas de « 0 / 0 jetons »).

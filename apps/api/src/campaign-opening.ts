@@ -5,6 +5,7 @@ import {
   buildCampaignOpeningRewritePrompt,
   buildFallbackOpeningPlan,
   completeChat,
+  buildOpeningPalette,
   parseCampaignOpeningPlan,
   renderFallbackOpeningNarrative,
   resolveEffectiveLlmConfig,
@@ -33,6 +34,7 @@ import {
 } from "./ws-hub.js";
 import { applySceneUpdate, bootstrapSceneLocationFromHistory, getSceneState } from "./room-scene.js";
 import { seedTableNowFromOpening } from "./room-table-now.js";
+import { upsertAdventureFromOpening } from "./adventure-store.js";
 import { updateNarrativeArc } from "./room-narrative-arc.js";
 import { broadcastScene } from "./ws-hub.js";
 import { queueNarrativeLlm } from "./room-llm-queue.js";
@@ -127,7 +129,11 @@ export async function bootstrapCampaignOpening(
         room.llmConfig!,
         userPrompt,
         resolveRoomApiKey(room.llmConfig, undefined, roomId),
-        { speakingPlayerId: host.id, responseLocale: host.preferredLocale }
+        {
+          speakingPlayerId: host.id,
+          responseLocale: host.preferredLocale,
+          adventureKind: "opening",
+        }
       );
 
     let opening = await queueNarrativeLlm(roomId, "campaign-opening-narrative", () =>
@@ -202,6 +208,18 @@ export async function bootstrapCampaignOpening(
       currentBeat:
         arcPatch?.currentBeat ??
         (plan.openingScene.slice(0, 200) || "Mise en place — Acte I"),
+    });
+
+    const pal = buildOpeningPalette(ctx);
+    upsertAdventureFromOpening({
+      roomId,
+      hostName: host.name,
+      hostSheet: host.characterSheet,
+      map: ctx.map,
+      when: pal.when,
+      weather: pal.weather,
+      incident: pal.incident,
+      place: pal.place,
     });
 
     setCampaignOpeningDone(roomId);

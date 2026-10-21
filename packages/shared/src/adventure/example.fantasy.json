@@ -1,0 +1,162 @@
+{
+  "schema": "rpg-cr.adventure.v1",
+  "id": "exemple-fantasy",
+  "title": "Exemple — tout le fantasy, rien dans le prompt d'un coup",
+  "premise": "Tu es déjà quelque part. Le monde ne se déverse pas : l'événement tire le nœud.",
+  "worldSeed": "exemple",
+  "tone": {
+    "genre": ["fantasy", "table", "quotidien"],
+    "taboos": ["guerre collée", "McGuffin d'inconnu", "secret du père hors fiche"],
+    "scale": "intimate"
+  },
+  "restrictions": [
+    "Un seul lieu à la fois.",
+    "Pas de PNJ nommé hors fiche / hors cast établi.",
+    "Figurant = rôle, pas un nom propre."
+  ],
+  "now": {
+    "nodeId": "auberge.table",
+    "placeId": "auberge",
+    "timeOfDay": "soir de lanternes",
+    "weather": "L'air est tiède.",
+    "tension": -10,
+    "establishedFactIds": ["beat-ouverture"],
+    "unlockedSecretIds": []
+  },
+  "places": {
+    "auberge": {
+      "id": "auberge",
+      "name": "l'auberge",
+      "kind": "haven",
+      "summary": "Salle commune, pas les fourneaux.",
+      "tags": ["inn", "haven"]
+    },
+    "bois": {
+      "id": "bois",
+      "name": "le bois au-dessus du village",
+      "kind": "wilderness",
+      "summary": "Piste, chouettes, pas un donjon.",
+      "tags": ["wilderness", "travel"],
+      "hazard": "racines, pas de loup démoniaque tant que le nœud combat n'est pas tiré"
+    },
+    "crypte": {
+      "id": "crypte",
+      "name": "la crypte sous le temple",
+      "kind": "dungeon",
+      "summary": "N'existe à table que si on y descend.",
+      "tags": ["dungeon", "temple"],
+      "reveal": "hidden"
+    }
+  },
+  "nodes": {
+    "auberge.table": {
+      "id": "auberge.table",
+      "placeId": "auberge",
+      "kind": "haven",
+      "title": "À table",
+      "youAre": "Tu es à une table, une chope à la main — tu n'es pas le service.",
+      "tags": ["inn", "social"],
+      "presentCastIds": ["tenanciere"],
+      "props": ["ton banc d'habitude", "une chope"],
+      "hooks": [
+        {
+          "id": "banc",
+          "text": "Ton banc d'habitude n'est pas libre — ou l'est trop.",
+          "tags": ["inn"]
+        }
+      ],
+      "exits": [
+        { "nodeId": "auberge.seuil", "label": "Le seuil", "effort": "step" }
+      ],
+      "taboos": ["Tu n'es pas en cuisine."]
+    },
+    "auberge.seuil": {
+      "id": "auberge.seuil",
+      "placeId": "auberge",
+      "kind": "threshold",
+      "title": "Le seuil",
+      "youAre": "Le battant donne sur la rue.",
+      "tags": ["inn", "street"],
+      "exits": [
+        { "nodeId": "auberge.table", "label": "La salle", "effort": "step" },
+        { "nodeId": "bois.piste", "label": "Le chemin du bois", "effort": "walk" }
+      ]
+    },
+    "bois.piste": {
+      "id": "bois.piste",
+      "placeId": "bois",
+      "kind": "wilderness",
+      "title": "La piste",
+      "youAre": "La piste sous les branches. On entend le village derrière.",
+      "tags": ["wilderness", "travel"],
+      "clockIds": ["nuit-qui-tombe"],
+      "exits": [
+        { "nodeId": "auberge.seuil", "label": "Revenir au village", "effort": "walk" }
+      ]
+    }
+  },
+  "cast": {
+    "tenanciere": {
+      "id": "tenanciere",
+      "label": "la tenancière",
+      "kind": "extra",
+      "named": false,
+      "tags": ["inn"],
+      "want": "tenir la salle sans drame",
+      "voice": "essuie trop longtemps le même verre"
+    }
+  },
+  "facts": [
+    {
+      "id": "beat-ouverture",
+      "kind": "beat",
+      "text": "La tenancière essuie trop longtemps le même verre.",
+      "nodeIds": ["auberge.table"],
+      "reveal": "established"
+    }
+  ],
+  "secrets": [
+    {
+      "id": "crypte-existe",
+      "text": "Une descente existe sous le temple — seulement si un fait l'établit.",
+      "locked": true,
+      "tags": ["dungeon"]
+    }
+  ],
+  "clocks": [
+    {
+      "id": "nuit-qui-tombe",
+      "label": "La nuit tombe",
+      "kind": "weather",
+      "ticks": 1,
+      "max": 4,
+      "tags": ["travel"],
+      "nodeIds": ["bois.piste"]
+    }
+  ],
+  "quests": [],
+  "items": {},
+  "creatures": {
+    "chien-errant": {
+      "id": "chien-errant",
+      "label": "un chien trop maigre",
+      "summary": "Aboiement, pas un loup-garou.",
+      "tags": ["combat", "street"],
+      "threat": "nuisance"
+    }
+  },
+  "factions": {},
+  "modules": {
+    "cosmology": {
+      "gods": [{ "id": "foyer", "name": "le foyer", "domain": "seuil et pain", "reveal": "public" }]
+    },
+    "magic": {
+      "traditions": [
+        { "id": "petit-feu", "name": "petit feu", "cost": "un souffle et de la cendre", "tags": ["ritual"] }
+      ]
+    },
+    "law": { "authority": "le notable du village", "crimes": ["vol d'étal", "rixe"] },
+    "economy": { "currency": "pièces usées", "note": "une chope = le quotidien, pas un trésor" }
+  },
+  "calendar": { "season": "fin d'été", "dayName": "soir de lanternes" }
+}
