@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-10-21 (**moteur Rust** `rpg-cr-engine` + fill-all JSON) — pas encore déployé
+> Dernière mise à jour : 2026-10-21 (**moteur Rust** `rpg-cr-engine` + fill-all JSON) — déployé prod `6145764`
 
 ## Vision
 
