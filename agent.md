@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-10-21 (**ouverture** : Groq jusqu'à 20k car., secours local si le cloud lâche)
+> Dernière mise à jour : 2026-10-21 (**ouverture** Groq 20k + secours local) — déployé prod `110e027`
 
 ## Vision
 
@@ -367,7 +367,7 @@ Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**
 
 **MJ local (gratuit)** : l'API appelle un endpoint OpenAI-compatible via `LM_STUDIO_BASE_URL` (nom historique — **Ollama** `http://127.0.0.1:11434/v1` ou **LM Studio** `http://127.0.0.1:1234/v1`). Providers UI distincts : **Ollama (VPS / local)** et **LM Studio (Mac + tunnel)**. `resolveLmStudioServerBaseUrl` ([lmstudio-url.ts](packages/shared/src/llm/lmstudio-url.ts)) prime sur l'URL affichée dans l'UI. **Sans Mac** : installer Ollama sur le VPS ([deploy/OLLAMA-VPS.md](deploy/OLLAMA-VPS.md)). **Avec GPU Mac** : tunnel SSH `-R 1234:127.0.0.1:1234` ([deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md)).
 
-**État VPS (2026-10-21)** : Docker actif ; moteur Rust + **aventure JSON** + chaîne Groq-first. Dernier déploiement : `3af5e76`. Health et accueil publics **200**. Déploiement : `bash deploy/push-deploy.sh` (Mac) ou `bash deploy/deploy.sh` (VPS). Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`. Un salon déjà ouvert **n’a pas** d'`adventure.json` : il se crée au prochain tour MJ (ou nouveau salon).
+**État VPS (2026-10-21)** : Docker actif ; moteur Rust + **aventure JSON** + Groq-first. Dernier déploiement : `110e027` (ouverture : Groq jusqu'à 20k, secours local). Health et accueil publics **200**. Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`. Un salon déjà ouvert **n’a pas** d'`adventure.json` : il se crée au prochain tour MJ (ou nouveau salon).
 
 **Suite sur le VPS** :
 ```bash
