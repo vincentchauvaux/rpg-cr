@@ -5,10 +5,10 @@ import {
   completeChat,
   mergeCharacterSheet,
   normalizeCharacterSheet,
-  parseCharacterSheetJson,
   type CharacterSheet,
   type LlmRoomConfig,
 } from "@rpg-cr/shared";
+import { parseSheetJson } from "./engine.js";
 import { getMap, getRoomById } from "./rooms.js";
 import { readCampaignContext } from "./campaign-export.js";
 import { generateCharacterSection } from "./character-section.js";
@@ -51,7 +51,7 @@ async function runPhaseLlm(
   roomId: string,
   label: string,
   config: LlmRoomConfig,
-  messages: { role: "system" | "user"; content: string }[],
+  messages: { role: "system" | "user" | "assistant"; content: string }[],
   apiKey: string | undefined,
   maxTokens: number,
   abortSignal?: AbortSignal
@@ -68,9 +68,49 @@ async function runPhaseLlm(
     })
   );
   if (!result.content?.trim()) {
-    throw new Error("Réponse LLM vide — réessayez ou vérifiez le modèle");
+    throw new Error("Réponse LLM vide — réessayez, ou remplissez à la main.");
   }
   return result.content;
+}
+
+const JSON_ONLY_RETRY =
+  "Ta réponse n'était pas un objet JSON. Renvoie UNIQUEMENT un objet JSON valide, sans phrase autour, sans markdown.";
+
+async function parsePhaseJsonOrRetry(
+  roomId: string,
+  label: string,
+  queueLabel: string,
+  config: LlmRoomConfig,
+  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  raw: string,
+  apiKey: string | undefined,
+  maxTokens: number,
+  abortSignal?: AbortSignal
+): Promise<Partial<CharacterSheet>> {
+  try {
+    return await parseSheetJson(raw, label);
+  } catch (first) {
+    const retryRaw = await runPhaseLlm(
+      roomId,
+      `${queueLabel}:json-retry`,
+      config,
+      [
+        ...messages,
+        { role: "assistant", content: raw.slice(0, 1800) },
+        { role: "user", content: JSON_ONLY_RETRY },
+      ],
+      apiKey,
+      maxTokens,
+      abortSignal
+    );
+    try {
+      return await parseSheetJson(retryRaw, label);
+    } catch {
+      throw first instanceof Error
+        ? first
+        : new Error(`Réponse LLM sans JSON (${label})`);
+    }
+  }
 }
 
 function report(
@@ -88,7 +128,7 @@ async function runPhaseWithHeartbeat(
   roomId: string,
   queueLabel: string,
   config: LlmRoomConfig,
-  messages: { role: "system" | "user"; content: string }[],
+  messages: { role: "system" | "user" | "assistant"; content: string }[],
   apiKey: string | undefined,
   maxTokens: number,
   onProgress: ((u: CharacterAllProgressUpdate) => void) | undefined,
@@ -164,7 +204,17 @@ export async function generateCharacterAll(
     40
   );
   if (runContext) assertCharacterAllNotAborted(runContext.playerId, runContext.lockToken);
-  const storyPatch = parseCharacterSheetJson(storyRaw, "histoire");
+  const storyPatch = await parsePhaseJsonOrRetry(
+    roomId,
+    "histoire",
+    "character-all:story",
+    config,
+    buildCharacterStoryPhaseMessages(sheet, playerName, worldContext, hints, preferredLocale),
+    storyRaw,
+    apiKey,
+    1200,
+    runContext?.abortSignal
+  );
   sheet = normalizeCharacterSheet(mergeCharacterSheet(sheet, storyPatch));
   report(onProgress, sheet, 40, "story", "Histoire et identité…");
 
@@ -198,7 +248,17 @@ export async function generateCharacterAll(
     80
   );
   if (runContext) assertCharacterAllNotAborted(runContext.playerId, runContext.lockToken);
-  const abilitiesPatch = parseCharacterSheetJson(abilitiesRaw, "capacités");
+  const abilitiesPatch = await parsePhaseJsonOrRetry(
+    roomId,
+    "capacités",
+    "character-all:abilities",
+    config,
+    buildCharacterAbilitiesPhaseMessages(sheet, playerName, worldContext, preferredLocale),
+    abilitiesRaw,
+    apiKey,
+    1024,
+    runContext?.abortSignal
+  );
   sheet = normalizeCharacterSheet(mergeCharacterSheet(sheet, abilitiesPatch));
   report(onProgress, sheet, 80, "abilities", "Sorts et capacités…");
 
@@ -218,7 +278,17 @@ export async function generateCharacterAll(
     100
   );
   if (runContext) assertCharacterAllNotAborted(runContext.playerId, runContext.lockToken);
-  const materialPatch = parseCharacterSheetJson(materialRaw, "biens");
+  const materialPatch = await parsePhaseJsonOrRetry(
+    roomId,
+    "biens",
+    "character-all:material",
+    config,
+    buildCharacterMaterialPhaseMessages(sheet, playerName, worldContext, preferredLocale),
+    materialRaw,
+    apiKey,
+    1200,
+    runContext?.abortSignal
+  );
   sheet = normalizeCharacterSheet(mergeCharacterSheet(sheet, materialPatch));
   report(onProgress, sheet, 100, "done", "Fiche complète");
 

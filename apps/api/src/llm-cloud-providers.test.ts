@@ -269,6 +269,11 @@ test("validation JSON fiche : refuse le texte libre et le JSON cassé", () => {
   );
   const ok = parseCharacterSheetJson('{"rank":"Baron"}', "histoire");
   assert.equal(ok.rank, "Baron");
+  const fenced = parseCharacterSheetJson(
+    'Voici la fiche :\n```json\n{"rank":"Baronne","background":"Fille du fleuve"}\n```',
+    "histoire"
+  );
+  assert.equal(fenced.rank, "Baronne");
 });
 
 test("erreur API Groq : message sans clé", async () => {

@@ -57,36 +57,24 @@ interface Props {
 
 type OverlayState = null | "loading" | { error: string; locked?: boolean };
 
-const LOCAL_SLOW_HINT =
-  "Sur le VPS, Ollama (qwen 7b) n'a pas ce plafond cloud. " +
-  "Si le modèle local met trop de temps, attendez qu'il soit chargé, " +
-  "ou remplissez à la main en attendant.";
-
-function looksLikeCloudLlmFailure(message: string): boolean {
-  return /LLM 402|LLM 403|LLM 429|openrouter|key limit|rate limit|\bTPM\b|\bTPD\b|groq|gemini/i.test(
-    message
-  );
-}
-
 function formatFillAllError(error: unknown): string {
   if (isHttpError(error)) {
     const base = error.message.replace(/\s*\(HTTP \d+\)\s*$/, "").trim();
-    if (error.status === 504 || error.status === 502) {
-      if (looksLikeCloudLlmFailure(base)) return base;
-      return `${base} ${LOCAL_SLOW_HINT}`;
+    if (error.status === 504) {
+      return `${base} Réessayez, ou remplissez à la main.`;
+    }
+    if (error.status === 502 && /sans JSON|JSON invalide|vide/i.test(base)) {
+      return "Le MJ n'a pas pu remplir la fiche (réponse illisible). Réessayez, ou complétez à la main.";
     }
     if (error.status === 429) {
       return base;
     }
-    return error.message;
+    return base || error.message;
   }
   if (error instanceof DOMException && error.name === "AbortError") {
-    return `Délai dépassé (4 min) — la génération a été interrompue. ${LOCAL_SLOW_HINT}`;
+    return "Délai dépassé — la génération a été interrompue. Réessayez, ou remplissez à la main.";
   }
   if (error instanceof Error) {
-    if (/aborted|abort|Délai dépassé/i.test(error.message)) {
-      return `${error.message} ${LOCAL_SLOW_HINT}`;
-    }
     return error.message;
   }
   return "Génération fiche impossible";

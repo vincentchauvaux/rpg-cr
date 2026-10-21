@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-10-21 (**MJ automatique** + ouverture Acte I) — déployé prod `d1060f2`
+> Dernière mise à jour : 2026-10-21 (**moteur Rust** `rpg-cr-engine` + fill-all JSON) — pas encore déployé
 
 ## Vision
 
@@ -10,12 +10,24 @@ Application SaaS de salons JDR rejoinables, avec MJ IA **unique** (le serveur ch
 
 | Couche | Techno |
 |--------|--------|
-| Monorepo | npm workspaces |
-| Partagé | `@rpg-cr/shared` (TypeScript) |
-| API | Fastify 5, WebSocket, better-sqlite3 |
+| Monorepo | npm workspaces + Cargo workspace |
+| Moteur | **Rust** `crates/rpg-cr-engine` (Axum `127.0.0.1:4020`) — JSON fiche, qualité Acte I, épreuves, sanitize récit |
+| Partagé | `@rpg-cr/shared` (TypeScript, secours si le moteur est down) |
+| API | Fastify 5, WebSocket, better-sqlite3 ; pont `apps/api/src/engine.ts` |
 | Web | Next.js **15.5.18** (pin), React **19.2.6** (pin) |
 | Données | SQLite (`apps/api/data/rpg-cr.db`) |
-| Déploiement | Docker multi-stage + `docker-compose.yml` (dev) + `docker-compose.prod.yml` (VPS) ; scripts `deploy/` |
+| Déploiement | Docker multi-stage (stage `rust-build` musl) + `docker-compose.yml` (dev) + `docker-compose.prod.yml` (VPS) ; scripts `deploy/` |
+
+### Moteur Rust (cœur de table)
+
+Le front Next.js et l'API Fastify restent : réécrire l'UI en Leptos casserait le salon mobile. **Ce qui est déterministe passe en Rust** (`crates/rpg-cr-engine`) :
+
+- parse JSON fiche (fence ` ```json ` + `{…}` équilibré) — fill-all / compagnon
+- qualité Acte I (Thorin PNJ, cuisine, dette, QCM, encyclopédie, cliché du vieux)
+- épreuves (modificateur D&D, issue contestée)
+- sanitize récit (fuite *Thinking Process*, relance méta)
+
+L'API Node parle HTTP `127.0.0.1:4020` (`apps/api/src/engine.ts`). Si le binaire est down → **même logique TypeScript** (`@rpg-cr/shared`). `npm run engine:test` / `npm run engine:build`. Dev : `npm run dev` lance aussi `cargo run -p rpg-cr-engine`.
 
 ## MVP livré (v0.1)
 
@@ -375,6 +387,8 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## Fichiers clés
 
+- `crates/rpg-cr-engine/` — cœur déterministe Rust (tests = cas Thorin / Sera / Jrounch / Ching / Yodeli). `cargo test -p rpg-cr-engine`. HTTP : `/v1/parse-sheet`, `/v1/opening-quality`, `/v1/sanitize`, `/v1/scene-check`.
+- `apps/api/src/engine.ts` — spawn binaire ou `RPG_CR_ENGINE_URL` ; secours TS si down. `/health` expose `engine`.
 - `packages/shared/src/map/procedural.ts` — carte
 - `packages/shared/src/llm/providers.ts` — `completeChat` (OpenAI-compatible) ; alias `completeAsMj` = kind narration ; overlay `AI_PROVIDER` + fallback `AI_FALLBACK_PROVIDER` puis LM Studio
 - `packages/shared/src/llm/env-ai.ts` — Groq/Gemini : clés `process.env` uniquement, jamais le frontend
@@ -470,7 +484,7 @@ API : `GET/PATCH /api/players/:id/character`, `POST …/finalize`, `POST …/int
 
 - Bouton **✨** en bas à droite de chaque zone texte (wizard + édition fiche).
 - Endpoint `POST /api/players/:id/character/generate-field` — body `{ field, currentSheet, actorPlayerId }`.
-- Endpoint `POST /api/players/:id/character/generate-all` — body `{ actorPlayerId, roomId, currentSheet?, hints? }` ; **4 phases LLM** séquentielles : histoire (0→40 %) → stats (55 %) → capacités (80 %) → biens (100 %) ; `GET …/generate-all-progress` (poll client ~450 ms) + WS `{ type: "character_gen_progress", playerId, percent, label, sheet }` ; timeout **120 s** par phase ; client **240 s** ; verrou **4 min** ; prompts `character-all-phases-prompt.ts`. Pipeline : LLM (`jsonMode`) → `parseCharacterSheetJson` → `normalizeCharacterSheet` / `mergeCharacterSheet` (pas de texte libre).
+- Endpoint `POST /api/players/:id/character/generate-all` — body `{ actorPlayerId, roomId, currentSheet?, hints? }` ; **4 phases LLM** séquentielles : histoire (0→40 %) → stats (55 %) → capacités (80 %) → biens (100 %) ; `GET …/generate-all-progress` (poll client ~450 ms) + WS `{ type: "character_gen_progress", playerId, percent, label, sheet }` ; timeout **120 s** par phase ; client **240 s** ; verrou **4 min** ; prompts `character-all-phases-prompt.ts`. Pipeline : LLM (`jsonMode`) → **moteur Rust** `/v1/parse-sheet` (`extract_json_object` + retry JSON) ; secours TS si le moteur est down ; puis `normalizeCharacterSheet` / `mergeCharacterSheet`. Message joueur 502 : « Le MJ n'a pas pu remplir la fiche (réponse illisible) » — plus de hint Ollama/qwen. Acte I : qualité via `/v1/opening-quality` (mêmes détecteurs Thorin / cuisine / dette).
 - **Mutex par joueur** : une seule génération fill-all par `playerId` (cible) à la fois → **429** si doublon (double-clic, autre appareil) ; TTL verrou **4 min** ; libération par **jeton** (une requête lente ne libère pas le verrou d'une relance) ; `finally` libère toujours ; `DELETE …/generate-all-lock?actorPlayerId=…` (propriétaire ou admin god) ; `GET …/generate-all-lock` pour polling.
 - **HTTP** : timeout LM Studio → **504** `{ error }` (message « Délai dépassé… ») ; autres erreurs LLM → **502**.
 - UI : bouton **« ✨ Remplir la fiche »** (`CharacterSheetFillAllButton`) — overlay avec **barre 0–100 %** + **spinner** + libellé de phase (`AiGenerationOverlay`) ; **heartbeat** toutes les 4 s pendant chaque phase LLM (« MJ en réflexion… », +2 % jusqu'à la fin de phase — gemma ~30–90 s en phase histoire) ; bouton **Annuler la génération** sur l'overlay chargement ; annulation **AbortController** serveur + client ; champs wizard/fiche mis à jour **en direct** via `onProgress` ; snapshot local avant appel ; `inFlightRef` + `disabled` pendant l’appel ; en **erreur** : brouillon inchangé + overlay `variant="error"` ; **429** : annuler verrou / réessayer (`ensureLockClear` libère auto si propriétaire) ; **409** annulation silencieuse côté client ; en succès : fiche finale mergée.
@@ -497,7 +511,8 @@ API : `GET/PATCH /api/players/:id/character`, `POST …/finalize`, `POST …/int
 | Admin ne peut pas éditer fiche d'un autre joueur | `canAccessCharacter` : admin du salon suffit (pas god mode UI) | PATCH avec `actorPlayerId` = admin, `playerId` = cible |
 | « ✨ Remplir la fiche » grisé, champs inéditables | `room.llmConfig` null (bouton IA désactivé) **ou** wizard dans `chat-blocked` (`pointer-events: none`) | Saisie manuelle via champs + « Suite » ; hôte : god mode à droite pour LLM ; hint texte si pas de MJ |
 | Fill-all → fiche vide / tout effacé | Bug corrigé : API fusionnait sur `{}` ; succès avec JSON vide → champs normalisés vides | Rebuild ; erreur 502 + overlay si LLM échoue ; brouillon local conservé |
-| Fill-all ne finit jamais / timeout | LLM > 180 s → API **504** ; client abort 240 s ; message « gemma / READY / qwen 7b » (pas CORS si `/health` OK) | Vérifier LM Studio READY ; modèle plus léger ; logs API `[character-all]` |
+| Fill-all « sans JSON (histoire) » | Le modèle a parlé en texte (souvent secours local) | **Moteur Rust** parse fence/équilibré + retry JSON ; message joueur sans hint Ollama ; réessayer ou saisir à la main |
+| Moteur Rust down (`/health` → `engine: null`) | Binaire absent ou port 4020 pris | `cargo build --release -p rpg-cr-engine` ; `npm run engine` ; logs API « secours TypeScript » |
 | **« Suite » inactif après fill-all** (wizard) | Phase histoire remplit `rank`+`background` → bouton fill masqué + overlay retiré alors que génération continue ; `char-sheet-generating` bloquait tout le panneau | Rebuild web ; attendre fin overlay 100 % ; correctif : overlay tant que `busy`, actions hors zone `pointer-events:none` |
 | Fill-all « CORS PATCH » alors que l’API répond | Ancien `formatFetchError` sur `Failed to fetch` (abort client = même symptôme) | Rebuild web ; erreur generate-all dédiée dans `api-errors.ts` |
 | **429** fill-all / « déjà en cours » | Verrou actif (autre onglet, double-clic, requête lente) | **Annuler la génération** puis réessayer ; relance auto-libère le verrou si propriétaire ; TTL 4 min ; admin god peut libérer le verrou d’un PJ |

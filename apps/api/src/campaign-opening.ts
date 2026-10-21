@@ -5,14 +5,13 @@ import {
   buildCampaignOpeningRewritePrompt,
   buildFallbackOpeningPlan,
   completeChat,
-  campaignOpeningUnplayableReasons,
-  isCampaignOpeningUnplayable,
   parseCampaignOpeningPlan,
   renderFallbackOpeningNarrative,
   resolveEffectiveLlmConfig,
   resolveMjMaxTokens,
 } from "@rpg-cr/shared";
 import { resolveRoomApiKey } from "./llm-api-key.js";
+import { openingUnplayableReasons } from "./engine.js";
 import {
   getCampaignOpeningDone,
   getMap,
@@ -118,8 +117,8 @@ export async function bootstrapCampaignOpening(
       sheet: host.characterSheet,
       mjProse: ctx.mjProse,
     };
-    const unplayable = (content: string) =>
-      isCampaignOpeningUnplayable(content, host.name, openingOpts);
+    const reasonsOf = (content: string) =>
+      openingUnplayableReasons(content, host.name, openingOpts);
 
     const narrativePrompt = buildCampaignOpeningNarrativePrompt(plan, ctx);
     const runOpening = (userPrompt: string) =>
@@ -134,12 +133,8 @@ export async function bootstrapCampaignOpening(
     let opening = await queueNarrativeLlm(roomId, "campaign-opening-narrative", () =>
       runOpening(narrativePrompt)
     );
-    if (unplayable(opening.content)) {
-      const reasons = campaignOpeningUnplayableReasons(
-        opening.content,
-        host.name,
-        openingOpts
-      );
+    let reasons = await reasonsOf(opening.content);
+    if (reasons.length > 0) {
       console.warn(
         `[opening] ${room.code} injouable (${reasons.join("; ")}) — réécriture`
       );
@@ -152,12 +147,8 @@ export async function bootstrapCampaignOpening(
           )
       );
     }
-    if (unplayable(opening.content)) {
-      const reasons = campaignOpeningUnplayableReasons(
-        opening.content,
-        host.name,
-        openingOpts
-      );
+    reasons = await reasonsOf(opening.content);
+    if (reasons.length > 0) {
       console.warn(
         `[opening] ${room.code} toujours injouable (${reasons.join("; ")}) — secours`
       );

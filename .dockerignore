@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/dist
+**/.next
+target
+**/target
+.git
+.env
+.env.local
+*.db
+*.sqlite
+backups
+llm-events.jsonl
+apps/web/tsconfig.tsbuildinfo

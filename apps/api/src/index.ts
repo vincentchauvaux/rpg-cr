@@ -7,6 +7,7 @@ import multipart from "@fastify/multipart";
 import { LLM_CATALOG, normalizeHex, isCharacterSheetFieldKey, isCharacterSheetSectionKey, assertMjSuitableModelId, assertChatModelId, isMjPlayerTriggerType, isMjHostTriggerType, isStoryTextField, isStorySectionKey, canHumanParticipateInChat, resolveLmStudioServerBaseUrl, inferLocalLlmBackend, localLlmNeedsMacTunnel, usesTightGroqTpm, buildAutomaticLlmConfig } from "@rpg-cr/shared";
 import { resolveRoomApiKey } from "./llm-api-key.js";
 import { initDb } from "./db.js";
+import { engineHealth, startRpgCrEngine, stopRpgCrEngine } from "./engine.js";
 import { installLlmFileTrace, readLlmTraceEvents, runWithLlmTrace } from "./llm-trace-file.js";
 import {
   API_SECURITY_HEADERS,
@@ -279,7 +280,10 @@ app.post<{
   return { ok: true };
 });
 
-app.get("/health", async () => ({ ok: true }));
+app.get("/health", async () => {
+  const engine = engineHealth();
+  return { ok: true, engine: engine.ok ? engine.url : null };
+});
 
 app.get("/api/llm/catalog", async () => LLM_CATALOG);
 
@@ -1852,8 +1856,11 @@ app.register(async function wsRoutes(f) {
 });
 
 try {
+  await startRpgCrEngine();
   await app.listen({ port: PORT, host: HOST });
   console.log(`API écoute sur http://${HOST}:${PORT}`);
+  process.once("SIGINT", () => stopRpgCrEngine());
+  process.once("SIGTERM", () => stopRpgCrEngine());
 } catch (err) {
   app.log.error(err);
   process.exit(1);

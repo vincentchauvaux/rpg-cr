@@ -80,8 +80,7 @@ export async function formatFetchError(
       (aborted
         ? "Délai dépassé (4 min) — la génération complète a été interrompue."
         : "La génération IA de la fiche a échoué alors que l'API répond.") +
-      " Sur le VPS, Ollama (qwen 7b) n'a pas de plafond OpenRouter / Groq. " +
-      "Remplissez à la main si le modèle local n'est pas encore chargé."
+      " Réessayez, ou remplissez à la main."
     );
   }
 

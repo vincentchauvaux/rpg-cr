@@ -3,9 +3,9 @@ import {
   companionStanceFromLoyalty,
   matchNamedAiPlayer,
   mergeCharacterSheet,
-  parseCharacterSheetJson,
   sheetHasStructuredContent,
 } from "@rpg-cr/shared";
+import { parseSheetJson } from "./engine.js";
 import {
   createAiPlayer,
   getPlayerById,
@@ -172,7 +172,7 @@ function scheduleCompanionSheetFill(roomId: string, player: Player): void {
           prompt,
           resolveRoomApiKey(room.llmConfig, undefined, roomId)
         );
-        const generated = parseCharacterSheetJson(content, "companion-sheet");
+        const generated = await parseSheetJson(content, "companion-sheet");
         const current = getPlayerById(player.id);
         if (!current) return;
         const preserved: Partial<CharacterSheet> = {

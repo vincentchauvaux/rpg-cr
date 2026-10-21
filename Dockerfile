@@ -1,3 +1,10 @@
+FROM rust:1-alpine AS rust-build
+RUN apk add --no-cache musl-dev
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+RUN cargo build --release -p rpg-cr-engine
+
 FROM node:22-alpine AS base
 WORKDIR /app
 
@@ -20,6 +27,8 @@ FROM base AS api
 ENV NODE_ENV=production
 ENV PORT=4000
 ENV DATABASE_PATH=/data/rpg-cr.db
+ENV RPG_CR_ENGINE_BIN=/usr/local/bin/rpg-cr-engine
+COPY --from=rust-build /src/target/release/rpg-cr-engine /usr/local/bin/rpg-cr-engine
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages/shared ./packages/shared
 COPY --from=build /app/apps/api ./apps/api
