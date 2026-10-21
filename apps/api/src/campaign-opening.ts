@@ -102,18 +102,25 @@ export async function bootstrapCampaignOpening(
     };
 
     const llm = resolveEffectiveLlmConfig(room.llmConfig!);
-    const planResult = await queueNarrativeLlm(roomId, "campaign-opening-plan", () =>
-      completeChat(room.llmConfig!, buildCampaignOpeningPlanMessages(ctx, host.preferredLocale), {
-        apiKey: resolveRoomApiKey(room.llmConfig, undefined, roomId),
-        lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
-        maxTokens: resolveMjMaxTokens(llm.providerId, llm.modelId),
-        taskKind: "tool",
-        jsonMode: true,
-      })
-    );
-
-    const plan =
-      parseCampaignOpeningPlan(planResult.content) ?? buildFallbackOpeningPlan(ctx);
+    let plan;
+    try {
+      const planResult = await queueNarrativeLlm(roomId, "campaign-opening-plan", () =>
+        completeChat(room.llmConfig!, buildCampaignOpeningPlanMessages(ctx, host.preferredLocale), {
+          apiKey: resolveRoomApiKey(room.llmConfig, undefined, roomId),
+          lmStudioBaseUrl: process.env.LM_STUDIO_BASE_URL,
+          maxTokens: resolveMjMaxTokens(llm.providerId, llm.modelId),
+          taskKind: "tool",
+          jsonMode: true,
+        })
+      );
+      plan = parseCampaignOpeningPlan(planResult.content) ?? buildFallbackOpeningPlan(ctx);
+    } catch (planErr) {
+      console.warn(
+        `[opening] ${room.code} plan LLM échoué — palette locale`,
+        planErr instanceof Error ? planErr.message : planErr
+      );
+      plan = buildFallbackOpeningPlan(ctx);
+    }
 
     const openingOpts = {
       sheet: host.characterSheet,
@@ -136,22 +143,58 @@ export async function bootstrapCampaignOpening(
         }
       );
 
-    let opening = await queueNarrativeLlm(roomId, "campaign-opening-narrative", () =>
-      runOpening(narrativePrompt)
-    );
+    const fallbackTurn = () => ({
+      content: renderFallbackOpeningNarrative(plan, ctx),
+      usedFallback: true,
+      responseLocale: host.preferredLocale ?? "fr",
+      scenePatch: {
+        location: plan.scene.location,
+        mood: plan.scene.mood,
+        tension: plan.scene.tension,
+      },
+      arcPatch: {
+        mainPlot: plan.mainPlot,
+        currentBeat: plan.openingScene.slice(0, 200) || "Mise en place — Acte I",
+      },
+      companionDirectives: [],
+      providerId: "fallback",
+      modelId: "opening-fallback",
+    });
+
+    let opening: Awaited<ReturnType<typeof runMjTurn>>;
+    try {
+      opening = await queueNarrativeLlm(roomId, "campaign-opening-narrative", () =>
+        runOpening(narrativePrompt)
+      );
+    } catch (narrErr) {
+      console.warn(
+        `[opening] ${room.code} récit LLM échoué — secours local`,
+        narrErr instanceof Error ? narrErr.message : narrErr
+      );
+      opening = fallbackTurn();
+    }
     let reasons = await reasonsOf(opening.content);
     if (reasons.length > 0) {
       console.warn(
         `[opening] ${room.code} injouable (${reasons.join("; ")}) — réécriture`
       );
-      opening = await queueNarrativeLlm(
-        roomId,
-        "campaign-opening-narrative-retry",
-        () =>
-          runOpening(
-            buildCampaignOpeningRewritePrompt(opening.content, plan, ctx, reasons)
-          )
-      );
+      try {
+        opening = await queueNarrativeLlm(
+          roomId,
+          "campaign-opening-narrative-retry",
+          () =>
+            runOpening(
+              buildCampaignOpeningRewritePrompt(opening.content, plan, ctx, reasons)
+            )
+        );
+      } catch (retryErr) {
+        console.warn(
+          `[opening] ${room.code} réécriture LLM échouée — secours local`,
+          retryErr instanceof Error ? retryErr.message : retryErr
+        );
+        opening = fallbackTurn();
+        reasons = [];
+      }
     }
     reasons = await reasonsOf(opening.content);
     if (reasons.length > 0) {

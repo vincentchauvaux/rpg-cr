@@ -818,6 +818,15 @@ async function completeChatUntraced(
     }
   }
 
+  const groqInChain = listAutomaticLlmCandidates(envAi).some(
+    (c) => c.providerId === "groq"
+  );
+  if (groqInChain && shouldSkipGroqNarration(estimatedChars, taskKind)) {
+    throw new Error(
+      "Prompt trop long pour Groq (TPM) — d'abord réduire le contexte."
+    );
+  }
+
   const chain = listAutomaticLlmCandidates(envAi).filter((c) => {
     if (c.providerId === effective.providerId) return false;
     if (isLlmProviderSkipped(c.providerId)) return false;

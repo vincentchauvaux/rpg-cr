@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-10-21 (**aventure JSON** + chaîne LLM Groq-first) — déployé prod `3af5e76`
+> Dernière mise à jour : 2026-10-21 (**ouverture** : Groq jusqu'à 20k car., secours local si le cloud lâche)
 
 ## Vision
 
@@ -197,7 +197,7 @@ Les listes markdown (`- …`) du **dernier** récit MJ encore **en vigueur** (2�
 - Export : `recit-canon.md` + `scene.md` + `trame.md` + stats/sorts/alignement dans `joueurs.md`.
 
    - **MJ automatique (unique)** : le joueur ne choisit plus le moteur. Chaîne : `AI_PROVIDER` → **Groq** → OpenRouter → Gemini → Ollama. 403 / clé à 0 $ : on **écarte** le provider 30 min. Gemini 503 : 18 s max puis skip 5 min. Prompt récit **> 12k car.** : pas d’Ollama CPU (le tour MJ réduit d’abord). `PUT /llm` ne garde que `mjProse` / faits auto / override prompt.
-   - **Ouverture Acte I** : si le récit est injouable (cuisine, dette inventée, QCM, réplique du PJ…), réécriture avec les **raisons** puis secours `renderFallbackOpeningNarrative`. Premier Dire/Action après ouverture : interdit de reposer la scène.
+   - **Ouverture Acte I** : plan JSON via Groq ; récit jusqu'à **20k car.** sur Groq (16k passait, 10k skip envoyait Gemini 18 s). Si le cloud lâche : `renderFallbackOpeningNarrative` — la table n'est plus bloquée. Réclamer (hôte) relance l'ouverture si elle n'est pas faite. Injouable (cuisine, dette, QCM…) : réécriture puis secours. Premier Dire/Action après ouverture : interdit de reposer la scène.
 5. **LLM** — `completeChat` + profils (`task-profile.ts`) ; **MJ auto Dire** / **Action** ; Réclamer / routes hôte
 6. **Carte** — génération procédurale (simplex noise, biomes, effets toxic/fog/evil/buff, POI, territoires, SVG)
 7. **Modèles** — tables SQLite : messages, quêtes, journal, propositions archivées (+ endpoints REST)

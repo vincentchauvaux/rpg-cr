@@ -522,6 +522,56 @@ test("OpenRouter 403 : Groq ensuite, pas Gemini ni Ollama sur un petit prompt", 
   assert.equal(urls.some((u) => u.includes("11434")), false);
 });
 
+test("OpenRouter écarté : un récit 16k va à Groq, pas Gemini", async () => {
+  process.env.AI_PROVIDER = "openrouter";
+  process.env.OPENROUTER_API_KEY = "sk-or-dead";
+  process.env.GROQ_API_KEY = "g";
+  process.env.GEMINI_API_KEY = "m";
+  const urls: string[] = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    urls.push(url);
+    if (url.includes("openrouter")) {
+      return errorResponse(403, "Key limit exceeded (total limit). $0.00 of $0.00 used");
+    }
+    if (url.includes("api.groq.com")) return chatResponse("OK groq");
+    throw new Error(`ne devrait pas appeler ${url}`);
+  };
+  const result = await completeChat(
+    cloudRoom,
+    [{ role: "user", content: "x".repeat(16_000) }],
+    { timeoutMs: 5_000, taskKind: "narration" }
+  );
+  assert.equal(result.providerId, "groq");
+  assert.equal(urls.some((u) => u.includes("generativelanguage")), false);
+});
+
+test("récit 37k : trop long pour Groq, pas d'attente Gemini 18 s", async () => {
+  process.env.AI_PROVIDER = "openrouter";
+  process.env.OPENROUTER_API_KEY = "sk-or-dead";
+  process.env.GROQ_API_KEY = "g";
+  process.env.GEMINI_API_KEY = "m";
+  const urls: string[] = [];
+  globalThis.fetch = async (input) => {
+    urls.push(String(input));
+    if (String(input).includes("openrouter")) {
+      return errorResponse(403, "Key limit exceeded (total limit). $0.00 of $0.00 used");
+    }
+    throw new Error(`ne devrait pas appeler ${String(input)}`);
+  };
+  await assert.rejects(
+    () =>
+      completeChat(
+        cloudRoom,
+        [{ role: "user", content: "x".repeat(37_000) }],
+        { timeoutMs: 5_000, taskKind: "narration" }
+      ),
+    /trop long pour Groq/i
+  );
+  assert.equal(urls.some((u) => u.includes("generativelanguage")), false);
+  assert.equal(urls.some((u) => u.includes("api.groq.com")), false);
+});
+
 test("choix automatique : AI_PROVIDER OpenRouter gagne même si le salon était Ollama", async () => {
   process.env.AI_PROVIDER = "openrouter";
   process.env.AI_MODEL = "google/gemini-3.8-flash";

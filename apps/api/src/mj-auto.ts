@@ -827,6 +827,13 @@ export function requestHostMjTrigger(
   if (player.role !== "admin") {
     return { ok: false, error: "Seul l'hôte peut lancer un préambule ou un récap." };
   }
+  if (type === "preamble" && shouldBootstrapCampaignOpening(roomId)) {
+    if (isOpeningBusy(roomId)) {
+      return { ok: false, error: "L'ouverture de campagne est déjà en cours." };
+    }
+    scheduleCampaignOpening(roomId, playerId);
+    return { ok: true };
+  }
   if (player.kind === "human" && player.characterStatus !== "ready" && !player.isGodMode) {
     return {
       ok: false,

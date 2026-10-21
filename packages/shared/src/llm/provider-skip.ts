@@ -1,6 +1,7 @@
 import {
   isLlmQuotaOrCreditError,
   isLlmRateLimitError,
+  isLlmTimeoutError,
   isLlmUnavailableError,
   parseLlmRetryAfterMs,
 } from "./context-budget.js";
@@ -34,6 +35,7 @@ export function clearLlmProviderSkips(): void {
 export function skipMsForLlmError(error: unknown): number {
   if (isLlmQuotaOrCreditError(error)) return QUOTA_SKIP_MS;
   if (isLlmUnavailableError(error)) return UNAVAILABLE_SKIP_MS;
+  if (isLlmTimeoutError(error)) return UNAVAILABLE_SKIP_MS;
   if (isLlmRateLimitError(error) && error instanceof Error) {
     return Math.min(parseLlmRetryAfterMs(error.message, 8_000), 60_000);
   }
@@ -47,8 +49,8 @@ export function rememberLlmProviderFailure(providerId: string, error: unknown): 
 /** 7B CPU : un roman de 37k caractères = 5 min. On refuse, le tour MJ réduit le prompt. */
 export const LOCAL_NARRATION_MAX_CHARS = 12_000;
 
-/** Groq free 8k TPM : un 37k car. claque avant le slim. */
-export const GROQ_NARRATION_MAX_CHARS = 10_000;
+/** Groq free 8k TPM : 16k car. passe (~2 s). 37k claque. */
+export const GROQ_NARRATION_MAX_CHARS = 20_000;
 
 export function shouldSkipLocalNarration(
   estimatedChars: number,
