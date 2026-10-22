@@ -260,7 +260,7 @@ export function formatLlmSilenceDetail(message: string): string {
 
   if (outcome === "context") {
     if (/trop long pour (Ollama|Groq)/i.test(message)) {
-      return "Le récit était trop long pour le cloud. Le MJ raccourcit et réessaie tout seul, Ollama si besoin. Réclamer.";
+      return "Le récit dépassait le budget du modèle. Le MJ le raccourcit et continue tout seul.";
     }
   }
 

@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-10-22 (**Groq TPM** : prompt micro, extraits coupés, Ollama tout seul) — déployé prod `8de8728`
+> Dernière mise à jour : 2026-10-22 (**contexte MJ** : plafond total 8k Groq / Réclamer = continuer)
 
 ## Vision
 
@@ -367,7 +367,7 @@ Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**
 
 **MJ local (gratuit)** : l'API appelle un endpoint OpenAI-compatible via `LM_STUDIO_BASE_URL` (nom historique — **Ollama** `http://127.0.0.1:11434/v1` ou **LM Studio** `http://127.0.0.1:1234/v1`). Providers UI distincts : **Ollama (VPS / local)** et **LM Studio (Mac + tunnel)**. `resolveLmStudioServerBaseUrl` ([lmstudio-url.ts](packages/shared/src/llm/lmstudio-url.ts)) prime sur l'URL affichée dans l'UI. **Sans Mac** : installer Ollama sur le VPS ([deploy/OLLAMA-VPS.md](deploy/OLLAMA-VPS.md)). **Avec GPU Mac** : tunnel SSH `-R 1234:127.0.0.1:1234` ([deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md)).
 
-**État VPS (2026-10-22)** : Docker actif ; moteur Rust + aventure JSON + Groq-first. Dernier déploiement : `8de8728` (prompt micro, extraits coupés, Ollama tout seul). Health et accueil publics **200**. Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`.
+**État VPS (2026-10-22)** : Docker actif ; moteur Rust + aventure JSON + Groq-first. Cette livraison : `capChatMessages` 8k + Réclamer = continuer (plus d'impasse « contexte trop long »). Health et accueil publics **200**. Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`.
 
 **Suite sur le VPS** :
 ```bash
@@ -604,8 +604,7 @@ Pas de bouton « ajouter un compagnon » : le PJ **demande au PNJ** (Dire `@PNJ`
 - **`POST /api/rooms/:roomId/mj/prompt`** — types joueur : `start` | `continue` | `hint` | `reclaim` (`player-mj-prompts.ts`) ; types **hôte admin** : `preamble` | `session_recap` (`host-mj-prompts.ts`, `requestHostMjTrigger` dans `mj-auto.ts`).
 - **UI** (`RoomView`) : l'hôte a un seul bouton **Réclamer** (champ vide, chat actif). Le type est choisi côté client via `pickHostMjPromptType` (`host-mj-prompts.ts`) :
   - **`preamble`** si `!campaignOpeningDone` (avant ouverture de campagne)
-  - **`session_recap`** si ouverture faite, `lastPreambleAt` renseigné (ou après ouverture auto), au moins un message, et pas encore de récap dans l'onglet (`sessionStorage` clé `rpg-cr-recap-done:{roomId}`)
-  - sinon **`reclaim`** (continuer le récit) — y compris après ouverture de campagne sans `last_preamble_at` (l'ouverture compte comme préambule via `touchLastPreambleAt`)
+  - sinon **`reclaim`** (continuer le récit). Le récap auto (`session_recap`) n'est **plus** choisi par Réclamer : il envoyait ~13k car. (Groq refuse à 8k, Ollama à 12k → table bloquée). `session_recap` reste un type API, pas un choix auto.
 - **Réclamer (joueur)** : `mjPromptBusy` reste actif jusqu'au message MJ ou échec WS ; **`reclaimError`** sous le bouton + bannière rouge (tous les joueurs) ; garde-fou client **280 s** (aligné timeout fetch MJ **270 s**) ; échec rapide **5 s** si aucun `mj_status` thinking serveur après POST ok ; reset client si dernière sollicitation **> 2 min** (`localStorage` `rpg-cr-mj-prompt-at:{roomId}`) ; `mjThinkingBegin` côté API dès acceptation du `POST …/mj/prompt`.
 - **Bugs corrigés (2026-05-28)** :
   - Préambule hôte : `narrativePhase` + `endNarrativeMjThinking` (évite `openingRefs` bloqué → Réclamer grisé à vie).
@@ -640,7 +639,7 @@ Module réutilisable : `NarrationKind` + `NarrationContext` + `buildNarrationPro
 | `reclaim_continue` | Joueur **Réclamer** (`POST …/mj/prompt` type `reclaim`) |
 | `player_start` / `player_continue` | Commencer / Continuer (joueur) |
 | `hint` | Indice (joueur) |
-| `host_preamble` / `host_recap` | Hôte **Réclamer** (`pickHostMjPromptType` → préambule ou récap) |
+| `host_preamble` / `reclaim_continue` | Hôte **Réclamer** (`pickHostMjPromptType` → préambule si ouverture pas faite, sinon continuer) |
 | `player_intro_manual` / `player_intro_auto` | Après `POST …/introduce` si auto MJ réactivé |
 | `circle_introduce` / `circle_withdraw` | Marionnette IA cercle narratif |
 | `set_piece` | Réservé (séquences longues explicites, v2) |
@@ -730,9 +729,9 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 ## Notes agent
 
 - **Aucune clé LLM côté client.** `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` + `AI_PROVIDER` / `AI_MODEL` dans `.env`. God mode : style du récit seulement (`MjProseSettings`).
-- **Routage LLM** : unique et automatique. Chaîne : `AI_PROVIDER` → Groq → OpenRouter → Gemini → Ollama. Si Groq est dans la chaîne : prompt **micro** (≤ 8k car.), extraits LLM coupés (`usesTightGroqTpm` vrai dès qu'il y a `GROQ_API_KEY` — pas seulement si `AI_PROVIDER=groq`). Trop lourd / 429 : Ollama tout seul. Plus de « enregistrez Ollama en god mode ».
+- **Routage LLM** : unique et automatique. Chaîne : `AI_PROVIDER` → Groq → OpenRouter → Gemini → Ollama. Si Groq est dans la chaîne : prompt **micro**, extraits LLM coupés (`usesTightGroqTpm` vrai dès qu'il y a `GROQ_API_KEY`). **Plafond total** `capChatMessages` après `buildMjTurnMessages` : Groq **8k**, Ollama **12k** (le monde est dans le message système — clipper le joueur ne suffisait pas). Trop lourd / 429 / contexte : Ollama tout seul avec le même plafond. Plus de « enregistrez Ollama en god mode ». Réclamer ne doit plus afficher « contexte trop long » comme impasse.
 - **Journal LLM** : chaque `completeChat` écrit une ligne JSONL (`/data/llm-events.jsonl` en prod, à côté de la SQLite en local) — provider demandé vs effectif, secours, durée, chars, salon, libellé de file (`character-all`, `player:reclaim`…). **Pas** de prompt ni de clé. God mode → panneau **Journal LLM**. `docker logs rpg-cr-api-1` contient aussi `[LLM] …`. Rotation ~1,5 Mo (`llm-events.1.jsonl`).
-- **Réclamer hôte** : `pickHostMjPromptType` + `handleHostReclaim` dans `RoomView` (préambule / récap / reclaim) — déjà en place ; pas de travail dupliqué côté sous-agent `3dd156bd` si non retrouvé dans l'historique.
+- **Réclamer hôte** : `pickHostMjPromptType` + `handleHostReclaim` dans `RoomView` — ouverture pas faite → préambule ; sinon **continuer** (`reclaim`). Plus de récap auto au premier Réclamer de session.
 - `getRoomByCode` compare en NOCASE (codes 6 caractères).
 - Pour LM Studio dans Docker : `host.docker.internal:1234`.
 - **URLs client** : `apps/web/src/lib/config.ts` — `getApiUrl()` / `getWsBase()` utilisent `window.location.hostname` + ports `NEXT_PUBLIC_API_PORT` (4000).
@@ -904,8 +903,8 @@ Quand le MJ ne répond plus, le salon affiche **pourquoi** (plus un simple « MJ
 
 | Couche | Comportement |
 |--------|----------------|
-| **Budget contexte** | `context-budget.ts` + `model-context-tier.ts` — modes `full` / `slim` / **`micro`** (4b, VL, etc.) ; prompt système **compact** (`MJ_SYSTEM_PROMPT_COMPACT`) en micro ; `resolveMjMaxTokens` selon taille modèle |
-| **Tour MJ** | `apps/api/src/mj.ts` — départ selon `initialMjContextModeForModel` (petit modèle → **micro**) ; si erreur **context length** → retry **micro** ; si timeout en **full** → retry **slim** ; message `formatSmallContextModelHint` si échec final |
+| **Budget contexte** | `context-budget.ts` + `model-context-tier.ts` — modes `full` / `slim` / **`micro`** ; prompt compact en micro ; `capChatMessages` plafonne le **total** (système+monde+user) à 8k (Groq) / 12k (Ollama) |
+| **Tour MJ** | `apps/api/src/mj.ts` — départ selon `initialMjContextModeForConfig` ; slim tant que > 8k Groq ; **toujours** `capChatMessages` avant le 1er appel ; trop long / 429 → Ollama avec prompt déjà plafonné (plus d'impasse « contexte trop long ») |
 | **Préflight** | `lmstudio-preflight.ts` — LM Studio : sonde chat ~14 s ; **Ollama** : liste modèles seule (pas de sonde — CPU VPS trop lent) |
 | **Timeout HTTP** | `resolveLlmTimeoutMs` : LM Studio **180–240 s** selon taille prompt ; cloud **90–120 s** ; défaut `completeChat` si `timeoutMs` omis |
 | **Profils tâche** | `narration` : temp 0,85 (tours MJ, ✨ champ, intro auto, récit ouverture) ; `tool` : temp 0,15 (extraction, fill-all JSON, traduction, aide héros, test) ; `jsonMode` + retry sans `response_format` si HTTP 400 ; cloud `toolModelId` (défaut GPT-4o mini) ; local = même `modelId` |

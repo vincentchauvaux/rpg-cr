@@ -22,28 +22,20 @@ export interface HostReclaimRoomState {
 
 /**
  * Choix automatique du type MJ quand l'hôte clique « Réclamer ».
- * - Préambule : jamais de préambule enregistré OU ouverture de campagne non faite
- * - Récap : campagne ouverte, historique chat, une fois par session navigateur
+ * - Préambule : ouverture de campagne pas encore faite
  * - Sinon : continuer le récit (`reclaim`)
+ *
+ * Le récap de session n'est plus déclenché par Réclamer : il envoyait ~13k
+ * caractères (Groq 8k + Ollama 12k = table bloquée). `session_recap` reste
+ * un type API explicite, pas un choix auto.
  */
 export function pickHostMjPromptType(
   room: HostReclaimRoomState,
-  messageCount: number,
-  recapOfferedThisSession: boolean
+  _messageCount?: number,
+  _recapOfferedThisSession?: boolean
 ): MjHostReclaimChoice {
-  const hasPreamble = Boolean(room.lastPreambleAt?.trim());
   if (!room.campaignOpeningDone) {
     return "preamble";
-  }
-  if (!hasPreamble) {
-    return "reclaim";
-  }
-  if (
-    room.campaignOpeningDone &&
-    messageCount > 0 &&
-    !recapOfferedThisSession
-  ) {
-    return "session_recap";
   }
   return "reclaim";
 }

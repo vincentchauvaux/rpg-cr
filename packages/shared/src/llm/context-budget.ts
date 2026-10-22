@@ -61,6 +61,80 @@ export function estimatePromptChars(messages: ChatCompletionMessage[]): number {
   return messages.reduce((sum, m) => sum + (m.content?.length ?? 0), 0);
 }
 
+const CAP_MARK = "\n[…]";
+
+function cutEnd(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  if (maxLen <= CAP_MARK.length) return text.slice(0, Math.max(0, maxLen));
+  return text.slice(0, maxLen - CAP_MARK.length) + CAP_MARK;
+}
+
+function cutStart(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  if (maxLen <= CAP_MARK.length) return text.slice(-Math.max(0, maxLen));
+  return CAP_MARK + text.slice(-(maxLen - CAP_MARK.length));
+}
+
+/**
+ * Plafonne le prompt MJ **total** (système + monde + user).
+ * Clipper seulement le message joueur ne suffit pas : le monde est dans le système.
+ * Coupe d'abord la fin du système (contexte monde), puis le début du user (historique).
+ */
+export function capChatMessages(
+  messages: ChatCompletionMessage[],
+  maxChars: number
+): ChatCompletionMessage[] {
+  const copy = messages.map((m) => ({
+    role: m.role,
+    content: m.content ?? "",
+  }));
+  if (maxChars <= 0 || estimatePromptChars(copy) <= maxChars) return copy;
+
+  const minFor = (role: ChatCompletionMessage["role"]) =>
+    role === "user" ? 480 : role === "system" ? 720 : 160;
+
+  const shrink = (
+    predicate: (m: ChatCompletionMessage) => boolean,
+    fromEnd: boolean
+  ) => {
+    for (const msg of copy) {
+      if (!predicate(msg)) continue;
+      const total = estimatePromptChars(copy);
+      if (total <= maxChars) return;
+      const overflow = total - maxChars;
+      const canCut = Math.max(0, msg.content.length - minFor(msg.role));
+      const cut = Math.min(overflow, canCut);
+      if (cut <= 0) continue;
+      const keep = msg.content.length - cut;
+      msg.content = fromEnd
+        ? cutEnd(msg.content, keep)
+        : cutStart(msg.content, keep);
+    }
+  };
+
+  shrink((m) => m.role === "system", true);
+  shrink((m) => m.role !== "system" && m.role !== "user", true);
+  shrink((m) => m.role === "user", false);
+
+  if (estimatePromptChars(copy) > maxChars) {
+    let remaining = maxChars;
+    for (let i = 0; i < copy.length; i++) {
+      const othersAfter = copy.length - i - 1;
+      const reserve = othersAfter * 80;
+      const share = Math.max(40, remaining - reserve);
+      if (copy[i].content.length > share) {
+        copy[i].content =
+          copy[i].role === "user"
+            ? cutStart(copy[i].content, share)
+            : cutEnd(copy[i].content, share);
+      }
+      remaining -= copy[i].content.length;
+    }
+  }
+
+  return copy;
+}
+
 /** Timeout HTTP adaptatif : local LM Studio plus long ; cloud plus court. */
 export function resolveLlmTimeoutMs(
   providerId: string,

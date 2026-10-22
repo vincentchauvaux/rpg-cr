@@ -6,6 +6,7 @@ import {
   localeLabel,
   prepareMjResponse,
   DEFAULT_LOCALE,
+  capChatMessages,
   estimatePromptChars,
   initialMjContextModeForConfig,
   isContextLengthLlmError,
@@ -15,7 +16,6 @@ import {
   isLlmUnavailableError,
   isLlmPromptTooHeavyForLocal,
   isReasoningChatModelId,
-  formatSmallContextModelHint,
   mjContextLimits,
   parseLlmRetryAfterMs,
   preflightLmStudioForMj,
@@ -31,6 +31,7 @@ import {
   formatCompanionRosterForMj,
   inferAdventureEventKind,
   GROQ_NARRATION_MAX_CHARS,
+  LOCAL_NARRATION_MAX_CHARS,
   type CompanionDirective,
   type LlmUsage,
   type LlmQuotaHint,
@@ -273,6 +274,23 @@ function buildMjTurnMessages(
   };
 }
 
+function mjNarrationBudget(kind: "cloud" | "local"): number {
+  return kind === "local"
+    ? LOCAL_NARRATION_MAX_CHARS
+    : GROQ_NARRATION_MAX_CHARS;
+}
+
+function fitMjTurnPayload<
+  T extends { messages: ChatCompletionMessage[]; estimatedChars: number },
+>(payload: T, kind: "cloud" | "local"): T {
+  const messages = capChatMessages(payload.messages, mjNarrationBudget(kind));
+  return {
+    ...payload,
+    messages,
+    estimatedChars: estimatePromptChars(messages),
+  };
+}
+
 async function completeMjWithTimeout(
   config: LlmRoomConfig,
   messages: ChatCompletionMessage[],
@@ -351,6 +369,7 @@ export async function runMjTurn(
     mode = slimmer;
     payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
   }
+  payload = fitMjTurnPayload(payload, groqInPlay ? "cloud" : "local");
   devLogMjContext(
     mode,
     payload.estimatedChars,
@@ -377,57 +396,52 @@ export async function runMjTurn(
         isLlmUnavailableError(firstError) ||
         isLlmPromptTooHeavyForLocal(firstError));
 
-    if (isContextLengthLlmError(firstError) && !slimmer) {
-      throw new Error(
-        `Contexte trop long pour « ${config.modelId} ». ${formatSmallContextModelHint(config.modelId)}`
+    const runLocalCapped = () => {
+      const localPayload = fitMjTurnPayload(
+        buildMjTurnMessages(roomId, config, playerMessage, options, "micro"),
+        "cloud"
       );
-    }
+      return completeMjWithTimeout(
+        config,
+        localPayload.messages,
+        localPayload.estimatedChars,
+        apiKey,
+        true
+      );
+    };
 
-    if (!canShrinkForQuota || !slimmer) {
-      const groqInPlay =
-        effective.providerId === "groq" || Boolean(process.env.GROQ_API_KEY?.trim());
-      if (
-        groqInPlay &&
-        !options.forceLocalFallback &&
-        (isLlmPromptTooHeavyForLocal(firstError) || isLlmRateLimitError(firstError))
-      ) {
-        const localPayload = buildMjTurnMessages(
-          roomId,
-          config,
-          playerMessage,
-          options,
-          "micro"
-        );
-        result = await completeMjWithTimeout(
-          config,
-          localPayload.messages,
-          localPayload.estimatedChars,
-          apiKey,
-          true
-        );
-      } else {
-        throw firstError;
-      }
-    } else {
+    if (canShrinkForQuota && slimmer) {
       if (isLlmRateLimitError(firstError) && firstError instanceof Error) {
         await sleepMs(Math.min(parseLlmRetryAfterMs(firstError.message), 12_000));
       }
 
       mode = slimmer;
-      payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
+      payload = fitMjTurnPayload(
+        buildMjTurnMessages(roomId, config, playerMessage, options, mode),
+        groqInPlay ? "cloud" : "local"
+      );
       devLogMjContext(
         mode,
         payload.estimatedChars,
         resolveLlmTimeoutMs(effective.providerId, payload.estimatedChars),
         "retry with smaller prompt"
       );
-      result = await completeMjWithTimeout(
-        config,
-        payload.messages,
-        payload.estimatedChars,
-        apiKey,
-        options.forceLocalFallback
-      );
+      try {
+        result = await completeMjWithTimeout(
+          config,
+          payload.messages,
+          payload.estimatedChars,
+          apiKey,
+          options.forceLocalFallback
+        );
+      } catch (retryError) {
+        if (options.forceLocalFallback) throw retryError;
+        result = await runLocalCapped();
+      }
+    } else if (!options.forceLocalFallback) {
+      result = await runLocalCapped();
+    } else {
+      throw firstError;
     }
   }
 
