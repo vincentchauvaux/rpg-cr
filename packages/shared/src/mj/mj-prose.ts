@@ -47,7 +47,7 @@ export function formatMjProseRules(value?: number | null): string {
 
   if (band === "blunt") {
     return `${head}
-- **Droit au but.** 1–3 paragraphes courts. Sujet–verbe–complément. **Règle des deux** : deux traits par chose, un bruit ou une odeur, un mouvement — puis stop.
+- **Droit au but.** 1–3 paragraphes courts. Sujet–verbe–complément. Lieu **nouveau** : deux traits, puis stop. Lieu **déjà décrit** : ne le redécris pas sans élément nouveau.
 - **Un seul lieu** par message. Nomme-le clairement (l'auberge, la caserne, la place du marché) — pas une enfilade ruelle + chapelle + brume.
 - **Interdit** : tapis de métaphores (« comme si les murs parlaient »), accumulations de murmures / ombres dansantes / parfums / brumes qui vibrent. **Interdit** d'écrire l'émotion du PJ (« tu as peur »).
 - **Interdit** : PNJ **nommé** absent de la fiche (pas de « Sir Aldric » surgissant). Figurant anonyme OK (« un forgeron », « la tenancière»).
@@ -58,13 +58,13 @@ export function formatMjProseRules(value?: number | null): string {
 
   if (band === "lush") {
     return `${head}
-- Style plus ample autorisé (3–5 paragraphes). Toujours **deux traits** par chose, plus de chair sensorielle, **une** comparaison si elle paie.
+- Style plus ample autorisé (3–5 paragraphes). Lieu **nouveau** : deux traits et de la chair. Lieu **déjà décrit** : n'ajoute du sensoriel que s'il y a un **élément nouveau**. **Une** comparaison si elle paie.
 - Reste ancré : **un lieu à la fois**, pas de PNJ nommé hors fiche, pas de secret familial inventé.
-- Évite de répéter le même motif (murmure, brume, ombre) à chaque phrase. N'impose pas l'émotion du PJ.`;
+- Évite de répéter le même motif à chaque phrase. Un lieu déjà décrit ne se redécrit pas sans élément nouveau. N'impose pas l'émotion du PJ.`;
   }
 
   return `${head}
-- Ton de table **sobre** : 2–4 paragraphes courts. **Règle des deux** + un sens hors la vue + un mouvement.
+- Ton de table **sobre** : 2–4 paragraphes courts. Lieu nouveau : deux traits. Lieu déjà décrit : ne le redécris pas sans élément nouveau.
 - Un seul lieu. Pas de catalogue poétique. Pas de PNJ nommé hors fiche. Pas de secret inventé (père, destin) absent de la fiche.
 - Incident déclencheur concret, pas une allégorie. Le PJ sent ; tu ne lui dictes pas « tu es angoissé ».`;
 }

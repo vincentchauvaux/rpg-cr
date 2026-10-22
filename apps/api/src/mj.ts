@@ -32,6 +32,7 @@ import {
   inferAdventureEventKind,
   GROQ_NARRATION_MAX_CHARS,
   LOCAL_NARRATION_MAX_CHARS,
+  MJ_ADVANCE_TURN_RULE,
   type CompanionDirective,
   type LlmUsage,
   type LlmQuotaHint,
@@ -257,8 +258,8 @@ function buildMjTurnMessages(
   const clippedPlayer = truncateMjBlock(playerMessage, playerCap);
   const userPrompt = recentTable
     ? `Derniers échanges à la table :\n${recentTable}\n\n${clippedPlayer}\n\n` +
-      `Réponds uniquement en ${localeLabel(responseLocale)}.`
-    : `${clippedPlayer}\n\nRéponds uniquement en ${localeLabel(responseLocale)}.`;
+      `${MJ_ADVANCE_TURN_RULE}\n\nRéponds uniquement en ${localeLabel(responseLocale)}.`
+    : `${clippedPlayer}\n\n${MJ_ADVANCE_TURN_RULE}\n\nRéponds uniquement en ${localeLabel(responseLocale)}.`;
 
   const messages = buildMjMessages(
     worldContext,

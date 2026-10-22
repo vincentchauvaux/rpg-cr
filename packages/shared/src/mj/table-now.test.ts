@@ -70,6 +70,7 @@ test("formatTableNowForMj interdit de re-narrer le trajet", () => {
   assert.match(text, /crépuscule/);
   assert.match(text, /parchemin/);
   assert.match(text, /Interdit/);
+  assert.match(text, /élément nouveau/);
 });
 
 test("parseTableNow ignore le JSON vide", () => {

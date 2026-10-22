@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-10-22 (**contexte MJ** : plafond total 8k Groq / Réclamer = continuer) — déployé prod `ce3902b`
+> Dernière mise à jour : 2026-10-22 (**récit** : un lieu déjà décrit ne se redécrit pas sans élément nouveau — tout lieu)
 
 ## Vision
 
@@ -201,7 +201,7 @@ Les listes markdown (`- …`) du **dernier** récit MJ encore **en vigueur** (2�
 5. **LLM** — `completeChat` + profils (`task-profile.ts`) ; **MJ auto Dire** / **Action** ; Réclamer / routes hôte
 6. **Carte** — génération procédurale (simplex noise, biomes, effets toxic/fog/evil/buff, POI, territoires, SVG)
 7. **Modèles** — tables SQLite : messages, quêtes, journal, propositions archivées (+ endpoints REST)
-8. **Prompt MJ** — `system-prompt.ts` + **maîtrise d'écrivain** (`mj-craft.ts` : monde vivant pas un rail ; **règle des deux** + un sens + un mouvement ; [DIRE] dit dans le monde ; PNJ incarnés) + contexte monde + canon (`canon-continuity.ts`)
+8. **Prompt MJ** — `system-prompt.ts` + **maîtrise d'écrivain** (`mj-craft.ts` : monde vivant pas un rail ; lieu **nouveau** = deux traits puis stop ; lieu **déjà décrit** = ne pas redécrire sans élément nouveau, **tout lieu** ; `MJ_ADVANCE_TURN_RULE` en fin de message user ; [DIRE] dit dans le monde ; PNJ incarnés) + contexte monde + canon (`canon-continuity.ts`)
 9. **Docker** — `Dockerfile`, `docker-compose.yml`
 10. **Graines / campagnes** — quitter sans supprimer le salon ; export Markdown fractionné ; liste « Mes graines » sur l'accueil ; reprise avec autre LLM via fichiers .md
 
@@ -367,7 +367,7 @@ Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**
 
 **MJ local (gratuit)** : l'API appelle un endpoint OpenAI-compatible via `LM_STUDIO_BASE_URL` (nom historique — **Ollama** `http://127.0.0.1:11434/v1` ou **LM Studio** `http://127.0.0.1:1234/v1`). Providers UI distincts : **Ollama (VPS / local)** et **LM Studio (Mac + tunnel)**. `resolveLmStudioServerBaseUrl` ([lmstudio-url.ts](packages/shared/src/llm/lmstudio-url.ts)) prime sur l'URL affichée dans l'UI. **Sans Mac** : installer Ollama sur le VPS ([deploy/OLLAMA-VPS.md](deploy/OLLAMA-VPS.md)). **Avec GPU Mac** : tunnel SSH `-R 1234:127.0.0.1:1234` ([deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md)).
 
-**État VPS (2026-10-22)** : Docker actif ; moteur Rust + aventure JSON + Groq-first. Dernier déploiement : `ce3902b` (`capChatMessages` 8k + Réclamer = continuer). Health et accueil publics **200**. Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`.
+**État VPS (2026-10-22)** : Docker actif ; moteur Rust + aventure JSON + Groq-first. Cette livraison : un lieu déjà décrit ne se redécrit pas sans élément nouveau (tout lieu). Health et accueil publics **200**. Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`.
 
 **Suite sur le VPS** :
 ```bash
@@ -731,6 +731,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Aucune clé LLM côté client.** `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` + `AI_PROVIDER` / `AI_MODEL` dans `.env`. God mode : style du récit seulement (`MjProseSettings`).
 - **Routage LLM** : unique et automatique. Chaîne : `AI_PROVIDER` → Groq → OpenRouter → Gemini → Ollama. Si Groq est dans la chaîne : prompt **micro**, extraits LLM coupés (`usesTightGroqTpm` vrai dès qu'il y a `GROQ_API_KEY`). **Plafond total** `capChatMessages` après `buildMjTurnMessages` : Groq **8k**, Ollama **12k** (le monde est dans le message système — clipper le joueur ne suffisait pas). Trop lourd / 429 / contexte : Ollama tout seul avec le même plafond. Plus de « enregistrez Ollama en god mode ». Réclamer ne doit plus afficher « contexte trop long » comme impasse.
 - **Journal LLM** : chaque `completeChat` écrit une ligne JSONL (`/data/llm-events.jsonl` en prod, à côté de la SQLite en local) — provider demandé vs effectif, secours, durée, chars, salon, libellé de file (`character-all`, `player:reclaim`…). **Pas** de prompt ni de clé. God mode → panneau **Journal LLM**. `docker logs rpg-cr-api-1` contient aussi `[LLM] …`. Rotation ~1,5 Mo (`llm-events.1.jsonl`).
+- **Récit** : un lieu **déjà décrit** (n'importe lequel) ne se redécrit pas sans **élément nouveau**. `MJ_ADVANCE_TURN_RULE` collé en fin du message user (survit au plafond 8k). Approche / écoute = ce qui se perçoit de neuf, pas le décor.
 - **Réclamer hôte** : `pickHostMjPromptType` + `handleHostReclaim` dans `RoomView` — ouverture pas faite → préambule ; sinon **continuer** (`reclaim`). Plus de récap auto au premier Réclamer de session.
 - `getRoomByCode` compare en NOCASE (codes 6 caractères).
 - Pour LM Studio dans Docker : `host.docker.internal:1234`.

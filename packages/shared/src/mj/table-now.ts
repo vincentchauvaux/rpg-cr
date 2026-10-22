@@ -426,7 +426,8 @@ export function formatTableNowForMj(
     lines.push(`- Ailleurs (pas ici) : ${state.elsewhere.join(" ; ")}`);
   }
   lines.push(
-    "- **Interdit** de re-décrire comment le PJ est arrivé ici, ni un lieu qu'il a quitté, ni le dernier fait ci-dessus. Continue **après**."
+    "- **Interdit** de re-décrire comment le PJ est arrivé ici, ni un lieu qu'il a quitté, ni le dernier fait ci-dessus. Continue **après**.",
+    "- Un lieu **déjà décrit** ne se redécrit pas sans **élément nouveau** (quelqu'un entre, un objet apparaît, le temps ou le cadre change)."
   );
   const script = recentBeats
     .filter((b) => b.event.trim())

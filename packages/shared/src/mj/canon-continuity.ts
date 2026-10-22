@@ -18,8 +18,8 @@ export const MJ_CANON_CONTINUITY_RULES = `## Continuité narrative (priorité ha
 
 ## Avancer, ne pas paraphraser (obligatoire)
 - Chaque tour apporte **du neuf** : un geste, une info, une réplique, un choix. **Interdit** de reformuler le dernier récit (même lieu, même tension, mêmes images).
-- Ne re-décris pas le cadre (salle, lumière, bruits, « l'ambiance est tendue ») s'il n'a pas changé — les joueurs l'ont déjà lu.
-- Réclamer / Continuer : **enchaîne** (PNJ qui dit une chose inédite, horloge qui avance, détail utile jamais mentionné). Ne réchauffe pas la scène.
+- Un lieu **déjà décrit** (n'importe lequel) ne se redécrit pas : lumière, bruits, odeurs, météo, « tu es toujours ici » — seulement s'il y a un **élément nouveau**. Les joueurs l'ont déjà lu.
+- Réclamer / Continuer : **enchaîne** (PNJ qui dit une chose inédite, temps qui passe, détail utile jamais mentionné). Ne réchauffe pas la scène.
 - Si peu d'événement : **2–4 phrases** + une question, plutôt qu'un second tableau identique.
 
 ## Cohérence spatiale et temporelle (obligatoire)
