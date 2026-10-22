@@ -158,6 +158,9 @@ export function classifyLlmFailure(message: string): LlmCallOutcome {
   if (AUTH_FAILURE_RE.test(message)) {
     return "auth";
   }
+  if (/trop long pour (Ollama|Groq)/i.test(message)) {
+    return "context";
+  }
   if (/LLM 429|rate limit|tokens per minute|\bTPM\b|Please try again in/i.test(message)) {
     return "rate_limit";
   }
@@ -231,7 +234,7 @@ export function formatLlmSilenceDetail(message: string): string {
       quota.requested > quota.remaining
         ? ` Ce tour demandait ${quota.requested} jetons, plus que le restant.`
         : "";
-    return `${head}${extra}${quotaLine ? ` ${quotaLine}` : formatWait(quota?.retryAfterMs)} Ce plafond vient d'OpenRouter / Groq, pas d'Ollama sur le VPS. En god mode, enregistrez Ollama puis Réclamer.`;
+    return `${head}${extra}${quotaLine ? ` ${quotaLine}` : formatWait(quota?.retryAfterMs)} Le MJ raccourcit le prompt et réessaie tout seul (Groq, puis Ollama). Réclamer dans un instant.`;
   }
 
   if (outcome === "auth") {
@@ -253,6 +256,12 @@ export function formatLlmSilenceDetail(message: string): string {
       (quotaLine ? ` ${quotaLine}` : "") +
       " Vérifiez OpenRouter / la clé serveur, puis Réclamer."
     );
+  }
+
+  if (outcome === "context") {
+    if (/trop long pour (Ollama|Groq)/i.test(message)) {
+      return "Le récit était trop long pour le cloud. Le MJ raccourcit et réessaie tout seul, Ollama si besoin. Réclamer.";
+    }
   }
 
   if (outcome === "timeout") {

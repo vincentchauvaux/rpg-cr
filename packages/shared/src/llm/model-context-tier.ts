@@ -91,7 +91,7 @@ export function initialMjContextModeForConfig(
     fallback === "groq" ||
     Boolean(env.GROQ_API_KEY?.trim())
   ) {
-    return "slim";
+    return "micro";
   }
   return initialMjContextModeForModel(modelId);
 }

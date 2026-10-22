@@ -116,6 +116,11 @@ test("AI_PROVIDER=groq surcharge un salon cloud, pas Ollama", () => {
   assert.equal(usesTightGroqTpm(effective), true);
 });
 
+test("OpenRouter + clé Groq : extraits auto coupés (même TPM)", () => {
+  process.env.GROQ_API_KEY = "gsk_test";
+  assert.equal(usesTightGroqTpm(cloudRoom), true);
+});
+
 test("AI_PROVIDER=gemini surcharge un salon cloud, pas Ollama", () => {
   const effective = applyEnvAiOverride(cloudRoom, {
     provider: "gemini",
@@ -391,20 +396,20 @@ test("OpenRouter : outils = même modèle que le récit (pas gpt-4o-mini silenci
   assert.equal(effective.toolModelId, "google/gemini-3.8-flash");
 });
 
-test("si Groq est le secours, le MJ part déjà en prompt slim", () => {
+test("si Groq est le secours, le MJ part déjà en prompt micro", () => {
   assert.equal(
     initialMjContextModeForConfig("openrouter", "google/gemini-3.8-flash", "groq"),
-    "slim"
+    "micro"
   );
   assert.equal(
     initialMjContextModeForConfig("groq", "openai/gpt-oss-20b"),
-    "slim"
+    "micro"
   );
   assert.equal(
     initialMjContextModeForConfig("openrouter", "google/gemini-3.8-flash", null, {
       GROQ_API_KEY: "gsk_test",
     }),
-    "slim"
+    "micro"
   );
   assert.equal(
     initialMjContextModeForConfig("openrouter", "google/gemini-3.8-flash", null, {}),
@@ -522,7 +527,7 @@ test("OpenRouter 403 : Groq ensuite, pas Gemini ni Ollama sur un petit prompt", 
   assert.equal(urls.some((u) => u.includes("11434")), false);
 });
 
-test("OpenRouter écarté : un récit 16k va à Groq, pas Gemini", async () => {
+test("OpenRouter écarté : un récit 6k va à Groq, pas Gemini", async () => {
   process.env.AI_PROVIDER = "openrouter";
   process.env.OPENROUTER_API_KEY = "sk-or-dead";
   process.env.GROQ_API_KEY = "g";
@@ -539,14 +544,14 @@ test("OpenRouter écarté : un récit 16k va à Groq, pas Gemini", async () => {
   };
   const result = await completeChat(
     cloudRoom,
-    [{ role: "user", content: "x".repeat(16_000) }],
+    [{ role: "user", content: "x".repeat(6_000) }],
     { timeoutMs: 5_000, taskKind: "narration" }
   );
   assert.equal(result.providerId, "groq");
   assert.equal(urls.some((u) => u.includes("generativelanguage")), false);
 });
 
-test("récit 37k : trop long pour Groq, pas d'attente Gemini 18 s", async () => {
+test("récit 16k : trop long pour Groq, pas d'attente Gemini 18 s", async () => {
   process.env.AI_PROVIDER = "openrouter";
   process.env.OPENROUTER_API_KEY = "sk-or-dead";
   process.env.GROQ_API_KEY = "g";
@@ -563,7 +568,7 @@ test("récit 37k : trop long pour Groq, pas d'attente Gemini 18 s", async () => 
     () =>
       completeChat(
         cloudRoom,
-        [{ role: "user", content: "x".repeat(37_000) }],
+        [{ role: "user", content: "x".repeat(16_000) }],
         { timeoutMs: 5_000, taskKind: "narration" }
       ),
     /trop long pour Groq/i

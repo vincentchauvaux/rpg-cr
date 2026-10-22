@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-10-21 (**ouverture** Groq 20k + secours local) — déployé prod `110e027`
+> Dernière mise à jour : 2026-10-22 (**Groq TPM** : prompt micro, extraits coupés, Ollama tout seul)
 
 ## Vision
 
@@ -730,7 +730,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 ## Notes agent
 
 - **Aucune clé LLM côté client.** `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` + `AI_PROVIDER` / `AI_MODEL` dans `.env`. God mode : style du récit seulement (`MjProseSettings`).
-- **Routage LLM** : unique et automatique. `applyEnvAiOverride` ignore le provider du salon. Chaîne : `AI_PROVIDER` → Groq → OpenRouter → Gemini → Ollama. Quota 403 mémorisé 30 min. Si Groq est dans la chaîne, le tour MJ part **slim** (micro si > 10k car.). Groq / Ollama refusés sur un récit trop lourd — le tour réduit d'abord.
+- **Routage LLM** : unique et automatique. Chaîne : `AI_PROVIDER` → Groq → OpenRouter → Gemini → Ollama. Si Groq est dans la chaîne : prompt **micro** (≤ 8k car.), extraits LLM coupés (`usesTightGroqTpm` vrai dès qu'il y a `GROQ_API_KEY` — pas seulement si `AI_PROVIDER=groq`). Trop lourd / 429 : Ollama tout seul. Plus de « enregistrez Ollama en god mode ».
 - **Journal LLM** : chaque `completeChat` écrit une ligne JSONL (`/data/llm-events.jsonl` en prod, à côté de la SQLite en local) — provider demandé vs effectif, secours, durée, chars, salon, libellé de file (`character-all`, `player:reclaim`…). **Pas** de prompt ni de clé. God mode → panneau **Journal LLM**. `docker logs rpg-cr-api-1` contient aussi `[LLM] …`. Rotation ~1,5 Mo (`llm-events.1.jsonl`).
 - **Réclamer hôte** : `pickHostMjPromptType` + `handleHostReclaim` dans `RoomView` (préambule / récap / reclaim) — déjà en place ; pas de travail dupliqué côté sous-agent `3dd156bd` si non retrouvé dans l'historique.
 - `getRoomByCode` compare en NOCASE (codes 6 caractères).

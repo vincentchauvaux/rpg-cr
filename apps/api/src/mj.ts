@@ -252,10 +252,12 @@ function buildMjTurnMessages(
     })
     .join("\n");
 
+  const playerCap = micro ? 1_600 : slim ? 3_200 : 8_000;
+  const clippedPlayer = truncateMjBlock(playerMessage, playerCap);
   const userPrompt = recentTable
-    ? `Derniers échanges à la table :\n${recentTable}\n\n${playerMessage}\n\n` +
+    ? `Derniers échanges à la table :\n${recentTable}\n\n${clippedPlayer}\n\n` +
       `Réponds uniquement en ${localeLabel(responseLocale)}.`
-    : `${playerMessage}\n\nRéponds uniquement en ${localeLabel(responseLocale)}.`;
+    : `${clippedPlayer}\n\nRéponds uniquement en ${localeLabel(responseLocale)}.`;
 
   const messages = buildMjMessages(
     worldContext,
@@ -337,16 +339,17 @@ export async function runMjTurn(
       envAi.fallbackProvider
     );
   let payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
-  if (
+  const groqInPlay =
+    effective.providerId === "groq" || Boolean(process.env.GROQ_API_KEY?.trim());
+  while (
     !options.preferredContextMode &&
-    payload.estimatedChars > GROQ_NARRATION_MAX_CHARS &&
-    (effective.providerId === "groq" || Boolean(process.env.GROQ_API_KEY?.trim()))
+    groqInPlay &&
+    payload.estimatedChars > GROQ_NARRATION_MAX_CHARS
   ) {
     const slimmer = nextSlimmerMjMode(mode);
-    if (slimmer) {
-      mode = slimmer;
-      payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
-    }
+    if (!slimmer) break;
+    mode = slimmer;
+    payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
   }
   devLogMjContext(
     mode,
@@ -381,28 +384,51 @@ export async function runMjTurn(
     }
 
     if (!canShrinkForQuota || !slimmer) {
-      throw firstError;
-    }
+      const groqInPlay =
+        effective.providerId === "groq" || Boolean(process.env.GROQ_API_KEY?.trim());
+      if (
+        groqInPlay &&
+        !options.forceLocalFallback &&
+        (isLlmPromptTooHeavyForLocal(firstError) || isLlmRateLimitError(firstError))
+      ) {
+        const localPayload = buildMjTurnMessages(
+          roomId,
+          config,
+          playerMessage,
+          options,
+          "micro"
+        );
+        result = await completeMjWithTimeout(
+          config,
+          localPayload.messages,
+          localPayload.estimatedChars,
+          apiKey,
+          true
+        );
+      } else {
+        throw firstError;
+      }
+    } else {
+      if (isLlmRateLimitError(firstError) && firstError instanceof Error) {
+        await sleepMs(Math.min(parseLlmRetryAfterMs(firstError.message), 12_000));
+      }
 
-    if (isLlmRateLimitError(firstError) && firstError instanceof Error) {
-      await sleepMs(Math.min(parseLlmRetryAfterMs(firstError.message), 12_000));
+      mode = slimmer;
+      payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
+      devLogMjContext(
+        mode,
+        payload.estimatedChars,
+        resolveLlmTimeoutMs(effective.providerId, payload.estimatedChars),
+        "retry with smaller prompt"
+      );
+      result = await completeMjWithTimeout(
+        config,
+        payload.messages,
+        payload.estimatedChars,
+        apiKey,
+        options.forceLocalFallback
+      );
     }
-
-    mode = slimmer;
-    payload = buildMjTurnMessages(roomId, config, playerMessage, options, mode);
-    devLogMjContext(
-      mode,
-      payload.estimatedChars,
-      resolveLlmTimeoutMs(effective.providerId, payload.estimatedChars),
-      "retry with smaller prompt"
-    );
-    result = await completeMjWithTimeout(
-      config,
-      payload.messages,
-      payload.estimatedChars,
-      apiKey,
-      options.forceLocalFallback
-    );
   }
 
   const prepared = prepareMjResponse(result.content);

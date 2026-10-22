@@ -49,8 +49,8 @@ export function rememberLlmProviderFailure(providerId: string, error: unknown): 
 /** 7B CPU : un roman de 37k caractères = 5 min. On refuse, le tour MJ réduit le prompt. */
 export const LOCAL_NARRATION_MAX_CHARS = 12_000;
 
-/** Groq free 8k TPM : 16k car. passe (~2 s). 37k claque. */
-export const GROQ_NARRATION_MAX_CHARS = 20_000;
+/** Groq free 8k TPM : 18k car. ≈ 5k jetons + max_tokens = 2 tours et c'est mort. */
+export const GROQ_NARRATION_MAX_CHARS = 8_000;
 
 export function shouldSkipLocalNarration(
   estimatedChars: number,

@@ -265,8 +265,14 @@ export function resolveEffectiveLlmConfig(
 }
 
 /** Groq free : extraits LLM auto coupés (même plafond TPM que le MJ). */
-export function usesTightGroqTpm(config: LlmRoomConfig): boolean {
-  return resolveEffectiveLlmConfig(config).providerId === "groq";
+export function usesTightGroqTpm(
+  config: LlmRoomConfig,
+  settings: EnvAiSettings = readEnvAiSettings(),
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  if (resolveEffectiveLlmConfig(config, settings).providerId === "groq") return true;
+  if (settings.fallbackProvider?.trim().toLowerCase() === "groq") return true;
+  return Boolean(env.GROQ_API_KEY?.trim());
 }
 
 export function fallbackProviderConfig(

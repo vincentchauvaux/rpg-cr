@@ -36,8 +36,15 @@ test("Groq 429 : restant = limite − utilisés, pas +10", () => {
   assert.match(detail, /5551 \/ 8000/);
   assert.match(detail, /6687/);
   assert.match(detail, /Réessayez dans/);
-  assert.match(detail, /OpenRouter \/ Groq/);
-  assert.match(detail, /Ollama/);
+  assert.match(detail, /réessaie tout seul/);
+  assert.doesNotMatch(detail, /god mode/);
+});
+
+test("trop long pour Groq n'est pas un faux quota TPM", () => {
+  const msg = "Prompt trop long pour Groq (TPM) — d'abord réduire le contexte.";
+  assert.equal(classifyLlmFailure(msg), "context");
+  assert.match(formatLlmSilenceDetail(msg), /raccourcit/);
+  assert.doesNotMatch(formatLlmSilenceDetail(msg), /quota de jetons à la minute/);
 });
 
 test("0 jeton restant", () => {
