@@ -36,6 +36,8 @@ test("un lieu déjà décrit ne se redécrit pas — tout lieu, pas seulement le
   assert.match(MJ_ADVANCE_TURN_RULE, /déjà décrit/);
   assert.match(MJ_ADVANCE_TURN_RULE, /élément nouveau/);
   assert.match(MJ_ADVANCE_TURN_RULE, /quel qu'il soit/);
+  assert.match(MJ_ADVANCE_TURN_RULE, /Verrous/);
+  assert.match(MJ_ADVANCE_TURN_RULE, /mot pour mot/);
   assert.match(MJ_CRAFT_RULES, /déjà décrit|rien de neuf/);
   assert.match(MJ_SYSTEM_PROMPT_COMPACT, /déjà décrit/);
 });

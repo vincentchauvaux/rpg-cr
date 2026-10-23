@@ -1,6 +1,6 @@
 # Agent — RPG-CR
 
-> Dernière mise à jour : 2026-10-22 (**récit** : un lieu déjà décrit ne se redécrit pas sans élément nouveau — tout lieu) — déployé prod `72e38a4`
+> Dernière mise à jour : 2026-10-23 (**canon** : verrous prix / ingrédients / objets pris — plus de liste qui mute)
 
 ## Vision
 
@@ -367,7 +367,7 @@ Guide : **[deploy/README.md](deploy/README.md)** — cohabitation **canopee.be**
 
 **MJ local (gratuit)** : l'API appelle un endpoint OpenAI-compatible via `LM_STUDIO_BASE_URL` (nom historique — **Ollama** `http://127.0.0.1:11434/v1` ou **LM Studio** `http://127.0.0.1:1234/v1`). Providers UI distincts : **Ollama (VPS / local)** et **LM Studio (Mac + tunnel)**. `resolveLmStudioServerBaseUrl` ([lmstudio-url.ts](packages/shared/src/llm/lmstudio-url.ts)) prime sur l'URL affichée dans l'UI. **Sans Mac** : installer Ollama sur le VPS ([deploy/OLLAMA-VPS.md](deploy/OLLAMA-VPS.md)). **Avec GPU Mac** : tunnel SSH `-R 1234:127.0.0.1:1234` ([deploy/LMSTUDIO-VPS.md](deploy/LMSTUDIO-VPS.md)).
 
-**État VPS (2026-10-22)** : Docker actif ; moteur Rust + aventure JSON + Groq-first. Dernier déploiement : `72e38a4` (lieu déjà décrit = ne pas redécrire sans élément nouveau). Health et accueil publics **200**. Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`.
+**État VPS (2026-10-23)** : Docker actif ; moteur Rust + aventure JSON + Groq-first. Cette livraison : verrous prix / ingrédients / objets pris. Health et accueil publics **200**. Public : `https://vps-e09ed6db.vps.ovh.net/rpg-cr/`.
 
 **Suite sur le VPS** :
 ```bash
@@ -732,6 +732,7 @@ Les anciens `buildPlayerMjPrompt` / `buildHostPreamblePrompt` / `buildSessionRec
 - **Routage LLM** : unique et automatique. Chaîne : `AI_PROVIDER` → Groq → OpenRouter → Gemini → Ollama. Si Groq est dans la chaîne : prompt **micro**, extraits LLM coupés (`usesTightGroqTpm` vrai dès qu'il y a `GROQ_API_KEY`). **Plafond total** `capChatMessages` après `buildMjTurnMessages` : Groq **8k**, Ollama **12k** (le monde est dans le message système — clipper le joueur ne suffisait pas). Trop lourd / 429 / contexte : Ollama tout seul avec le même plafond. Plus de « enregistrez Ollama en god mode ». Réclamer ne doit plus afficher « contexte trop long » comme impasse.
 - **Journal LLM** : chaque `completeChat` écrit une ligne JSONL (`/data/llm-events.jsonl` en prod, à côté de la SQLite en local) — provider demandé vs effectif, secours, durée, chars, salon, libellé de file (`character-all`, `player:reclaim`…). **Pas** de prompt ni de clé. God mode → panneau **Journal LLM**. `docker logs rpg-cr-api-1` contient aussi `[LLM] …`. Rotation ~1,5 Mo (`llm-events.1.jsonl`).
 - **Récit** : un lieu **déjà décrit** (n'importe lequel) ne se redécrit pas sans **élément nouveau**. `MJ_ADVANCE_TURN_RULE` collé en fin du message user (survit au plafond 8k). Approche / écoute = ce qui se perçoit de neuf, pas le décor.
+- **Verrous de table** (`play-locks.ts`) : premier prix, première offre d'ingrédients, objets déjà pris — extraits du fil **sans LLM**, injectés même en micro / même avec l'aventure JSON. Le MJ doit les **répéter mot pour mot**. Payer / demander le prix = pas de d20 (`isAutomaticSceneChoice`). Sanitize : retire « le PJ présent / selon la fiche / vous êtes encore dans… ».
 - **Réclamer hôte** : `pickHostMjPromptType` + `handleHostReclaim` dans `RoomView` — ouverture pas faite → préambule ; sinon **continuer** (`reclaim`). Plus de récap auto au premier Réclamer de session.
 - `getRoomByCode` compare en NOCASE (codes 6 caractères).
 - Pour LM Studio dans Docker : `host.docker.internal:1234`.

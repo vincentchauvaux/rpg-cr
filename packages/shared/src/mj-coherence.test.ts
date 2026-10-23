@@ -7,7 +7,11 @@ import {
   scrubScenePatchAgainstSourceText,
   scrubScenePatchLocation,
 } from "./mj/scene-extract-prompt.js";
-import { rewriteTableMetaClosers } from "./mj/sanitize-response.js";
+import {
+  rewriteTableMetaClosers,
+  sanitizeMjResponse,
+  stripSheetMetaLeaks,
+} from "./mj/sanitize-response.js";
 import { formatEstablishedCanonSummary } from "./mj/canon-continuity.js";
 import { getSceneWhenDisplayLabel } from "./scene.js";
 import { generateProceduralMap } from "./map/procedural.js";
@@ -66,6 +70,20 @@ test("relance méta réécrite en relance jouable", () => {
   assert.match(
     rewriteTableMetaClosers("Quelles actions souhaitez-vous entreprendre ?"),
     /Que fais‑tu \?/
+  );
+});
+
+test("fuite fiche / PJ présent retirée du récit", () => {
+  const leaked =
+    "Le barman pose le parchemin.\n\n" +
+    "Vous êtes encore dans la salle du tavern du Loup, où le barman vous fixe.\n" +
+    "Le personnage qui agit est Dude.";
+  const out = sanitizeMjResponse(leaked);
+  assert.match(out, /barman pose le parchemin/);
+  assert.doesNotMatch(out, /personnage qui agit|PJ présent|tavern du Loup/i);
+  assert.doesNotMatch(
+    stripSheetMetaLeaks("Le PJ présent dans cette scène, selon votre fiche, est Dude."),
+    /PJ présent|fiche/
   );
 });
 

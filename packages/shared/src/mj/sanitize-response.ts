@@ -104,6 +104,19 @@ export function rewriteTableMetaClosers(text: string): string {
   return out;
 }
 
+/** Fuites « le PJ présent / selon la fiche / le personnage qui agit ». */
+export function stripSheetMetaLeaks(text: string): string {
+  let out = text
+    .replace(/Le PJ présent[^.?\n]{0,120}\.?/giu, "")
+    .replace(/Le personnage qui agit[^.?\n]{0,80}\.?/giu, "")
+    .replace(/selon (?:votre|ta|la) fiche[^.?\n]{0,80}\.?/giu, "");
+  out = out.replace(
+    /(?:^|\n\n+)Vous [eê]tes (?:toujours|encore) dans [^\n]{8,140}\.?\s*(?=\n\n|$)/giu,
+    "\n\n"
+  );
+  return out.replace(/\n{3,}/g, "\n\n").replace(/[ \t]+\n/g, "\n").trim();
+}
+
 function trimTrailingLeakBlock(text: string): string {
   const trailing = text.match(
     /\n{2,}(?:\d+\.\s*\*\*(?:Analyze|Review|Consider|Draft|Plan|Final)[\s\S]*)$/i
@@ -132,6 +145,7 @@ export function sanitizeMjResponse(text: string): string {
   out = trimTrailingLeakBlock(out);
   out = collapseTrailingPhraseLoop(out);
   out = rewriteTableMetaClosers(out);
+  out = stripSheetMetaLeaks(out);
 
   return out.replace(/\n{3,}/g, "\n\n").trim();
 }

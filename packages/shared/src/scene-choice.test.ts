@@ -155,6 +155,11 @@ test("ignore / verre / rentrer chez soi : pas de d20", () => {
     true
   );
   assert.equal(isAutomaticSceneChoice("Examinez le parchemin de plus près"), false);
+  assert.equal(
+    isAutomaticSceneChoice("Payer les ingrédients, en donnant la somme que le barman indique."),
+    true
+  );
+  assert.equal(isAutomaticSceneChoice("Je demande au barman combien ça coûte"), true);
 });
 
 test("resolveSceneCheckOutcome : DD, contesté, égalité", () => {

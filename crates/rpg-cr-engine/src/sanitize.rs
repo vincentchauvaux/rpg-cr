@@ -68,6 +68,40 @@ pub fn rewrite_table_meta_closers(text: &str) -> String {
     out
 }
 
+fn is_here_dump(block: &str) -> bool {
+    let t = block.trim();
+    if t.is_empty() || t.len() > 160 || t.contains('«') {
+        return false;
+    }
+    let fold: String = t
+        .chars()
+        .map(|c| match c {
+            'ê' | 'é' => 'e',
+            other => other,
+        })
+        .collect::<String>()
+        .to_lowercase();
+    fold.starts_with("vous etes toujours dans") || fold.starts_with("vous etes encore dans")
+}
+
+fn strip_sheet_meta_leaks(text: &str) -> String {
+    static PJ: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?iu)Le PJ présent[^.?\n]{0,120}\.?").expect("pj"));
+    static ACTS: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?iu)Le personnage qui agit[^.?\n]{0,80}\.?").expect("acts"));
+    static SHEET: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?iu)selon (?:votre|ta|la) fiche[^.?\n]{0,80}\.?").expect("sheet")
+    });
+    let mut out = PJ.replace_all(text, "").into_owned();
+    out = ACTS.replace_all(&out, "").into_owned();
+    out = SHEET.replace_all(&out, "").into_owned();
+    out.split("\n\n")
+        .map(str::trim)
+        .filter(|block| !block.is_empty() && !is_here_dump(block))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 fn clause_parts(s: &str) -> Vec<(String, String)> {
     static CLAUSE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"(?u)([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9\s''\-]{1,55}?)([.…!?])").expect("clause")
@@ -144,6 +178,7 @@ pub fn sanitize_mj_response(text: &str) -> String {
     out = trim_trailing_leak_block(&out);
     out = collapse_trailing_phrase_loop(&out);
     out = rewrite_table_meta_closers(&out);
+    out = strip_sheet_meta_leaks(&out);
     static MANY_NL: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"\n{3,}").expect("newlines"));
     MANY_NL.replace_all(&out, "\n\n").trim().to_string()
@@ -166,5 +201,15 @@ mod tests {
         let out = sanitize_mj_response("Le feu crépite. Quelles seront vos prochaines actions ?");
         assert!(out.contains("Que fais"));
         assert!(!out.to_lowercase().contains("prochaines actions"));
+    }
+
+    #[test]
+    fn coupe_fuite_fiche() {
+        let out = sanitize_mj_response(
+            "Le barman pose le parchemin.\n\nVous êtes encore dans la salle du tavern du Loup, où le barman vous fixe.\nLe personnage qui agit est Dude.",
+        );
+        assert!(out.contains("barman pose le parchemin"));
+        assert!(!out.to_lowercase().contains("personnage qui agit"));
+        assert!(!out.to_lowercase().contains("pj présent"));
     }
 }

@@ -395,5 +395,12 @@ export function isAutomaticSceneChoice(choice: string): boolean {
   ) {
     return true;
   }
+  if (
+    /\b(payer|acheter|prix|co[uû]t|combien|pi[eè]ces?\s+d['’]?or|donner les ingr|offre les|donne[- ]moi)\b/iu.test(
+      t
+    )
+  ) {
+    return true;
+  }
   return false;
 }

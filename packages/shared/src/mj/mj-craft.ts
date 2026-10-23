@@ -62,6 +62,8 @@ Tu n'es pas un distributeur de quêtes ni un moteur de règles. Tu es le **garan
 /** Fin du message user : survit au plafond 8k (on coupe le début, pas la fin). Tout lieu. */
 export const MJ_ADVANCE_TURN_RULE = `Consigne de ce tour (prioritaire) :
 - Un lieu **déjà décrit** ne se redécrit pas, quel qu'il soit (salle, rue, forêt, chambre, pont…). Lumière, bruits, odeurs, météo, « tu es toujours ici » : seulement s'il y a un **élément nouveau**.
+- **Verrous** : un prix, une liste d'ingrédients/objets, un objet déjà pris — **reprends-les mot pour mot**. Interdit d'en inventer d'autres à la place.
+- Interdit le méta (« le PJ présent », « selon ta fiche », « le personnage qui agit est »).
 - Narre **uniquement** ce que le geste du PJ change : réplique, info, réaction, choix.
 - S'il s'approche, tend l'oreille ou veut mieux voir : **cite ce qu'il perçoit de neuf**. Pas le trajet, pas le décor déjà lu.`;
 

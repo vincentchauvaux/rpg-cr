@@ -33,6 +33,8 @@ import {
   GROQ_NARRATION_MAX_CHARS,
   LOCAL_NARRATION_MAX_CHARS,
   MJ_ADVANCE_TURN_RULE,
+  extractPlayLocks,
+  formatPlayLocksForMj,
   type CompanionDirective,
   type LlmUsage,
   type LlmQuotaHint,
@@ -183,9 +185,31 @@ function buildMjTurnMessages(
   const playerNames = listPlayers(roomId)
     .filter((p) => p.kind === "human" && p.characterStatus === "ready")
     .map((p) => p.name);
+  const lockBlock = formatPlayLocksForMj(
+    extractPlayLocks(
+      listMessages(roomId)
+        .filter(
+          (m) =>
+            m.kind === "mj" ||
+            m.kind === "action" ||
+            m.kind === "say" ||
+            m.kind === "chat"
+        )
+        .slice(-16)
+        .map((m) => ({ kind: m.kind, content: m.content }))
+    )
+  );
+  const factsForPrompt = truncateMjBlock(
+    factsBlock,
+    micro ? 500 : slim ? 800 : 2_000
+  );
+  const factsAreReal =
+    factsForPrompt.length > 0 &&
+    !factsForPrompt.toLowerCase().includes("aucun fait canon");
+
   let establishedCanonSummary = formatEstablishedCanonSummary({
     playerNames,
-    narrativeFactsBlock: micro ? "" : factsBlock,
+    narrativeFactsBlock: factsAreReal ? factsForPrompt : "",
     sceneBlock,
     arcBlock: micro ? "" : arcBlock,
   });
@@ -197,6 +221,8 @@ function buildMjTurnMessages(
     ? [
         `Graine : ${worldSeed}.`,
         `### Script de table\n${truncateMjBlock(tableNowBlock, 700)}`,
+        lockBlock,
+        factsAreReal ? `### Faits établis\n${factsForPrompt}` : "",
         adventureBlock || `### Canon (résumé)\n${establishedCanonSummary}`,
         `### Scène\n${sceneBlock}`,
         playerSheetBlock
@@ -222,7 +248,8 @@ function buildMjTurnMessages(
             (slim
               ? ""
               : "Pas encore d'aventure JSON — elle se crée à l'ouverture ou au premier tour."),
-        slim || adventureBlock ? "" : `### Canon narratif établi (faits MJ)\n${factsBlock}`,
+        lockBlock,
+        factsAreReal ? `### Faits établis (ne pas changer)\n${factsForPrompt}` : "",
         establishedCanonBlock && !adventureBlock
           ? `### Éléments établis (ne pas inventer au-delà)\n${establishedCanonBlock}`
           : "",

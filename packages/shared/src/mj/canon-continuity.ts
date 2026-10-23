@@ -15,6 +15,7 @@ export const MJ_CANON_CONTINUITY_RULES = `## Continuité narrative (priorité ha
 - Si tu n'es pas certain qu'un rôle ou titre a été dit à la table, décris des réactions **neutres** : « ils attendent ta réponse » — **pas** « la princesse attend ta réponse ».
 - Pour les PJ : utilise **uniquement** les noms des fiches joueurs. Les **rangs, hommes et biens de la fiche** sont canon — n'invente pas un titre **absent** de la fiche, mais **ne nie pas** un sergent / une suite déjà écrits dessus.
 - Tu peux enrichir ambiance et détails sensoriels ; tu ne peux pas introduire de nouveaux éléments diegétiques majeurs (PNJ nommés, révélations, missions) sans base dans le contexte.
+- **Verrous** (prix, ingrédients, objets pris, visage d'un PNJ déjà décrit) : une fois dits, ils restent. Interdit de les remplacer par une autre liste, un autre tarif, un autre nom de lieu.
 
 ## Avancer, ne pas paraphraser (obligatoire)
 - Chaque tour apporte **du neuf** : un geste, une info, une réplique, un choix. **Interdit** de reformuler le dernier récit (même lieu, même tension, mêmes images).
